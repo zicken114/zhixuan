@@ -2,8 +2,7 @@
 import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
-import { aiClient } from '../utils/aiClient';
-import { useSettingsStore } from '../stores/settings';
+import { aiClient, type ChatMessage } from '../utils/aiClient';
 
 interface ScreenshotPayload {
   image: string;  // Base64 PNG
@@ -19,8 +18,6 @@ interface ExtractionPrompt {
   prompt: string;
   format: 'latex' | 'markdown' | 'text' | 'html';
 }
-
-const settingsStore = useSettingsStore();
 
 // Screenshot state
 const screenshotData = ref<ScreenshotPayload | null>(null);
@@ -113,8 +110,6 @@ const handleMouseUp = async () => {
   isSelecting.value = false;
   hasSelected.value = true;
 
-  const x = Math.min(startX.value, endX.value);
-  const y = Math.min(startY.value, endY.value);
   const width = Math.abs(endX.value - startX.value);
   const height = Math.abs(endY.value - startY.value);
 
@@ -250,7 +245,7 @@ const extractWithPrompt = async (prompt: ExtractionPrompt) => {
     const croppedImage = canvas.toDataURL('image/png').split(',')[1];
 
     // Call Vision AI
-    const messages = [
+    const messages: ChatMessage[] = [
       {
         role: 'user',
         content: [
@@ -264,7 +259,6 @@ const extractWithPrompt = async (prompt: ExtractionPrompt) => {
 
     // Use vision model for image-based chat
     await aiClient.chatStream(messages, {
-      useVision: true,
       onToken: (token) => {
         fullResponse += token;
         processingResult.value = fullResponse;
@@ -309,7 +303,7 @@ const extractWithPrompt = async (prompt: ExtractionPrompt) => {
           await invoke('hide_capture_window');
         }, 500);
       }
-    });
+    }, true);
 
   } catch (error) {
     isProcessing.value = false;

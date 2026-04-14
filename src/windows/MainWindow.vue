@@ -29,7 +29,14 @@ const scrollToBottom = async () => {
 // Save messages to history when they change
 watch(messages, (newMessages) => {
   if (newMessages.length > 0) {
-    historyStore.updateCurrentMessages(newMessages);
+    // Transform messages to text-only format for history storage
+    const textMessages = newMessages.map(msg => ({
+      role: msg.role,
+      content: typeof msg.content === 'string'
+        ? msg.content
+        : msg.content.filter(c => c.type === 'text').map(c => (c as { type: 'text'; text: string }).text).join('')
+    }));
+    historyStore.updateCurrentMessages(textMessages);
   }
 }, { deep: true });
 
