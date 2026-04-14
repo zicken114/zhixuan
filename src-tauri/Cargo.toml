@@ -1,0 +1,43 @@
+[package]
+name = "ai-research-assistant"
+version = "0.1.0"
+description = "AI Research Assistant Desktop App"
+authors = ["you"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "ai_research_assistant_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["devtools", "image-png", "image-ico"] }
+tauri-plugin-opener = "2"
+tauri-plugin-store = "2"
+tauri-plugin-global-shortcut = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+arboard = { version = "3", features = ["image-data"] }
+mouse_position = "0.1"
+screenshots = "0.8"
+image = "0.25"
+base64 = "0.22"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { version = "0.52", features = [
+    "Win32_System_DataExchange",
+    "Win32_System_Memory",
+    "Win32_Graphics_Gdi",
+    "Win32_Foundation"
+] }
+
+
+
+

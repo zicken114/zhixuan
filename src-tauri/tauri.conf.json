@@ -1,0 +1,86 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "AI Research Assistant",
+  "version": "0.1.0",
+  "identifier": "com.research.assistant",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "widget",
+        "title": "Widget",
+        "url": "index.html?window=widget",
+        "width": 60,
+        "height": 60,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "shadow": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "visible": true,
+        "x": 100,
+        "y": 100
+      },
+      {
+        "label": "main",
+        "title": "AI Chat",
+        "url": "index.html?window=main",
+        "width": 400,
+        "height": 800,
+        "resizable": true,
+        "decorations": false,
+        "transparent": true,
+        "shadow": false,
+        "alwaysOnTop": false,
+        "visible": false
+      },
+      {
+        "label": "popup",
+        "title": "Quick Menu",
+        "url": "index.html?window=popup",
+        "width": 200,
+        "height": 220,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "shadow": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "visible": false,
+        "focus": true
+      },
+      {
+        "label": "capture",
+        "title": "Screen Capture",
+        "url": "index.html?window=capture",
+        "fullscreen": true,
+        "resizable": false,
+        "decorations": false,
+        "transparent": false,
+        "alwaysOnTop": true,
+        "visible": false,
+        "focus": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
+}
