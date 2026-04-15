@@ -1,6 +1,3 @@
-<<<<<<< HEAD
-# proj0407
-=======
 # AI Research Assistant (科研悬浮小助手)
 
 一款专为科研人员打造的 AI 桌面辅助工具，基于 Tauri + Vue 3 + Rust 构建。
@@ -54,7 +51,7 @@
 
 ### 必需环境
 
-1. **Node.js** (v18+)
+1. **Node.js** (建议 v20.x；最低 v18.18+)
 2. **Rust** (最新稳定版)
    - 安装: https://www.rust-lang.org/tools/install
    - Windows: 下载并运行 `rustup-init.exe`
@@ -242,5 +239,3 @@ MIT License
 ## Recommended IDE Setup
 
 - [VS Code](https://code.visualstudio.com/) + [Vue - Official](https://marketplace.visualstudio.com/items?itemName=Vue.volar) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
-
->>>>>>> 9b319c2 (第一轮大致框架)

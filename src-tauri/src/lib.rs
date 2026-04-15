@@ -25,6 +25,21 @@ struct ScreenshotPayload {
     y: i32,
 }
 
+#[derive(Clone, Serialize)]
+struct MonitorFrame {
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
+}
+
+#[derive(Clone, Serialize)]
+struct WidgetDockState {
+    side: String,
+    x: i32,
+    y: i32,
+}
+
 // Tauri commands
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -37,6 +52,113 @@ fn set_widget_position(app: tauri::AppHandle, x: f64, y: f64) -> Result<(), Stri
         .ok_or("Widget window not found")?;
 
     window.set_position(PhysicalPosition::new(x as i32, y as i32))
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
+fn set_widget_default_position(app: tauri::AppHandle) -> Result<(), String> {
+    let window = app.get_webview_window("widget")
+        .ok_or("Widget window not found")?;
+
+    let monitor = app.primary_monitor()
+        .map_err(|e| e.to_string())?
+        .ok_or("Primary monitor not found")?;
+
+    let monitor_size = monitor.size();
+    let monitor_position = monitor.position();
+    let window_size = window.outer_size().map_err(|e| e.to_string())?;
+
+    let x = monitor_position.x + ((monitor_size.width as f64 * 0.72) as i32) - (window_size.width as i32 / 2);
+    let y = monitor_position.y + ((monitor_size.height as f64 * 0.22) as i32) - (window_size.height as i32 / 2);
+
+    window.set_position(PhysicalPosition::new(x, y))
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
+fn get_primary_monitor_frame(app: tauri::AppHandle) -> Result<MonitorFrame, String> {
+    let monitor = app.primary_monitor()
+        .map_err(|e| e.to_string())?
+        .ok_or("Primary monitor not found")?;
+
+    let position = monitor.position();
+    let size = monitor.size();
+
+    Ok(MonitorFrame {
+        x: position.x,
+        y: position.y,
+        width: size.width,
+        height: size.height,
+    })
+}
+
+#[tauri::command]
+fn snap_widget_to_bounds(app: tauri::AppHandle) -> Result<WidgetDockState, String> {
+    let window = app.get_webview_window("widget")
+        .ok_or("Widget window not found")?;
+
+    let monitor = app.primary_monitor()
+        .map_err(|e| e.to_string())?
+        .ok_or("Primary monitor not found")?;
+
+    let monitor_position = monitor.position();
+    let monitor_size = monitor.size();
+    let window_position = window.outer_position().map_err(|e| e.to_string())?;
+    let window_size = window.outer_size().map_err(|e| e.to_string())?;
+
+    let min_x = monitor_position.x;
+    let min_y = monitor_position.y;
+    let max_x = monitor_position.x + monitor_size.width as i32 - window_size.width as i32;
+    let max_y = monitor_position.y + monitor_size.height as i32 - window_size.height as i32;
+
+    let mut target_x = window_position.x.clamp(min_x, max_x);
+    let target_y = window_position.y.clamp(min_y, max_y);
+
+    let threshold = 28;
+    let distance_to_left = (target_x - min_x).abs();
+    let distance_to_right = (max_x - target_x).abs();
+
+    let side = if distance_to_left <= threshold {
+        target_x = min_x;
+        "left"
+    } else if distance_to_right <= threshold {
+        target_x = max_x;
+        "right"
+    } else {
+        "none"
+    };
+
+    window.set_position(PhysicalPosition::new(target_x, target_y))
+        .map_err(|e| e.to_string())?;
+
+    Ok(WidgetDockState {
+        side: side.to_string(),
+        x: target_x,
+        y: target_y,
+    })
+}
+
+#[tauri::command]
+fn center_window(app: tauri::AppHandle, label: String) -> Result<(), String> {
+    let window = app.get_webview_window(&label)
+        .ok_or("Window not found")?;
+
+    let monitor = app.primary_monitor()
+        .map_err(|e| e.to_string())?
+        .ok_or("Primary monitor not found")?;
+
+    let monitor_size = monitor.size();
+    let monitor_position = monitor.position();
+    let window_size = window.outer_size().map_err(|e| e.to_string())?;
+
+    let x = monitor_position.x + ((monitor_size.width as i32 - window_size.width as i32) / 2);
+    let y = monitor_position.y + ((monitor_size.height as i32 - window_size.height as i32) / 2);
+
+    window.set_position(PhysicalPosition::new(x, y))
         .map_err(|e| e.to_string())?;
 
     Ok(())
@@ -295,6 +417,12 @@ fn show_window_with_settings(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn quit_app(app: tauri::AppHandle) -> Result<(), String> {
+    app.exit(0);
+    Ok(())
+}
+
+#[tauri::command]
 fn trigger_capture(app: tauri::AppHandle) -> Result<(), String> {
     use screenshots::Screen;
 
@@ -422,6 +550,10 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             greet,
             set_widget_position,
+            set_widget_default_position,
+            get_primary_monitor_frame,
+            snap_widget_to_bounds,
+            center_window,
             get_clipboard_text,
             set_clipboard_text,
             get_mouse_position,
@@ -433,6 +565,7 @@ pub fn run() {
             show_window,
             show_popup_with_clipboard,
             show_window_with_settings,
+            quit_app,
             trigger_capture
         ])
         .run(tauri::generate_context!())

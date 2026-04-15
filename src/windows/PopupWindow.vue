@@ -20,16 +20,17 @@ const menuItems = [
   { icon: '🌍', label: 'Translate', action: 'translate' },
   { icon: '🧹', label: 'Clean to Word', action: 'clean' },
   { icon: '📚', label: 'Format Citation', action: 'citation' },
-  { icon: '⚙️', label: 'Settings', action: 'settings' }
+  { icon: '⚙️', label: 'Settings', action: 'settings' },
+  { icon: '⏻', label: 'Exit', action: 'exit' }
 ];
 
 let blurTimeout: number | null = null;
 
 const handleBlur = () => {
-  // Start 3-second timer to hide window when losing focus
+  // Hide immediately when the popup loses focus.
   blurTimeout = window.setTimeout(async () => {
     await closeWindow();
-  }, 3000);
+  }, 0);
 };
 
 const handleFocus = () => {
@@ -57,6 +58,11 @@ const handleAction = async (action: string) => {
     await invoke('show_window', { label: 'main' });
     await invoke('show_window_with_settings');
     await closeWindow();
+    return;
+  }
+
+  if (action === 'exit') {
+    await invoke('quit_app');
     return;
   }
 
@@ -189,7 +195,8 @@ const closeWindow = async () => {
   padding: 0.5rem;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05);
   position: relative;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 /* Subtle glow effect at top */

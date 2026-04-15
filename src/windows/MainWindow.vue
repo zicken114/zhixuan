@@ -2,10 +2,12 @@
 import { ref, nextTick, watch, onMounted } from 'vue';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { listen } from '@tauri-apps/api/event';
+import { invoke } from '@tauri-apps/api/core';
 import { aiClient, type ChatMessage } from '../utils/aiClient';
 import { useSettingsStore } from '../stores/settings';
 import { useHistoryStore } from '../stores/history';
 import SettingsPanel from '../components/SettingsPanel.vue';
+import WelcomePanel from '../components/WelcomePanel.vue';
 
 const appWindow = getCurrentWebviewWindow();
 const settingsStore = useSettingsStore();
@@ -17,6 +19,7 @@ const isStreaming = ref(false);
 const streamingText = ref('');
 const showSettings = ref(false);
 const showHistory = ref(false);
+const showWelcome = ref(false);
 const messagesContainer = ref<HTMLElement | null>(null);
 
 const scrollToBottom = async () => {
@@ -42,6 +45,8 @@ watch(messages, (newMessages) => {
 
 // Listen for show-settings event from Rust
 onMounted(async () => {
+  showWelcome.value = true;
+
   await listen('show-settings', () => {
     showSettings.value = true;
   });
@@ -127,6 +132,14 @@ const openSettings = () => {
   showSettings.value = true;
 };
 
+const finishWelcome = async () => {
+  showWelcome.value = false;
+  showSettings.value = false;
+  await invoke('set_widget_default_position');
+  await invoke('show_window', { label: 'widget' });
+  await appWindow.hide();
+};
+
 // New chat - clear current conversation
 const newChat = () => {
   messages.value = [];
@@ -165,7 +178,8 @@ const handleHeaderMouseDown = async (e: MouseEvent) => {
 
 <template>
   <div class="main-window">
-    <SettingsPanel v-if="showSettings" @close="showSettings = false" />
+    <WelcomePanel v-if="showWelcome" @continue="finishWelcome" />
+    <SettingsPanel v-else-if="showSettings" @close="showSettings = false" />
 
     <div v-else class="chat-view">
       <!-- Draggable Header -->

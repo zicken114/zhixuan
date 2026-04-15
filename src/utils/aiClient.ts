@@ -28,6 +28,16 @@ export interface StreamCallbacks {
 }
 
 export class AIClient {
+  private resolveChatCompletionsUrl(baseUrl: string) {
+    const trimmedBaseUrl = baseUrl.trim().replace(/\/+$/, '');
+
+    if (trimmedBaseUrl.endsWith('/chat/completions')) {
+      return trimmedBaseUrl;
+    }
+
+    return `${trimmedBaseUrl}/chat/completions`;
+  }
+
   private getTextConfig() {
     const settingsStore = useSettingsStore();
     if (!settingsStore.isTextConfigured()) {
@@ -51,6 +61,7 @@ export class AIClient {
     useVision: boolean = false
   ): Promise<void> {
     const config = useVision ? this.getVisionConfig() : this.getTextConfig();
+    const requestUrl = this.resolveChatCompletionsUrl(config.baseUrl);
 
     callbacks.onStart?.();
 
@@ -65,7 +76,7 @@ export class AIClient {
       };
 
       console.log('[Vision Request]', {
-        url: config.baseUrl,
+        url: requestUrl,
         model: config.model,
         useVision,
         messageCount: messages.length,
@@ -73,7 +84,7 @@ export class AIClient {
           messages[0].content.some((c: any) => c.type === 'image_url')
       });
 
-      const response = await fetch(`${config.baseUrl}`, {
+      const response = await fetch(requestUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -88,7 +99,7 @@ export class AIClient {
           status: response.status,
           statusText: response.statusText,
           body: errorText,
-          url: config.baseUrl,
+          url: requestUrl,
           model: config.model
         });
         throw new Error(`API request failed: ${response.status} ${response.statusText} - ${errorText}`);
@@ -147,8 +158,9 @@ export class AIClient {
 
   async chatOnce(messages: ChatMessage[], useVision: boolean = false): Promise<string> {
     const config = useVision ? this.getVisionConfig() : this.getTextConfig();
+    const requestUrl = this.resolveChatCompletionsUrl(config.baseUrl);
 
-    const response = await fetch(`${config.baseUrl}`, {
+    const response = await fetch(requestUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

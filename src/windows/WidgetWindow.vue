@@ -1,16 +1,123 @@
 <script setup lang="ts">
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { invoke } from '@tauri-apps/api/core';
 
+type DockSide = 'left' | 'right' | null;
+
+interface WidgetDockState {
+  side: 'left' | 'right' | 'none';
+  x: number;
+  y: number;
+}
+
 const appWindow = getCurrentWebviewWindow();
+
+const collapsedOffset = 44;
+const collapseDelayMs = 1200;
+const expandedSize = 60;
+const collapsedWidth = 14;
+const collapsedHeight = 46;
+
+const dockSide = ref<DockSide>(null);
+const isExpanded = ref(true);
 
 let isMouseDown = false;
 let mouseDownX = 0;
 let mouseDownY = 0;
 let hasDragged = false;
 let clickTimeout: number | null = null;
+let moveSettleTimeout: number | null = null;
+let collapseDelayTimeout: number | null = null;
+let suppressSingleClick = false;
+let unlistenMoved: (() => void) | null = null;
+
+const widgetShellStyle = computed(() => {
+  if (!dockSide.value || isExpanded.value) {
+    return {
+      width: `${expandedSize}px`,
+      height: `${expandedSize}px`,
+      transform: 'translateX(0)',
+      borderRadius: '50%'
+    };
+  }
+
+  return {
+    width: `${collapsedWidth}px`,
+    height: `${collapsedHeight}px`,
+    transform: dockSide.value === 'left'
+      ? `translateX(-${collapsedOffset}px)`
+      : `translateX(${collapsedOffset}px)`,
+    borderRadius: dockSide.value === 'left' ? '0 12px 12px 0' : '12px 0 0 12px'
+  };
+});
+
+const widgetCoreStyle = computed(() => {
+  if (!dockSide.value || isExpanded.value) {
+    return {
+      opacity: 1,
+      transform: 'scale(1)'
+    };
+  }
+
+  return {
+    opacity: 0,
+    transform: dockSide.value === 'left' ? 'translateX(-8px) scale(0.84)' : 'translateX(8px) scale(0.84)'
+  };
+});
+
+const syncDockState = async () => {
+  const result = await invoke<WidgetDockState>('snap_widget_to_bounds');
+  dockSide.value = result.side === 'none' ? null : result.side;
+  isExpanded.value = result.side === 'none';
+};
+
+const scheduleDockSync = () => {
+  if (moveSettleTimeout) {
+    clearTimeout(moveSettleTimeout);
+  }
+
+  moveSettleTimeout = window.setTimeout(async () => {
+    moveSettleTimeout = null;
+    await syncDockState();
+  }, 140);
+};
+
+const expandDockedWidget = () => {
+  if (collapseDelayTimeout) {
+    clearTimeout(collapseDelayTimeout);
+    collapseDelayTimeout = null;
+  }
+
+  if (dockSide.value) {
+    isExpanded.value = true;
+  }
+};
+
+const collapseDockedWidget = () => {
+  if (!isMouseDown && dockSide.value) {
+    if (collapseDelayTimeout) {
+      clearTimeout(collapseDelayTimeout);
+    }
+
+    collapseDelayTimeout = window.setTimeout(() => {
+      isExpanded.value = false;
+      collapseDelayTimeout = null;
+    }, collapseDelayMs);
+  }
+};
 
 const handleMouseDown = (e: MouseEvent) => {
+  if (e.button === 0 && e.detail === 2) {
+    suppressSingleClick = true;
+
+    if (clickTimeout) {
+      clearTimeout(clickTimeout);
+      clickTimeout = null;
+    }
+  }
+
+  expandDockedWidget();
   isMouseDown = true;
   hasDragged = false;
   mouseDownX = e.screenX;
@@ -23,9 +130,10 @@ const handleMouseMove = async (e: MouseEvent) => {
   const dx = Math.abs(e.screenX - mouseDownX);
   const dy = Math.abs(e.screenY - mouseDownY);
 
-  // Start native drag after small movement threshold
   if (!hasDragged && (dx > 5 || dy > 5)) {
     hasDragged = true;
+    dockSide.value = null;
+    isExpanded.value = true;
     await appWindow.startDragging();
   }
 };
@@ -38,21 +146,32 @@ const handleMouseUp = (e: MouseEvent) => {
   const dy = Math.abs(e.screenY - mouseDownY);
   const wasClick = !hasDragged && dx < 5 && dy < 5;
 
-  if (wasClick) {
-    if (e.button === 0) {
-      // Left click - show popup menu after a short delay to distinguish from drag
-      clickTimeout = window.setTimeout(() => {
-        showPopup();
-      }, 50);
-    } else if (e.button === 2) {
-      // Right click - show main window with settings
-      if (clickTimeout) {
-        clearTimeout(clickTimeout);
-        clickTimeout = null;
-      }
-      showMainWindowWithSettings();
-    }
+  if (hasDragged) {
+    scheduleDockSync();
+    return;
   }
+
+  if (wasClick && e.button === 0 && !suppressSingleClick) {
+    clickTimeout = window.setTimeout(() => {
+      clickTimeout = null;
+      showPopup();
+    }, 220);
+  }
+};
+
+const handleDoubleClick = () => {
+  suppressSingleClick = true;
+
+  if (clickTimeout) {
+    clearTimeout(clickTimeout);
+    clickTimeout = null;
+  }
+
+  showMainWindow();
+
+  window.setTimeout(() => {
+    suppressSingleClick = false;
+  }, 250);
 };
 
 const showPopup = async () => {
@@ -63,7 +182,7 @@ const showPopup = async () => {
   }
 };
 
-const showMainWindowWithSettings = async () => {
+const showMainWindow = async () => {
   try {
     await invoke('show_window', { label: 'main' });
   } catch (error) {
@@ -74,17 +193,52 @@ const showMainWindowWithSettings = async () => {
 const handleContextMenu = (e: MouseEvent) => {
   e.preventDefault();
 };
+
+onMounted(async () => {
+  await invoke('set_widget_default_position');
+  await appWindow.hide();
+  await invoke('center_window', { label: 'main' });
+  await invoke('show_window', { label: 'main' });
+
+  unlistenMoved = await appWindow.onMoved(() => {
+    scheduleDockSync();
+  });
+});
+
+onUnmounted(() => {
+  if (moveSettleTimeout) {
+    clearTimeout(moveSettleTimeout);
+  }
+
+  if (collapseDelayTimeout) {
+    clearTimeout(collapseDelayTimeout);
+  }
+
+  if (unlistenMoved) {
+    unlistenMoved();
+  }
+});
 </script>
 
 <template>
   <div
     class="widget-container"
+    :class="{
+      'is-docked': dockSide,
+      'is-collapsed': dockSide && !isExpanded
+    }"
     @mousedown="handleMouseDown"
     @mousemove="handleMouseMove"
     @mouseup="handleMouseUp"
+    @dblclick="handleDoubleClick"
+    @mouseenter="expandDockedWidget"
+    @mouseleave="collapseDockedWidget"
     @contextmenu="handleContextMenu"
   >
-    <div class="widget-ball"></div>
+    <div class="widget-shell" :style="widgetShellStyle">
+      <div class="widget-tab" :class="{ 'dock-left': dockSide === 'left', 'dock-right': dockSide === 'right' }"></div>
+      <div class="widget-core" :style="widgetCoreStyle"></div>
+    </div>
   </div>
 </template>
 
@@ -99,15 +253,75 @@ const handleContextMenu = (e: MouseEvent) => {
   user-select: none;
   pointer-events: auto;
   background: transparent;
+  overflow: hidden;
 }
 
-.widget-ball {
-  width: 56px;
-  height: 56px;
+.widget-shell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, rgba(18, 24, 33, 0.96) 0%, rgba(11, 15, 22, 0.96) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
+  transition:
+    width 0.28s ease,
+    height 0.28s ease,
+    transform 0.24s ease,
+    border-radius 0.24s ease,
+    box-shadow 0.24s ease,
+    filter 0.24s ease,
+    background 0.24s ease;
+}
+
+.widget-core {
+  width: 52px;
+  height: 52px;
   border-radius: 50%;
   background-image: url('../assets/icon.jpg');
   background-size: cover;
   background-position: center;
-  pointer-events: none;
+  transition:
+    opacity 0.2s ease,
+    transform 0.24s ease;
+}
+
+.widget-tab {
+  position: absolute;
+  inset: 6px 3px;
+  border-radius: 10px;
+  background:
+    linear-gradient(180deg, rgba(0, 229, 204, 0.75) 0%, rgba(61, 116, 231, 0.82) 100%);
+  opacity: 0;
+  transition: opacity 0.24s ease;
+}
+
+.widget-tab::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 18px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.85);
+  transform: translate(-50%, -50%);
+}
+
+.widget-tab.dock-left::after {
+  transform: translate(-40%, -50%);
+}
+
+.widget-tab.dock-right::after {
+  transform: translate(-60%, -50%);
+}
+
+.widget-container.is-collapsed .widget-shell {
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.2);
+  filter: saturate(0.94);
+}
+
+.widget-container.is-collapsed .widget-tab {
+  opacity: 1;
 }
 </style>

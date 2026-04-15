@@ -1,32 +1,65 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
-import { useSettingsStore } from '../stores/settings';
+import { computed, onMounted, ref } from 'vue';
+import {
+  providerPresets,
+  useSettingsStore,
+  type AIConfig,
+  type ModelConfig,
+  type ProviderPreset,
+  type ProviderPresetId
+} from '../stores/settings';
 
 const settingsStore = useSettingsStore();
-const localConfig = ref({
-  textConfig: {
-    baseUrl: '',
-    apiKey: '',
-    model: ''
-  },
-  visionConfig: {
-    baseUrl: '',
-    apiKey: '',
-    model: ''
-  },
-  autoHideOnBlur: true,
-  popupShortcut: 'Alt+Q',
-  captureShortcut: 'Alt+S'
-});
+const localConfig = ref<AIConfig>(JSON.parse(JSON.stringify(settingsStore.config)));
 
 const showTextPassword = ref(false);
 const showVisionPassword = ref(false);
 const saveStatus = ref<'idle' | 'saving' | 'saved' | 'error'>('idle');
+const textExpanded = ref(true);
+const visionExpanded = ref(false);
+const shortcutsExpanded = ref(false);
+
+const emit = defineEmits<{
+  close: [];
+}>();
 
 onMounted(() => {
-  // Deep clone to avoid mutating store directly
   localConfig.value = JSON.parse(JSON.stringify(settingsStore.config));
 });
+
+const textProviderPresets = computed(() =>
+  providerPresets.filter((preset) => preset.supportsText)
+);
+
+const visionProviderPresets = computed(() =>
+  providerPresets.filter((preset) => preset.supportsVision)
+);
+
+const getPreset = (presetId: ProviderPresetId): ProviderPreset =>
+  providerPresets.find((preset) => preset.id === presetId) || providerPresets[0];
+
+const applyPreset = (target: 'textConfig' | 'visionConfig', presetId: ProviderPresetId) => {
+  const preset = getPreset(presetId);
+  const nextConfig: ModelConfig = {
+    ...localConfig.value[target],
+    provider: preset.id
+  };
+
+  if (preset.baseUrl) {
+    nextConfig.baseUrl = preset.baseUrl;
+  }
+
+  const suggestedModel =
+    target === 'textConfig'
+      ? (preset.textModel || localConfig.value[target].model)
+      : (preset.visionModel || localConfig.value[target].model);
+
+  if (suggestedModel) {
+    nextConfig.model = suggestedModel;
+  }
+
+  localConfig.value[target] = nextConfig;
+};
 
 const saveSettings = async () => {
   saveStatus.value = 'saving';
@@ -35,7 +68,7 @@ const saveSettings = async () => {
     settingsStore.updateConfig(localConfig.value);
     saveStatus.value = 'saved';
 
-    setTimeout(() => {
+    window.setTimeout(() => {
       saveStatus.value = 'idle';
     }, 2000);
   } catch (error) {
@@ -49,154 +82,201 @@ const resetSettings = () => {
   location.reload();
 };
 
-const emit = defineEmits<{
-  close: [];
-}>();
+const toggleCard = (target: 'text' | 'vision' | 'shortcuts') => {
+  if (target === 'text') textExpanded.value = !textExpanded.value;
+  if (target === 'vision') visionExpanded.value = !visionExpanded.value;
+  if (target === 'shortcuts') shortcutsExpanded.value = !shortcutsExpanded.value;
+};
 </script>
 
 <template>
   <div class="settings-panel">
     <div class="header">
-      <h2>Settings</h2>
-      <button class="close-btn" @click="emit('close')">×</button>
+      <div>
+        <h2>Settings</h2>
+        <p class="header-subtitle">Choose a provider preset or keep using a custom OpenAI-compatible endpoint.</p>
+      </div>
+      <button class="close-btn" @click="emit('close')">x</button>
     </div>
 
     <div class="content">
-      <!-- Text Model Section -->
-      <div class="section">
-        <h3 class="section-title">Text Model (对话/翻译)</h3>
-
-        <div class="form-group">
-          <label class="label">Base URL</label>
-          <input
-            v-model="localConfig.textConfig.baseUrl"
-            type="text"
-            class="input"
-            placeholder="https://api.openai.com/v1"
-          />
-          <p class="hint">OpenAI-compatible API endpoint</p>
-        </div>
-
-        <div class="form-group">
-          <label class="label">API Key</label>
-          <div class="password-input">
-            <input
-              v-model="localConfig.textConfig.apiKey"
-              :type="showTextPassword ? 'text' : 'password'"
-              class="input"
-              placeholder="sk-..."
-            />
-            <button
-              class="toggle-password"
-              @click="showTextPassword = !showTextPassword"
-            >
-              {{ showTextPassword ? '👁️' : '👁️‍🗨️' }}
-            </button>
+      <div class="card">
+        <button class="card-header" @click="toggleCard('text')">
+          <div>
+            <h3 class="card-title">Text Model</h3>
+            <p class="card-subtitle">Chat, translation, citation formatting, and clipboard cleanup.</p>
           </div>
-        </div>
+          <span class="card-toggle">{{ textExpanded ? 'Hide' : 'Show' }}</span>
+        </button>
 
-        <div class="form-group">
-          <label class="label">Model</label>
-          <input
-            v-model="localConfig.textConfig.model"
-            type="text"
-            class="input"
-            placeholder="gpt-4o"
-          />
-          <p class="hint">Model for text tasks (chat, translation)</p>
+        <div v-if="textExpanded" class="card-body">
+          <div class="provider-group">
+            <div class="provider-label">Provider Presets</div>
+            <div class="provider-grid">
+              <button
+                v-for="preset in textProviderPresets"
+                :key="`text-${preset.id}`"
+                class="provider-chip"
+                :class="{ active: localConfig.textConfig.provider === preset.id }"
+                @click="applyPreset('textConfig', preset.id)"
+              >
+                {{ preset.label }}
+              </button>
+            </div>
+            <p class="hint">{{ getPreset(localConfig.textConfig.provider).description }}</p>
+          </div>
+
+          <div class="form-group">
+            <label class="label">Base URL</label>
+            <input
+              v-model="localConfig.textConfig.baseUrl"
+              type="text"
+              class="input"
+              placeholder="https://api.openai.com/v1"
+            />
+            <p class="hint">Enter the API root. The app will automatically call `/chat/completions`.</p>
+          </div>
+
+          <div class="form-group">
+            <label class="label">API Key</label>
+            <div class="password-input">
+              <input
+                v-model="localConfig.textConfig.apiKey"
+                :type="showTextPassword ? 'text' : 'password'"
+                class="input"
+                placeholder="sk-..."
+              />
+              <button class="toggle-password" @click="showTextPassword = !showTextPassword">
+                {{ showTextPassword ? 'Hide' : 'Show' }}
+              </button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="label">Model</label>
+            <input
+              v-model="localConfig.textConfig.model"
+              type="text"
+              class="input"
+              placeholder="gpt-4o"
+            />
+            <p class="hint">Preset suggestions are provider-specific, but you can override them manually.</p>
+          </div>
         </div>
       </div>
 
-      <!-- Vision Model Section -->
-      <div class="section">
-        <h3 class="section-title">Vision Model (截图识别)</h3>
-
-        <div class="form-group">
-          <label class="label">Base URL</label>
-          <input
-            v-model="localConfig.visionConfig.baseUrl"
-            type="text"
-            class="input"
-            placeholder="https://api.openai.com/v1"
-          />
-          <p class="hint">OpenAI-compatible API endpoint</p>
-        </div>
-
-        <div class="form-group">
-          <label class="label">API Key</label>
-          <div class="password-input">
-            <input
-              v-model="localConfig.visionConfig.apiKey"
-              :type="showVisionPassword ? 'text' : 'password'"
-              class="input"
-              placeholder="sk-..."
-            />
-            <button
-              class="toggle-password"
-              @click="showVisionPassword = !showVisionPassword"
-            >
-              {{ showVisionPassword ? '👁️' : '👁️‍🗨️' }}
-            </button>
+      <div class="card">
+        <button class="card-header" @click="toggleCard('vision')">
+          <div>
+            <h3 class="card-title">Vision Model</h3>
+            <p class="card-subtitle">Screenshot OCR and multimodal extraction.</p>
           </div>
-        </div>
+          <span class="card-toggle">{{ visionExpanded ? 'Hide' : 'Show' }}</span>
+        </button>
 
-        <div class="form-group">
-          <label class="label">Model</label>
-          <input
-            v-model="localConfig.visionConfig.model"
-            type="text"
-            class="input"
-            placeholder="gpt-4o"
-          />
-          <p class="hint">Model for image analysis (screenshot extraction)</p>
+        <div v-if="visionExpanded" class="card-body">
+          <div class="provider-group">
+            <div class="provider-label">Provider Presets</div>
+            <div class="provider-grid">
+              <button
+                v-for="preset in visionProviderPresets"
+                :key="`vision-${preset.id}`"
+                class="provider-chip"
+                :class="{ active: localConfig.visionConfig.provider === preset.id }"
+                @click="applyPreset('visionConfig', preset.id)"
+              >
+                {{ preset.label }}
+              </button>
+            </div>
+            <p class="hint">{{ getPreset(localConfig.visionConfig.provider).description }}</p>
+          </div>
+
+          <div class="form-group">
+            <label class="label">Base URL</label>
+            <input
+              v-model="localConfig.visionConfig.baseUrl"
+              type="text"
+              class="input"
+              placeholder="https://api.openai.com/v1"
+            />
+            <p class="hint">Use a provider and model that accepts image content in OpenAI-compatible chat calls.</p>
+          </div>
+
+          <div class="form-group">
+            <label class="label">API Key</label>
+            <div class="password-input">
+              <input
+                v-model="localConfig.visionConfig.apiKey"
+                :type="showVisionPassword ? 'text' : 'password'"
+                class="input"
+                placeholder="sk-..."
+              />
+              <button class="toggle-password" @click="showVisionPassword = !showVisionPassword">
+                {{ showVisionPassword ? 'Hide' : 'Show' }}
+              </button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="label">Model</label>
+            <input
+              v-model="localConfig.visionConfig.model"
+              type="text"
+              class="input"
+              placeholder="gpt-4o"
+            />
+            <p class="hint">Current built-in vision-safe presets: OpenAI and Bailian. Custom endpoints still work.</p>
+          </div>
         </div>
       </div>
 
-      <!-- Keyboard Shortcuts Section -->
-      <div class="section">
-        <h3 class="section-title">Keyboard Shortcuts</h3>
+      <div class="card">
+        <button class="card-header" @click="toggleCard('shortcuts')">
+          <div>
+            <h3 class="card-title">Keyboard Shortcuts</h3>
+            <p class="card-subtitle">Read-only shortcuts used by the current desktop build.</p>
+          </div>
+          <span class="card-toggle">{{ shortcutsExpanded ? 'Hide' : 'Show' }}</span>
+        </button>
 
-        <div class="form-group">
-          <label class="label">Popup Menu</label>
-          <input
-            v-model="localConfig.popupShortcut"
-            type="text"
-            class="input shortcut-input"
-            placeholder="Alt+Q"
-            readonly
-          />
-          <p class="hint">Global shortcut to show popup menu</p>
-        </div>
+        <div v-if="shortcutsExpanded" class="card-body">
+          <div class="form-group">
+            <label class="label">Popup Menu</label>
+            <input
+              v-model="localConfig.popupShortcut"
+              type="text"
+              class="input shortcut-input"
+              placeholder="Alt+Q"
+              readonly
+            />
+          </div>
 
-        <div class="form-group">
-          <label class="label">Screen Capture</label>
-          <input
-            v-model="localConfig.captureShortcut"
-            type="text"
-            class="input shortcut-input"
-            placeholder="Alt+S"
-            readonly
-          />
-          <p class="hint">Global shortcut to capture screen</p>
+          <div class="form-group">
+            <label class="label">Screen Capture</label>
+            <input
+              v-model="localConfig.captureShortcut"
+              type="text"
+              class="input shortcut-input"
+              placeholder="Alt+S"
+              readonly
+            />
+          </div>
         </div>
       </div>
 
       <button
         class="save-btn"
-        :class="{ 'saving': saveStatus === 'saving', 'saved': saveStatus === 'saved' }"
+        :class="{ saved: saveStatus === 'saved' }"
         @click="saveSettings"
         :disabled="saveStatus === 'saving'"
       >
         <span v-if="saveStatus === 'idle'">Save Settings</span>
         <span v-else-if="saveStatus === 'saving'">Saving...</span>
-        <span v-else-if="saveStatus === 'saved'">✓ Saved</span>
+        <span v-else-if="saveStatus === 'saved'">Saved</span>
         <span v-else>Error</span>
       </button>
 
-      <button
-        class="reset-btn"
-        @click="resetSettings"
-      >
+      <button class="reset-btn" @click="resetSettings">
         Reset to Default
       </button>
     </div>
@@ -207,60 +287,49 @@ const emit = defineEmits<{
 .settings-panel {
   width: 100%;
   height: 100%;
-  background: #f8f9fb;
+  background:
+    radial-gradient(circle at top right, rgba(0, 229, 204, 0.08), transparent 32%),
+    linear-gradient(180deg, #fbfcfe 0%, #f4f7fb 100%);
   display: flex;
   flex-direction: column;
-  position: relative;
   overflow: hidden;
 }
 
-/* Subtle background pattern */
-.settings-panel::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background:
-    radial-gradient(ellipse at 100% 0%, rgba(0, 229, 204, 0.04) 0%, transparent 50%),
-    radial-gradient(ellipse at 0% 100%, rgba(0, 229, 204, 0.03) 0%, transparent 50%);
-  pointer-events: none;
-}
-
 .header {
-  padding: 1.5rem 1.75rem;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  background: rgba(255, 255, 255, 0.8);
+  align-items: flex-start;
+  gap: 1rem;
+  background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(10px);
-  position: relative;
-  z-index: 1;
 }
 
 .header h2 {
-  font-size: 1.2rem;
+  font-size: 1.15rem;
   font-weight: 700;
-  color: #0f1419;
+  color: #111827;
   margin: 0;
   font-family: 'Syne', sans-serif;
-  letter-spacing: -0.01em;
+}
+
+.header-subtitle {
+  margin: 0.35rem 0 0;
+  color: #6b7280;
+  font-size: 0.82rem;
+  line-height: 1.5;
 }
 
 .close-btn {
+  flex-shrink: 0;
   background: none;
   border: none;
   color: #6b7280;
-  font-size: 1.75rem;
+  font-size: 1.2rem;
   cursor: pointer;
-  padding: 0;
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  width: 34px;
+  height: 34px;
   border-radius: 8px;
   transition: all 0.2s ease;
 }
@@ -273,64 +342,134 @@ const emit = defineEmits<{
 .content {
   flex: 1;
   overflow-y: auto;
-  padding: 1.75rem;
-  position: relative;
-  z-index: 1;
+  padding: 1.25rem;
 }
 
-.section {
-  margin-bottom: 2rem;
-  padding-bottom: 1.75rem;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+.card {
+  margin-bottom: 1rem;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  border-radius: 18px;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.05);
+  overflow: hidden;
 }
 
-.section:last-of-type {
-  border-bottom: none;
+.card-header {
+  width: 100%;
+  border: none;
+  background: transparent;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  text-align: left;
+  padding: 1.2rem 1.25rem;
+  cursor: pointer;
 }
 
-.section-title {
-  font-size: 0.7rem;
+.card-title {
+  margin: 0;
+  font-size: 0.8rem;
   font-weight: 700;
-  color: #00b8a3;
-  margin: 0 0 1.25rem 0;
+  color: #00a896;
   text-transform: uppercase;
   letter-spacing: 0.12em;
   font-family: 'Syne', sans-serif;
 }
 
+.card-subtitle {
+  margin: 0.35rem 0 0;
+  color: #6b7280;
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.card-toggle {
+  flex-shrink: 0;
+  color: #3d74e7;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.card-body {
+  padding: 0 1.25rem 1.25rem;
+}
+
+.provider-group {
+  margin-bottom: 1.2rem;
+}
+
+.provider-label {
+  color: #374151;
+  font-weight: 600;
+  margin-bottom: 0.6rem;
+  font-size: 0.8rem;
+}
+
+.provider-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0.65rem;
+}
+
+.provider-chip {
+  width: 100%;
+  border: none;
+  border-radius: 999px;
+  padding: 0.75rem 0.95rem;
+  background: #eef2f7;
+  color: #6b7280;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 0.88rem;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.provider-chip:hover {
+  transform: translateY(-1px);
+  background: #e6ebf3;
+  color: #374151;
+}
+
+.provider-chip.active {
+  background: linear-gradient(135deg, #4f8cff 0%, #3d74e7 100%);
+  color: #ffffff;
+  box-shadow: 0 10px 22px rgba(61, 116, 231, 0.22);
+}
+
 .form-group {
-  margin-bottom: 1.25rem;
+  margin-bottom: 1rem;
 }
 
 .label {
   display: block;
   color: #374151;
   font-weight: 600;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.45rem;
   font-size: 0.8rem;
-  letter-spacing: 0.01em;
 }
 
 .input {
   width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   background: #ffffff;
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  border-radius: 10px;
-  padding: 0.8rem 1rem;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 12px;
+  padding: 0.82rem 1rem;
   color: #111827;
-  font-size: 0.875rem;
+  font-size: 0.9rem;
   outline: none;
   transition: all 0.2s ease;
   font-family: 'DM Sans', sans-serif;
 }
 
 .input:focus {
-  border-color: #00e5cc;
-  box-shadow: 0 0 0 3px rgba(0, 229, 204, 0.12), 0 2px 8px rgba(0, 0, 0, 0.04);
-}
-
-.input::placeholder {
-  color: #9ca3af;
+  border-color: #00d1bb;
+  box-shadow: 0 0 0 4px rgba(0, 209, 187, 0.12);
 }
 
 .shortcut-input {
@@ -340,56 +479,52 @@ const emit = defineEmits<{
 }
 
 .hint {
-  margin-top: 0.35rem;
-  font-size: 0.72rem;
-  color: #9ca3af;
-  letter-spacing: 0.01em;
+  margin-top: 0.4rem;
+  font-size: 0.75rem;
+  color: #8a94a6;
+  line-height: 1.5;
 }
 
 .password-input {
   position: relative;
 }
 
-.toggle-password {
-  position: absolute;
-  right: 0.75rem;
-  top: 50%;
-  transform: translateY(-50%);
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 1.1rem;
-  padding: 0.25rem;
-  transition: transform 0.15s ease;
+.password-input .input {
+  padding-right: 5rem;
 }
 
-.toggle-password:hover {
-  transform: translateY(-50%) scale(1.1);
+.toggle-password {
+  position: absolute;
+  right: 0.6rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(15, 23, 42, 0.06);
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #4b5563;
+  padding: 0.42rem 0.72rem;
 }
 
 .save-btn {
   width: 100%;
   background: linear-gradient(135deg, #00e5cc 0%, #00b8a3 100%);
   border: none;
-  border-radius: 10px;
-  padding: 1rem;
-  color: #07070d;
+  border-radius: 12px;
+  padding: 0.95rem;
+  color: #06211f;
   font-weight: 700;
   cursor: pointer;
   transition: all 0.2s ease;
-  font-size: 0.875rem;
+  font-size: 0.9rem;
   font-family: 'Syne', sans-serif;
-  letter-spacing: 0.02em;
-  box-shadow: 0 2px 12px rgba(0, 229, 204, 0.25);
+  box-shadow: 0 8px 20px rgba(0, 184, 163, 0.22);
 }
 
 .save-btn:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 4px 18px rgba(0, 229, 204, 0.35);
-}
-
-.save-btn:active:not(:disabled) {
-  transform: translateY(0);
 }
 
 .save-btn:disabled {
@@ -400,27 +535,25 @@ const emit = defineEmits<{
 
 .save-btn.saved {
   background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  box-shadow: 0 2px 12px rgba(16, 185, 129, 0.25);
 }
 
 .reset-btn {
   width: 100%;
-  margin-top: 0.6rem;
+  margin-top: 0.7rem;
   background: transparent;
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  border-radius: 10px;
-  padding: 0.85rem;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 12px;
+  padding: 0.9rem;
   color: #6b7280;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
-  font-size: 0.85rem;
+  font-size: 0.86rem;
   font-family: 'DM Sans', sans-serif;
 }
 
 .reset-btn:hover {
-  background: rgba(0, 0, 0, 0.02);
-  border-color: rgba(0, 0, 0, 0.15);
+  background: rgba(15, 23, 42, 0.03);
   color: #374151;
 }
 </style>
