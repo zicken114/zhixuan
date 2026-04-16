@@ -4,6 +4,7 @@ import WidgetWindow from './windows/WidgetWindow.vue';
 import MainWindow from './windows/MainWindow.vue';
 import PopupWindow from './windows/PopupWindow.vue';
 import CaptureWindow from './windows/CaptureWindow.vue';
+import ResultWindow from './windows/ResultWindow.vue';
 
 const windowType = ref<string>('widget');
 
@@ -19,6 +20,7 @@ onMounted(() => {
     <MainWindow v-else-if="windowType === 'main'" />
     <PopupWindow v-else-if="windowType === 'popup'" />
     <CaptureWindow v-else-if="windowType === 'capture'" />
+    <ResultWindow v-else-if="windowType === 'result'" />
   </div>
 </template>
 

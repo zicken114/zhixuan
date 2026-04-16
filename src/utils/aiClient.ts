@@ -28,6 +28,15 @@ export interface StreamCallbacks {
 }
 
 export class AIClient {
+  private abortController: AbortController | null = null;
+
+  cancel() {
+    if (this.abortController) {
+      this.abortController.abort();
+      this.abortController = null;
+    }
+  }
+
   private resolveChatCompletionsUrl(baseUrl: string) {
     const trimmedBaseUrl = baseUrl.trim().replace(/\/+$/, '');
 
@@ -63,6 +72,9 @@ export class AIClient {
     const config = useVision ? this.getVisionConfig() : this.getTextConfig();
     const requestUrl = this.resolveChatCompletionsUrl(config.baseUrl);
 
+    // Create new AbortController for this request
+    this.abortController = new AbortController();
+
     callbacks.onStart?.();
 
     try {
@@ -90,7 +102,8 @@ export class AIClient {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${config.apiKey}`
         },
-        body: JSON.stringify(requestBody)
+        body: JSON.stringify(requestBody),
+        signal: this.abortController.signal
       });
 
       if (!response.ok) {
@@ -151,6 +164,10 @@ export class AIClient {
         callbacks.onComplete?.(content);
       }
     } catch (error) {
+      // Don't report abort as error — user cancelled
+      if ((error as Error).name === 'AbortError' || (error as Error).message?.includes('abort')) {
+        return;
+      }
       callbacks.onError?.(error as Error);
       throw error;
     }
@@ -159,6 +176,9 @@ export class AIClient {
   async chatOnce(messages: ChatMessage[], useVision: boolean = false): Promise<string> {
     const config = useVision ? this.getVisionConfig() : this.getTextConfig();
     const requestUrl = this.resolveChatCompletionsUrl(config.baseUrl);
+
+    // Create new AbortController for this request
+    this.abortController = new AbortController();
 
     const response = await fetch(requestUrl, {
       method: 'POST',
@@ -170,7 +190,8 @@ export class AIClient {
         model: config.model,
         messages,
         stream: false
-      })
+      }),
+      signal: this.abortController.signal
     });
 
     if (!response.ok) {

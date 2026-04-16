@@ -167,6 +167,15 @@ const selectionInfo = computed(() => {
 const extractWithPrompt = async (prompt: ExtractionPrompt) => {
   if (!hasSelected.value) return;
 
+  // Immediately hide capture window and open result window
+  console.log('[CaptureWindow] hiding capture window and showing result window');
+  await invoke('hide_capture_window');
+  await invoke('show_result_window');
+  console.log('[CaptureWindow] result window should now be visible');
+  // Wait for result window to be fully mounted and listeners ready
+  await invoke('wait_for_result_window_ready');
+  console.log('[CaptureWindow] result window is ready');
+
   // Viewport coordinates (what the user selected on screen)
   const viewX = Math.min(startX.value, endX.value);
   const viewY = Math.min(startY.value, endY.value);
@@ -262,46 +271,51 @@ const extractWithPrompt = async (prompt: ExtractionPrompt) => {
       onToken: (token) => {
         fullResponse += token;
         processingResult.value = fullResponse;
+        invoke('emit_to_result', { content: fullResponse }).catch(() => {});
       },
       onComplete: async () => {
         isProcessing.value = false;
         showResult.value = true;
 
-        // Write result to clipboard based on format
+        // Determine clipboard text based on format
+        let clipboardText = fullResponse;
         if (prompt.format === 'latex' || prompt.format === 'markdown') {
           // Remove markdown code block markers if present
-          const cleanResult = fullResponse
+          clipboardText = fullResponse
             .replace(/^```(?:latex|markdown)?\n?/i, '')
             .replace(/\n?```$/, '')
             .trim();
+        } else {
+          clipboardText = fullResponse.trim();
+        }
 
-          if (prompt.format === 'latex') {
-            // For LaTeX, also write as plain text for compatibility
-            await invoke('set_clipboard_text', { text: cleanResult });
-          } else {
-            // For markdown, try to write as HTML
-            const htmlResult = convertMarkdownToHtml(cleanResult);
-            try {
-              await invoke('set_clipboard_html', { html: htmlResult });
-            } catch {
-              // Fallback to plain text
-              await invoke('set_clipboard_text', { text: cleanResult });
-            }
+        // Write to clipboard based on format
+        if (prompt.format === 'latex') {
+          await invoke('set_clipboard_text', { text: clipboardText });
+        } else if (prompt.format === 'markdown') {
+          const htmlResult = convertMarkdownToHtml(clipboardText);
+          try {
+            await invoke('set_clipboard_html', { html: htmlResult });
+          } catch {
+            await invoke('set_clipboard_text', { text: clipboardText });
           }
         } else {
-          // Plain text
-          await invoke('set_clipboard_text', { text: fullResponse.trim() });
+          await invoke('set_clipboard_text', { text: clipboardText });
         }
-        // User will click "关闭" button to dismiss
+
+        // Emit complete to result window
+        await invoke('emit_extraction_complete', {
+          icon: prompt.icon,
+          label: prompt.label,
+          content: clipboardText
+        });
       },
       onError: (error) => {
         isProcessing.value = false;
         processingResult.value = `错误: ${error}`;
         showResult.value = true;
-        // Auto-hide after a short delay
-        setTimeout(async () => {
-          await invoke('hide_capture_window');
-        }, 500);
+        // Emit error to result window
+        invoke('emit_extraction_error', { error: String(error) }).catch(() => {});
       }
     }, true);
 
@@ -309,6 +323,7 @@ const extractWithPrompt = async (prompt: ExtractionPrompt) => {
     isProcessing.value = false;
     processingResult.value = `错误: ${error}`;
     showResult.value = true;
+    await invoke('emit_extraction_error', { error: String(error) });
   }
 };
 

@@ -1,13 +1,24 @@
-use tauri::{Manager, PhysicalPosition, Emitter};
+use tauri::{Manager, PhysicalPosition, Emitter, Listener};
+use std::fs::OpenOptions;
+use std::io::Write;
 use arboard::Clipboard;
 use serde::Serialize;
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use image::ImageFormat;
 use std::io::Cursor;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
 
 static CAPTURE_IN_PROGRESS: AtomicBool = AtomicBool::new(false);
+
+fn log_to_file(msg: &str) {
+    if let Ok(mut file) = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open("D:/temp/ai_research_log.txt")
+    {
+        let _ = writeln!(file, "{}", msg);
+    }
+}
 
 #[derive(Clone, Serialize)]
 struct ClipboardPayload {
@@ -354,9 +365,84 @@ fn set_clipboard_html(html: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+async fn show_result_window(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("result") {
+        window.show().map_err(|e| e.to_string())?;
+        window.set_focus().map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+async fn wait_for_result_window_ready(app: tauri::AppHandle) -> Result<(), String> {
+    println!("[wait_for_result_window_ready] waiting for result-window-ready event");
+
+    // Use event listener to wait for the ready signal
+    let ready = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let ready_clone = ready.clone();
+
+    // Set up a listener for the ready event
+    app.once("result-window-ready", move |_| {
+        println!("[wait_for_result_window_ready] received result-window-ready");
+        ready_clone.store(true, std::sync::atomic::Ordering::SeqCst);
+    });
+
+    // Wait with timeout of 3 seconds
+    let start = std::time::Instant::now();
+    let timeout = std::time::Duration::from_secs(3);
+
+    while start.elapsed() < timeout {
+        if ready.load(std::sync::atomic::Ordering::SeqCst) {
+            println!("[wait_for_result_window_ready] ready signal received");
+            return Ok(());
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+
+    println!("[wait_for_result_window_ready] timeout waiting for ready event");
+    Ok(())
+}
+
+#[tauri::command]
+async fn result_window_ready(app: tauri::AppHandle) -> Result<(), String> {
+    println!("[result_window_ready] received from Vue");
+    // Emit the event to unblock wait_for_result_window_ready
+    let _ = app.emit("result-window-ready", ());
+    Ok(())
+}
+
+#[tauri::command]
+async fn emit_to_result(app: tauri::AppHandle, content: String) -> Result<(), String> {
+    let _ = app.emit("result-stream", content);
+    Ok(())
+}
+
+#[tauri::command]
+async fn emit_extraction_complete(app: tauri::AppHandle, icon: String, label: String, content: String) -> Result<(), String> {
+    println!("[emit_extraction_complete] content length: {}, checking windows...", content.len());
+    for (label, _) in app.webview_windows() {
+        println!("  window: {}", label);
+    }
+    let _ = app.emit("extraction-complete", serde_json::json!({"icon": icon, "label": label, "content": content}));
+    println!("[emit_extraction_complete] emit done");
+    Ok(())
+}
+
+#[tauri::command]
+async fn emit_extraction_error(app: tauri::AppHandle, error: String) -> Result<(), String> {
+    println!("[emit_extraction_error] emitting error: {}", error);
+    let _ = app.emit("extraction-error", error);
+    Ok(())
+}
+
+#[tauri::command]
 fn hide_capture_window(app: tauri::AppHandle) -> Result<(), String> {
+    println!("[hide_capture_window] called");
     if let Some(window) = app.get_webview_window("capture") {
+        println!("[hide_capture_window] hiding capture window");
         window.hide().map_err(|e| e.to_string())?;
+    } else {
+        println!("[hide_capture_window] capture window not found");
     }
     Ok(())
 }
@@ -483,6 +569,15 @@ fn trigger_capture(app: tauri::AppHandle) -> Result<(), String> {
         y: screen.display_info.y,
     };
 
+    // Hide result window when starting new capture
+    if let Some(result_window) = app.get_webview_window("result") {
+        println!("Hiding result window for new capture");
+        let _ = result_window.hide();
+    }
+
+    // Emit event to reset result window state for new capture
+    let _ = app.emit("new-capture-started", ());
+
     // Now show the window
     if let Some(window) = app.get_webview_window("capture") {
         println!("Showing capture window");
@@ -502,7 +597,6 @@ fn trigger_capture(app: tauri::AppHandle) -> Result<(), String> {
     }
 
     // Reset the flag after a delay
-    let app_handle = app.clone();
     std::thread::spawn(move || {
         std::thread::sleep(std::time::Duration::from_secs(2));
         CAPTURE_IN_PROGRESS.store(false, Ordering::SeqCst);
@@ -560,6 +654,12 @@ pub fn run() {
             set_clipboard_html,
             capture_fullscreen,
             capture_region,
+            show_result_window,
+            wait_for_result_window_ready,
+            result_window_ready,
+            emit_to_result,
+            emit_extraction_complete,
+            emit_extraction_error,
             hide_capture_window,
             hide_window,
             show_window,

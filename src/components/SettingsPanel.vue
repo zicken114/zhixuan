@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
+import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import {
   providerPresets,
   useSettingsStore,
@@ -9,7 +10,14 @@ import {
   type ProviderPresetId
 } from '../stores/settings';
 
+const appWindow = getCurrentWebviewWindow();
 const settingsStore = useSettingsStore();
+
+const handleDragStart = async (e: MouseEvent) => {
+  // Don't drag if clicking interactive elements inside settings
+  if ((e.target as HTMLElement).closest('button, input, .settings-panel')) return;
+  await appWindow.startDragging();
+};
 const localConfig = ref<AIConfig>(JSON.parse(JSON.stringify(settingsStore.config)));
 
 const showTextPassword = ref(false);
@@ -91,6 +99,7 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts') => {
 
 <template>
   <div class="settings-panel">
+    <div class="drag-handle" @mousedown="handleDragStart"></div>
     <div class="header">
       <div>
         <h2>Settings</h2>
@@ -293,6 +302,14 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts') => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.drag-handle {
+  height: 32px;
+  cursor: move;
+  -webkit-app-region: drag;
+  flex-shrink: 0;
+  /* Transparent but acts as a hit target */
 }
 
 .header {

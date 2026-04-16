@@ -66,6 +66,18 @@
         "alwaysOnTop": true,
         "visible": false,
         "focus": true
+      },
+      {
+        "label": "result",
+        "title": "提取结果",
+        "width": 480,
+        "height": 360,
+        "resizable": true,
+        "decorations": true,
+        "alwaysOnTop": false,
+        "center": true,
+        "url": "index.html?window=result",
+        "visible": false
       }
     ],
     "security": {

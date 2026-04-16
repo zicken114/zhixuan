@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Capability for all windows",
-  "windows": ["main", "widget", "popup", "capture"],
+  "windows": ["main", "widget", "popup", "capture", "result"],
   "permissions": [
     "core:default",
     "core:window:allow-show",
@@ -13,6 +13,7 @@
     "core:window:allow-is-visible",
     "core:window:allow-start-dragging",
     "core:window:allow-set-focus",
+    "core:window:allow-close",
     "core:event:default",
     "core:event:allow-listen",
     "core:event:allow-emit",

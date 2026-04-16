@@ -9,6 +9,9 @@ import { marked } from 'marked';
 const appWindow = getCurrentWebviewWindow();
 const clipboardText = ref('');
 const isProcessing = ref(false);
+const progress = ref(0);
+const progressLabel = ref('处理中...');
+let progressTimer: number | null = null;
 
 interface ClipboardPayload {
   text: string;
@@ -27,10 +30,14 @@ const menuItems = [
 let blurTimeout: number | null = null;
 
 const handleBlur = () => {
-  // Hide immediately when the popup loses focus.
+  // Don't auto-cancel when losing focus - let the AI request complete
+  // The popup will be hidden but the request continues in background
+  // Only auto-close if not processing
   blurTimeout = window.setTimeout(async () => {
-    await closeWindow();
-  }, 0);
+    if (!isProcessing.value) {
+      await closeWindow();
+    }
+  }, 2000); // Wait 2 seconds before closing if not processing
 };
 
 const handleFocus = () => {
@@ -53,6 +60,7 @@ onMounted(async () => {
 });
 
 const handleAction = async (action: string) => {
+  console.log('[Popup] handleAction called with:', action, 'isProcessing:', isProcessing.value);
   if (action === 'settings') {
     // Open settings in main window
     await invoke('show_window', { label: 'main' });
@@ -79,6 +87,7 @@ const handleAction = async (action: string) => {
   }
 
   isProcessing.value = true;
+  startFakeProgress();
 
   try {
     switch (action) {
@@ -93,20 +102,35 @@ const handleAction = async (action: string) => {
         break;
     }
   } catch (error: any) {
-    console.error('Action failed:', error);
-    // Show error to user by opening main window with settings
-    await invoke('show_window', { label: 'main' });
-    await invoke('show_window_with_settings');
-    // Close popup after showing settings
+    // Don't show error UI if user aborted
+    if (error?.name === 'AbortError' || error?.message?.includes('abort')) {
+      console.log('Action cancelled by user');
+      return;
+    }
+    console.error('[Popup] Action failed with error:', error);
+    // Update progress to show error state
+    if (progressTimer) {
+      clearInterval(progressTimer);
+      progressTimer = null;
+    }
+    progress.value = 0;
+    progressLabel.value = `错误: ${error?.message || '操作失败'}`;
+    // Auto-close after showing error
+    await new Promise(resolve => setTimeout(resolve, 2000));
     await closeWindow();
     return;
   } finally {
+    if (progressTimer) {
+      clearInterval(progressTimer);
+      progressTimer = null;
+    }
     isProcessing.value = false;
   }
   await closeWindow();
 };
 
 const handleTranslate = async () => {
+  console.log('[Popup] handleTranslate called, clipboard text length:', clipboardText.value.length);
   const messages = [
     {
       role: 'system' as const,
@@ -118,8 +142,16 @@ const handleTranslate = async () => {
     }
   ];
 
+  console.log('[Popup] calling aiClient.chatOnce...');
   const result = await aiClient.chatOnce(messages);
-  await invoke('set_clipboard_text', { text: result });
+  console.log('[Popup] chatOnce returned, result length:', result.length);
+  try {
+    await invoke('set_clipboard_text', { text: result });
+    console.log('[Popup] clipboard set successfully');
+  } catch (e) {
+    console.error('Failed to set clipboard:', e);
+  }
+  await completeProgress();
 };
 
 const handleCleanToWord = async () => {
@@ -127,7 +159,12 @@ const handleCleanToWord = async () => {
 
   if (hasMarkdown) {
     const html = await marked(clipboardText.value);
-    await invoke('set_clipboard_html', { html });
+    try {
+      await invoke('set_clipboard_html', { html });
+    } catch (e) {
+      console.error('Failed to set clipboard HTML:', e);
+    }
+    await completeProgress();
   } else {
     const messages = [
       {
@@ -141,7 +178,12 @@ const handleCleanToWord = async () => {
     ];
 
     const result = await aiClient.chatOnce(messages);
-    await invoke('set_clipboard_text', { text: result });
+    try {
+      await invoke('set_clipboard_text', { text: result });
+    } catch (e) {
+      console.error('Failed to set clipboard:', e);
+    }
+    await completeProgress();
   }
 };
 
@@ -158,11 +200,53 @@ const handleFormatCitation = async () => {
   ];
 
   const result = await aiClient.chatOnce(messages);
-  await invoke('set_clipboard_text', { text: result });
+  try {
+    await invoke('set_clipboard_text', { text: result });
+  } catch (e) {
+    console.error('Failed to set clipboard:', e);
+  }
+  await completeProgress();
 };
 
 const closeWindow = async () => {
   await appWindow.hide();
+};
+
+const cancelProgress = async () => {
+  if (progressTimer) {
+    clearInterval(progressTimer);
+    progressTimer = null;
+  }
+  await aiClient.cancel();
+  isProcessing.value = false;
+  await closeWindow();
+};
+
+const startFakeProgress = () => {
+  console.log('[Popup] startFakeProgress called');
+  progress.value = 0;
+  progressLabel.value = '处理中...';
+  progressTimer = window.setInterval(() => {
+    if (progress.value < 85) {
+      // Simulate variable speed (slow start, faster middle, slow end)
+      const increment = progress.value < 30 ? 2 : progress.value < 70 ? 3.5 : 1.5;
+      progress.value = Math.min(85, progress.value + increment);
+      console.log('[Popup] progress:', progress.value);
+    }
+  }, 80);
+};
+
+const completeProgress = async () => {
+  console.log('[Popup] completeProgress called');
+  if (progressTimer) {
+    clearInterval(progressTimer);
+    progressTimer = null;
+  }
+  progress.value = 100;
+  progressLabel.value = '✓ 已复制到粘贴板';
+  console.log('[Popup] progress set to 100%, waiting...');
+  await new Promise(resolve => setTimeout(resolve, 1500));
+  console.log('[Popup] completeProgress done, closing window');
 };
 </script>
 
@@ -180,7 +264,14 @@ const closeWindow = async () => {
     </div>
 
     <div v-if="isProcessing" class="processing-overlay">
-      <div class="spinner"></div>
+      <div class="progress-container">
+        <div class="progress-label">{{ progressLabel }}</div>
+        <div class="progress-bar-track">
+          <div class="progress-bar-fill" :style="{ width: progress + '%' }"></div>
+        </div>
+        <div class="progress-percent">{{ Math.round(progress) }}%</div>
+        <button class="cancel-btn" @click="cancelProgress">终止任务</button>
+      </div>
     </div>
   </div>
 </template>
@@ -277,17 +368,60 @@ const closeWindow = async () => {
   backdrop-filter: blur(8px);
 }
 
-.spinner {
-  width: 28px;
-  height: 28px;
-  border: 3px solid rgba(0, 229, 204, 0.15);
-  border-top-color: #00e5cc;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-  box-shadow: 0 0 15px rgba(0, 229, 204, 0.3);
+.progress-container {
+  width: 80%;
+  max-width: 260px;
+  text-align: center;
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
+.progress-label {
+  color: rgba(240, 240, 245, 0.7);
+  font-size: 13px;
+  margin-bottom: 14px;
+  letter-spacing: 0.02em;
+  min-height: 20px;
+}
+
+.progress-bar-track {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #00e5cc 0%, #00b8a3 100%);
+  border-radius: 3px;
+  transition: width 0.1s ease;
+  box-shadow: 0 0 10px rgba(0, 229, 204, 0.4);
+}
+
+.progress-percent {
+  color: #00e5cc;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: 'JetBrains Mono', monospace;
+  margin-bottom: 14px;
+}
+
+.cancel-btn {
+  margin-top: 12px;
+  padding: 7px 18px;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 8px;
+  color: #ef4444;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+
+.cancel-btn:hover {
+  background: rgba(239, 68, 68, 0.25);
+  border-color: rgba(239, 68, 68, 0.5);
 }
 </style>
