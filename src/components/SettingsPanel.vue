@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import {
   providerPresets,
+  supportedLanguages,
   useSettingsStore,
   type AIConfig,
   type ModelConfig,
@@ -26,6 +27,7 @@ const saveStatus = ref<'idle' | 'saving' | 'saved' | 'error'>('idle');
 const textExpanded = ref(true);
 const visionExpanded = ref(false);
 const shortcutsExpanded = ref(false);
+const translateExpanded = ref(false);
 
 const emit = defineEmits<{
   close: [];
@@ -90,10 +92,11 @@ const resetSettings = () => {
   location.reload();
 };
 
-const toggleCard = (target: 'text' | 'vision' | 'shortcuts') => {
+const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate') => {
   if (target === 'text') textExpanded.value = !textExpanded.value;
   if (target === 'vision') visionExpanded.value = !visionExpanded.value;
   if (target === 'shortcuts') shortcutsExpanded.value = !shortcutsExpanded.value;
+  if (target === 'translate') translateExpanded.value = !translateExpanded.value;
 };
 </script>
 
@@ -235,6 +238,38 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts') => {
               placeholder="gpt-4o"
             />
             <p class="hint">Current built-in vision-safe presets: OpenAI and Bailian. Custom endpoints still work.</p>
+          </div>
+</div>
+      </div>
+
+      <div class="card">
+        <button class="card-header" @click="toggleCard('translate')">
+          <div>
+            <h3 class="card-title">Translation</h3>
+            <p class="card-subtitle">Configure your translation language preference.</p>
+          </div>
+          <span class="card-toggle">{{ translateExpanded ? 'Hide' : 'Show' }}</span>
+        </button>
+
+        <div v-if="translateExpanded" class="card-body">
+          <div class="form-group">
+            <label class="label">Source Language</label>
+            <select v-model="localConfig.translateConfig.sourceLang" class="input select-input">
+              <option v-for="lang in supportedLanguages" :key="lang.code" :value="lang.code">
+                {{ lang.label }}
+              </option>
+            </select>
+            <p class="hint">The language of the text you want to translate.</p>
+          </div>
+
+          <div class="form-group">
+            <label class="label">Target Language</label>
+            <select v-model="localConfig.translateConfig.targetLang" class="input select-input">
+              <option v-for="lang in supportedLanguages.filter(l => l.code !== 'auto')" :key="lang.code" :value="lang.code">
+                {{ lang.label }}
+              </option>
+            </select>
+            <p class="hint">The language you want to translate into.</p>
           </div>
         </div>
       </div>
@@ -572,5 +607,14 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts') => {
 .reset-btn:hover {
   background: rgba(15, 23, 42, 0.03);
   color: #374151;
+}
+
+.select-input {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+  background-position: right 0.75rem center;
+  background-repeat: no-repeat;
+  background-size: 1.5em 1.5em;
+  padding-right: 2.5rem;
 }
 </style>

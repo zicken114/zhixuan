@@ -5,9 +5,11 @@ import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import { aiClient } from '../utils/aiClient';
 import { marked } from 'marked';
+import { useSettingsStore, supportedLanguages } from '../stores/settings';
 
 const appWindow = getCurrentWebviewWindow();
 const clipboardText = ref('');
+const settingsStore = useSettingsStore();
 const isProcessing = ref(false);
 const progress = ref(0);
 const progressLabel = ref('处理中...');
@@ -131,10 +133,19 @@ const handleAction = async (action: string) => {
 
 const handleTranslate = async () => {
   console.log('[Popup] handleTranslate called, clipboard text length:', clipboardText.value.length);
+
+  const { sourceLang, targetLang } = settingsStore.config.translateConfig;
+  const sourceLabel = supportedLanguages.find(l => l.code === sourceLang)?.label || sourceLang;
+  const targetLabel = supportedLanguages.find(l => l.code === targetLang)?.label || targetLang;
+
+  const systemPrompt = sourceLang === 'auto'
+    ? `You are a professional translator. Translate the given text to ${targetLabel}. Only output the translation, no explanations.`
+    : `You are a professional translator. Translate the given text from ${sourceLabel} to ${targetLabel}. Only output the translation, no explanations.`;
+
   const messages = [
     {
       role: 'system' as const,
-      content: 'You are a professional translator. Translate the given text to English if it is in another language, or to Chinese if it is in English. Only output the translation, no explanations.'
+      content: systemPrompt
     },
     {
       role: 'user' as const,

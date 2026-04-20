@@ -18,6 +18,31 @@ export type ProviderPresetId =
   | 'stepfun'
   | 'minimax';
 
+export const supportedLanguages = [
+  { code: 'auto', label: '自动检测' },
+  { code: 'zh', label: '中文' },
+  { code: 'en', label: '英语' },
+  { code: 'ja', label: '日语' },
+  { code: 'ko', label: '韩语' },
+  { code: 'fr', label: '法语' },
+  { code: 'de', label: '德语' },
+  { code: 'es', label: '西班牙语' },
+  { code: 'ru', label: '俄语' },
+  { code: 'ar', label: '阿拉伯语' },
+  { code: 'pt', label: '葡萄牙语' },
+  { code: 'it', label: '意大利语' },
+  { code: 'nl', label: '荷兰语' },
+  { code: 'pl', label: '波兰语' },
+  { code: 'tr', label: '土耳其语' }
+] as const;
+
+export type LanguageCode = typeof supportedLanguages[number]['code'];
+
+export interface TranslateConfig {
+  sourceLang: LanguageCode;
+  targetLang: LanguageCode;
+}
+
 export interface ProviderPreset {
   id: ProviderPresetId;
   label: string;
@@ -32,6 +57,7 @@ export interface ProviderPreset {
 export interface AIConfig {
   textConfig: ModelConfig;
   visionConfig: ModelConfig;
+  translateConfig: TranslateConfig;
   hasCompletedWelcome: boolean;
   autoHideOnBlur: boolean;
   popupShortcut: string;
@@ -131,6 +157,10 @@ const defaultConfig: AIConfig = {
     apiKey: '',
     model: 'gpt-4o'
   },
+  translateConfig: {
+    sourceLang: 'auto',
+    targetLang: 'zh'
+  },
   hasCompletedWelcome: false,
   autoHideOnBlur: true,
   popupShortcut: 'Alt+Q',
@@ -164,6 +194,10 @@ const normalizeModelConfig = (
 const normalizeConfig = (partial: Partial<AIConfig> | undefined): AIConfig => ({
   textConfig: normalizeModelConfig(partial?.textConfig, defaultConfig.textConfig),
   visionConfig: normalizeModelConfig(partial?.visionConfig, defaultConfig.visionConfig),
+  translateConfig: {
+    sourceLang: partial?.translateConfig?.sourceLang ?? defaultConfig.translateConfig.sourceLang,
+    targetLang: partial?.translateConfig?.targetLang ?? defaultConfig.translateConfig.targetLang
+  },
   hasCompletedWelcome: partial?.hasCompletedWelcome ?? defaultConfig.hasCompletedWelcome,
   autoHideOnBlur: partial?.autoHideOnBlur ?? defaultConfig.autoHideOnBlur,
   popupShortcut: partial?.popupShortcut ?? defaultConfig.popupShortcut,
