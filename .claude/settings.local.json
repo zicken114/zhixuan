@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(powershell:*)",
+      "Bash(export PATH=\"$PATH:/c/Users/华为/.cargo/bin\")",
+      "Bash(npm run:*)",
+      "Bash(rustup toolchain:*)",
+      "Bash(rustup default:*)",
+      "Bash(rustc --version)",
+      "Bash(where cl.exe)",
+      "Bash(where pacman:*)",
+      "Read(//c/Program Files/Microsoft Visual Studio/**)",
+      "Read(//c/Program Files \\(x86\\)/Microsoft Visual Studio/**)"
+    ]
+  }
+}
