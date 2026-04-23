@@ -1,18 +1,22 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import { aiClient } from '../utils/aiClient';
 import { marked } from 'marked';
 import { useSettingsStore, supportedLanguages } from '../stores/settings';
+import { usePopupHistoryStore } from '../stores/popupHistory';
 
 const appWindow = getCurrentWebviewWindow();
 const clipboardText = ref('');
 const settingsStore = useSettingsStore();
+const historyStore = usePopupHistoryStore();
 const isProcessing = ref(false);
 const progress = ref(0);
 const progressLabel = ref('处理中...');
+const inputText = ref('');
+const outputText = ref('');
 let progressTimer: number | null = null;
 
 interface ClipboardPayload {
@@ -25,7 +29,9 @@ const menuItems = [
   { icon: '🌍', label: 'Translate', action: 'translate' },
   { icon: '🧹', label: 'Clean to Word', action: 'clean' },
   { icon: '📚', label: 'Format Citation', action: 'citation' },
+  { icon: '📷', label: 'Screenshot', action: 'screenshot' },
   { icon: '⚙️', label: 'Settings', action: 'settings' },
+  { icon: '📋', label: 'History', action: 'history' },
   { icon: '⏻', label: 'Exit', action: 'exit' }
 ];
 
@@ -39,7 +45,7 @@ const handleBlur = () => {
     if (!isProcessing.value) {
       await closeWindow();
     }
-  }, 2000); // Wait 2 seconds before closing if not processing
+  }, 500); // Wait 500ms before closing if not processing
 };
 
 const handleFocus = () => {
@@ -50,29 +56,63 @@ const handleFocus = () => {
   }
 };
 
+const handleDocumentClick = async (e: MouseEvent) => {
+  // Close popup when clicking outside (except during processing)
+  if (isProcessing.value) return;
+
+  const target = e.target as HTMLElement;
+  // If click is not on the popup window, close it
+  if (!target.closest('.popup-window')) {
+    await closeWindow();
+  }
+};
+
 onMounted(async () => {
   // Listen for clipboard data from Rust
   await listen<ClipboardPayload>('clipboard-data', (event) => {
     clipboardText.value = event.payload.text;
   });
 
+  // Listen for widget position updates while dragging
+  await listen('widget-move-update', () => {
+    // The popup window is positioned by Rust, no need to update from frontend
+    // This listener is kept for potential future use
+  });
+
   // Add blur/focus listeners for auto-hide
   window.addEventListener('blur', handleBlur);
   window.addEventListener('focus', handleFocus);
+
+  // Add document click listener to close popup when clicking outside
+  document.addEventListener('click', handleDocumentClick);
+
 });
+
+// Adjust window size based on content
 
 const handleAction = async (action: string) => {
   console.log('[Popup] handleAction called with:', action, 'isProcessing:', isProcessing.value);
   if (action === 'settings') {
     // Open settings in main window
-    await invoke('show_window', { label: 'main' });
     await invoke('show_window_with_settings');
     await closeWindow();
     return;
   }
 
-  if (action === 'exit') {
+  if (action === 'history') {
+    await invoke('show_window', { label: 'history' });
+    await closeWindow();
+    return;
+  }
+
+if (action === 'exit') {
     await invoke('quit_app');
+    return;
+  }
+
+  if (action === 'screenshot') {
+    await invoke('trigger_capture');
+    await closeWindow();
     return;
   }
 
@@ -82,13 +122,14 @@ const handleAction = async (action: string) => {
   // but show error after if API call fails
   if (!clipboardText.value.trim()) {
     console.log('Clipboard is empty, showing settings');
-    await invoke('show_window', { label: 'main' });
     await invoke('show_window_with_settings');
     await closeWindow();
     return;
   }
 
   isProcessing.value = true;
+  inputText.value = clipboardText.value;
+  outputText.value = '';
   startFakeProgress();
 
   try {
@@ -156,6 +197,22 @@ const handleTranslate = async () => {
   console.log('[Popup] calling aiClient.chatOnce...');
   const result = await aiClient.chatOnce(messages);
   console.log('[Popup] chatOnce returned, result length:', result.length);
+  outputText.value = result;
+
+  // Save to history
+  try {
+    historyStore.addItem({
+      actionType: 'translate',
+      actionLabel: '翻译',
+      inputText: clipboardText.value,
+      outputText: result
+    });
+    await invoke('notify_history_changed');
+    console.log('[Popup] history saved, total items:', historyStore.items.length);
+  } catch (e) {
+    console.error('[Popup] Failed to save history:', e);
+  }
+
   try {
     await invoke('set_clipboard_text', { text: result });
     console.log('[Popup] clipboard set successfully');
@@ -170,6 +227,16 @@ const handleCleanToWord = async () => {
 
   if (hasMarkdown) {
     const html = await marked(clipboardText.value);
+    outputText.value = html;
+
+    historyStore.addItem({
+      actionType: 'clean',
+      actionLabel: '清理文本',
+      inputText: clipboardText.value,
+      outputText: html
+    });
+    await invoke('notify_history_changed');
+
     try {
       await invoke('set_clipboard_html', { html });
     } catch (e) {
@@ -189,10 +256,20 @@ const handleCleanToWord = async () => {
     ];
 
     const result = await aiClient.chatOnce(messages);
+    outputText.value = result;
+
+    historyStore.addItem({
+      actionType: 'clean',
+      actionLabel: '清理文本',
+      inputText: clipboardText.value,
+      outputText: result
+    });
+    await invoke('notify_history_changed');
+
     try {
       await invoke('set_clipboard_text', { text: result });
     } catch (e) {
-      console.error('Failed to set clipboard:', e);
+      console.error('Failed to set clipboard text:', e);
     }
     await completeProgress();
   }
@@ -211,6 +288,16 @@ const handleFormatCitation = async () => {
   ];
 
   const result = await aiClient.chatOnce(messages);
+  outputText.value = result;
+
+  historyStore.addItem({
+    actionType: 'citation',
+    actionLabel: '格式引用',
+    inputText: clipboardText.value,
+    outputText: result
+  });
+  await invoke('notify_history_changed');
+
   try {
     await invoke('set_clipboard_text', { text: result });
   } catch (e) {
@@ -221,6 +308,11 @@ const handleFormatCitation = async () => {
 
 const closeWindow = async () => {
   await appWindow.hide();
+  await invoke('popup_closed');
+};
+
+const hidePopup = async () => {
+  await invoke('hide_popup');
 };
 
 const cancelProgress = async () => {
@@ -256,33 +348,57 @@ const completeProgress = async () => {
   progress.value = 100;
   progressLabel.value = '✓ 已复制到粘贴板';
   console.log('[Popup] progress set to 100%, waiting...');
-  await new Promise(resolve => setTimeout(resolve, 1500));
+
+  // Wait 5 seconds if output is available, otherwise 1.5 seconds
+  const waitTime = outputText.value ? 5000 : 1500;
+  await new Promise(resolve => setTimeout(resolve, waitTime));
   console.log('[Popup] completeProgress done, closing window');
 };
+
+onUnmounted(() => {
+  window.removeEventListener('blur', handleBlur);
+  window.removeEventListener('focus', handleFocus);
+  document.removeEventListener('click', handleDocumentClick);
+
+  if (blurTimeout) {
+    clearTimeout(blurTimeout);
+  }
+});
 </script>
 
 <template>
-  <div class="popup-window">
-    <div
-      v-for="item in menuItems"
-      :key="item.action"
-      class="menu-item"
-      :class="{ 'processing': isProcessing }"
-      @click="handleAction(item.action)"
-    >
-      <span class="icon">{{ item.icon }}</span>
-      <span class="label">{{ item.label }}</span>
+  <div class="popup-window" @click.self="hidePopup">
+    <!-- Menu View -->
+    <div v-if="!isProcessing" class="menu-list">
+      <div
+        v-for="item in menuItems"
+        :key="item.action"
+        class="menu-item"
+        @click.stop="handleAction(item.action)"
+      >
+        <span class="icon">{{ item.icon }}</span>
+        <span class="label">{{ item.label }}</span>
+      </div>
     </div>
 
-    <div v-if="isProcessing" class="processing-overlay">
-      <div class="progress-container">
-        <div class="progress-label">{{ progressLabel }}</div>
-        <div class="progress-bar-track">
-          <div class="progress-bar-fill" :style="{ width: progress + '%' }"></div>
-        </div>
-        <div class="progress-percent">{{ Math.round(progress) }}%</div>
-        <button class="cancel-btn" @click="cancelProgress">终止任务</button>
+    <!-- Processing View -->
+    <div v-else class="processing-view">
+      <div class="section">
+        <div class="section-label">输入</div>
+        <div class="text-preview input-preview">{{ inputText }}</div>
       </div>
+      <div v-if="outputText" class="section">
+        <div class="section-label">输出</div>
+        <div class="text-preview output-preview">{{ outputText }}</div>
+      </div>
+      <div class="progress-info">
+        <div class="progress-label">{{ progressLabel }}</div>
+        <div class="progress-percent">{{ Math.round(progress) }}%</div>
+      </div>
+      <div class="progress-bar-track">
+        <div class="progress-bar-fill" :style="{ width: progress + '%' }"></div>
+      </div>
+      <button class="cancel-btn" @click="cancelProgress">终止任务</button>
     </div>
   </div>
 </template>
@@ -293,24 +409,14 @@ const completeProgress = async () => {
   height: 100%;
   background: rgba(13, 13, 20, 0.95);
   backdrop-filter: blur(20px);
-  border-radius: 12px;
-  padding: 0.5rem;
+  border-radius: 16px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05);
   position: relative;
-  overflow-x: hidden;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
-/* Subtle glow effect at top */
-.popup-window::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 60%;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(0, 229, 204, 0.5), transparent);
+.menu-list {
+  padding: 10px 8px;
 }
 
 .menu-item {
@@ -339,18 +445,13 @@ const completeProgress = async () => {
   border-radius: 0 2px 2px 0;
 }
 
-.menu-item:hover:not(.processing) {
+.menu-item:hover {
   background: rgba(0, 229, 204, 0.08);
   color: #f0f0f5;
 }
 
-.menu-item:hover:not(.processing)::before {
+.menu-item:hover::before {
   transform: scaleY(1);
-}
-
-.menu-item.processing {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 .icon {
@@ -365,32 +466,57 @@ const completeProgress = async () => {
   letter-spacing: 0.01em;
 }
 
-.processing-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(7, 7, 13, 0.85);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 12px;
-  backdrop-filter: blur(8px);
+.processing-view {
+  padding: 14px 12px;
 }
 
-.progress-container {
-  width: 80%;
-  max-width: 260px;
-  text-align: center;
+.section {
+  margin-bottom: 10px;
+}
+
+.section-label {
+  color: rgba(0, 229, 204, 0.7);
+  font-size: 10px;
+  font-weight: 600;
+  margin-bottom: 5px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.text-preview {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 11px;
+  color: rgba(240, 240, 245, 0.8);
+  text-align: left;
+  max-height: 60px;
+  overflow: hidden;
+  word-break: break-word;
+  line-height: 1.4;
+}
+
+.input-preview {
+  border-color: rgba(0, 229, 204, 0.15);
+}
+
+.output-preview {
+  border-color: rgba(0, 229, 204, 0.25);
+  color: #00e5cc;
+}
+
+.progress-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 5px;
 }
 
 .progress-label {
   color: rgba(240, 240, 245, 0.7);
-  font-size: 13px;
-  margin-bottom: 14px;
+  font-size: 12px;
   letter-spacing: 0.02em;
-  min-height: 20px;
 }
 
 .progress-bar-track {
@@ -415,18 +541,16 @@ const completeProgress = async () => {
   font-size: 12px;
   font-weight: 600;
   font-family: 'JetBrains Mono', monospace;
-  margin-bottom: 14px;
 }
 
 .cancel-btn {
-  margin-top: 12px;
-  padding: 7px 18px;
+  padding: 6px 16px;
   background: rgba(239, 68, 68, 0.15);
   border: 1px solid rgba(239, 68, 68, 0.3);
   border-radius: 8px;
   color: #ef4444;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
   transition: all 0.15s ease;
 }

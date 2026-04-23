@@ -21,6 +21,8 @@ const collapsedHeight = 46;
 
 const dockSide = ref<DockSide>(null);
 const isExpanded = ref(true);
+const isDragging = ref(false);
+const isPopupVisible = ref(false);
 
 let isMouseDown = false;
 let mouseDownX = 0;
@@ -31,6 +33,9 @@ let moveSettleTimeout: number | null = null;
 let collapseDelayTimeout: number | null = null;
 let suppressSingleClick = false;
 let unlistenMoved: (() => void) | null = null;
+let unlistenPopupOpened: (() => void) | null = null;
+let unlistenPopupClosed: (() => void) | null = null;
+let unlistenWelcomeClosed: (() => void) | null = null;
 
 const widgetShellStyle = computed(() => {
   if (!dockSide.value || isExpanded.value) {
@@ -134,6 +139,14 @@ const handleMouseMove = async (e: MouseEvent) => {
     hasDragged = true;
     dockSide.value = null;
     isExpanded.value = true;
+    isDragging.value = true;
+
+    // Hide popup while dragging
+    if (isPopupVisible.value) {
+      invoke('hide_window', { label: 'popup' });
+      isPopupVisible.value = false;
+    }
+
     await appWindow.startDragging();
   }
 };
@@ -141,6 +154,7 @@ const handleMouseMove = async (e: MouseEvent) => {
 const handleMouseUp = (e: MouseEvent) => {
   if (!isMouseDown) return;
   isMouseDown = false;
+  isDragging.value = false;
 
   const dx = Math.abs(e.screenX - mouseDownX);
   const dy = Math.abs(e.screenY - mouseDownY);
@@ -152,9 +166,19 @@ const handleMouseUp = (e: MouseEvent) => {
   }
 
   if (wasClick && e.button === 0 && !suppressSingleClick) {
-    clickTimeout = window.setTimeout(() => {
+    clickTimeout = window.setTimeout(async () => {
       clickTimeout = null;
-      showPopup();
+      const popupActuallyVisible = await invoke<boolean>('is_window_visible', { label: 'popup' });
+      if (!popupActuallyVisible) {
+        isPopupVisible.value = false;
+      }
+
+      if (isPopupVisible.value) {
+        await invoke('hide_popup');
+        isPopupVisible.value = false;
+      } else {
+        await showPopup();
+      }
     }, 220);
   }
 };
@@ -175,9 +199,11 @@ const handleDoubleClick = () => {
 };
 
 const showPopup = async () => {
+  isPopupVisible.value = true;
   try {
     await invoke('show_popup_with_clipboard');
   } catch (error) {
+    isPopupVisible.value = false;
     console.error('Failed to show popup:', error);
   }
 };
@@ -195,13 +221,26 @@ const handleContextMenu = (e: MouseEvent) => {
 };
 
 onMounted(async () => {
-  await invoke('set_widget_default_position');
-  await appWindow.hide();
-  await invoke('center_window', { label: 'main' });
+  // Always show welcome window on app startup, then reveal widget after welcome closes
   await invoke('show_window', { label: 'main' });
+  await appWindow.hide();
 
   unlistenMoved = await appWindow.onMoved(() => {
     scheduleDockSync();
+  });
+
+  unlistenPopupOpened = await appWindow.listen('popup-opened', () => {
+    isPopupVisible.value = true;
+  });
+
+  unlistenPopupClosed = await appWindow.listen('popup-closed', () => {
+    isPopupVisible.value = false;
+  });
+
+  // Show widget when welcome is closed
+  unlistenWelcomeClosed = await appWindow.listen('welcome-closed', async () => {
+    await invoke('set_widget_default_position');
+    await invoke('show_window', { label: 'widget' });
   });
 });
 
@@ -216,6 +255,15 @@ onUnmounted(() => {
 
   if (unlistenMoved) {
     unlistenMoved();
+  }
+  if (unlistenPopupOpened) {
+    unlistenPopupOpened();
+  }
+  if (unlistenPopupClosed) {
+    unlistenPopupClosed();
+  }
+  if (unlistenWelcomeClosed) {
+    unlistenWelcomeClosed();
   }
 });
 </script>

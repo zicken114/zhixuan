@@ -3,6 +3,9 @@ import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import { aiClient, type ChatMessage } from '../utils/aiClient';
+import { usePopupHistoryStore } from '../stores/popupHistory';
+
+const historyStore = usePopupHistoryStore();
 
 interface ScreenshotPayload {
   image: string;  // Base64 PNG
@@ -49,6 +52,71 @@ const extractionPrompts: ExtractionPrompt[] = [
 const selectedPrompt = ref<ExtractionPrompt | null>(null);
 
 let unlisten: UnlistenFn | null = null;
+
+// Create thumbnail from base64 image
+const createThumbnail = (base64: string, maxSize: number = 100): Promise<string> => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      let width = img.width;
+      let height = img.height;
+
+      if (width > height) {
+        if (width > maxSize) {
+          height = Math.round((height * maxSize) / width);
+          width = maxSize;
+        }
+      } else {
+        if (height > maxSize) {
+          width = Math.round((width * maxSize) / height);
+          height = maxSize;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL('image/png').split(',')[1]);
+    };
+    img.onerror = () => resolve(base64);
+    img.src = `data:image/png;base64,${base64}`;
+  });
+};
+
+// Save screenshot extraction to history
+const saveScreenshotToHistory = async (
+  label: string,
+  content: string,
+  actionType: string
+) => {
+  if (!screenshotData.value) return;
+
+  try {
+    // Create thumbnail
+    const thumbnail = await createThumbnail(screenshotData.value.image, 150);
+
+    // Determine action type from label
+    let type = actionType;
+    if (label.includes('LaTeX') || label.includes('公式')) type = 'extract-latex';
+    else if (label.includes('表格')) type = 'extract-table';
+    else if (label.includes('纯文本') || label.includes('文字')) type = 'extract-text';
+
+    historyStore.addItem({
+      actionType: type as any,
+      actionLabel: label,
+      inputText: '[截图内容]',
+      inputImage: thumbnail, // Store thumbnail
+      outputText: content
+    });
+
+    await invoke('notify_history_changed');
+    console.log('[Capture] Screenshot history saved');
+  } catch (e) {
+    console.error('[Capture] Failed to save screenshot history:', e);
+  }
+};
 
 onMounted(async () => {
   // Listen for screenshot from Rust
@@ -309,6 +377,9 @@ const extractWithPrompt = async (prompt: ExtractionPrompt) => {
           label: prompt.label,
           content: clipboardText
         });
+
+        // Save to history
+        await saveScreenshotToHistory(prompt.label, clipboardText, '');
       },
       onError: (error) => {
         isProcessing.value = false;

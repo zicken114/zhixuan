@@ -4,12 +4,14 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { aiClient } from '../utils/aiClient';
+import { usePopupHistoryStore } from '../stores/popupHistory';
 
 const appWindow = getCurrentWebviewWindow();
 const resultData = ref<{ icon: string; label: string; content: string } | null>(null);
 const isProcessing = ref(true);
 const progress = ref(0);
 const progressLabel = ref('正在提取...');
+const historyStore = usePopupHistoryStore();
 let progressTimer: number | null = null;
 let unlistenComplete: UnlistenFn | null = null;
 let unlistenError: UnlistenFn | null = null;
@@ -18,6 +20,15 @@ let unlistenFocus: UnlistenFn | null = null;
 let unlistenNewCapture: UnlistenFn | null = null;
 const streamingContent = ref('');
 let isClosing = false;
+
+// Map extraction label to history action type
+const labelToActionType: Record<string, string> = {
+  '提取文字': 'extract-text',
+  '提取LaTeX': 'extract-latex',
+  '提取公式': 'extract-math',
+  '提取表格': 'extract-table',
+  '提取引用': 'extract-citation'
+};
 
 // Called when window needs to reset for new extraction
 const resetForNewExtraction = () => {
@@ -57,12 +68,27 @@ onMounted(async () => {
   // Reset state on mount - Vue component just mounted so we need fresh state
   resetForNewExtraction();
 
-  unlistenComplete = await listen<{ icon: string; label: string; content: string }>('extraction-complete', (event) => {
+  unlistenComplete = await listen<{ icon: string; label: string; content: string }>('extraction-complete', async (event) => {
     if (isClosing) { console.log('[ResultWindow] ignoring extraction-complete, isClosing=true'); return; }
     console.log('[ResultWindow] received extraction-complete, content length:', event.payload.content.length);
     resultData.value = event.payload;
     isProcessing.value = false;
     completeProgress();
+
+    // Save to history
+    const actionType = labelToActionType[event.payload.label] || 'extract-text';
+    try {
+      historyStore.addItem({
+        actionType: actionType as any,
+        actionLabel: event.payload.label,
+        inputText: '[截图内容]',
+        outputText: event.payload.content
+      });
+      await invoke('notify_history_changed');
+      console.log('[ResultWindow] history saved');
+    } catch (e) {
+      console.error('[ResultWindow] Failed to save history:', e);
+    }
   });
 
   unlistenError = await listen<string>('extraction-error', (event) => {

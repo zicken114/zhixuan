@@ -10,7 +10,21 @@
       "Bash(where cl.exe)",
       "Bash(where pacman:*)",
       "Read(//c/Program Files/Microsoft Visual Studio/**)",
-      "Read(//c/Program Files \\(x86\\)/Microsoft Visual Studio/**)"
+      "Read(//c/Program Files \\(x86\\)/Microsoft Visual Studio/**)",
+      "Bash(npm install *)",
+      "Bash(cargo --version)",
+      "Bash(cargo fetch *)",
+      "Bash(npx vue-tsc *)",
+      "Bash(cargo check *)",
+      "Bash(cargo run *)",
+      "Bash(curl -s http://localhost:1420)",
+      "Bash(pkill -f \"ai-research-assistant\")",
+      "Bash(pkill -f vite)",
+      "Bash(pkill -f node)",
+      "Bash(netstat -ano)",
+      "Bash(taskkill //F //PID 40524)",
+      "Bash(awk '{print $5}')",
+      "Bash(xargs -I{} taskkill //F //PID {})"
     ]
   }
 }

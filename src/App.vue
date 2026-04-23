@@ -1,17 +1,14 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { ref } from 'vue';
 import WidgetWindow from './windows/WidgetWindow.vue';
 import MainWindow from './windows/MainWindow.vue';
 import PopupWindow from './windows/PopupWindow.vue';
 import CaptureWindow from './windows/CaptureWindow.vue';
 import ResultWindow from './windows/ResultWindow.vue';
+import HistoryWindow from './windows/HistoryWindow.vue';
 
-const windowType = ref<string>('widget');
-
-onMounted(() => {
-  const params = new URLSearchParams(window.location.search);
-  windowType.value = params.get('window') || 'widget';
-});
+const params = new URLSearchParams(window.location.search);
+const windowType = ref<string>(params.get('window') || 'widget');
 </script>
 
 <template>
@@ -21,6 +18,7 @@ onMounted(() => {
     <PopupWindow v-else-if="windowType === 'popup'" />
     <CaptureWindow v-else-if="windowType === 'capture'" />
     <ResultWindow v-else-if="windowType === 'result'" />
+    <HistoryWindow v-else-if="windowType === 'history'" />
   </div>
 </template>
 

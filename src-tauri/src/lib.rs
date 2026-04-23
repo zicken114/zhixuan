@@ -1,4 +1,5 @@
 use tauri::{Manager, PhysicalPosition, Emitter, Listener};
+use std::sync::Mutex;
 use std::fs::OpenOptions;
 use std::io::Write;
 use arboard::Clipboard;
@@ -9,6 +10,7 @@ use std::io::Cursor;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 static CAPTURE_IN_PROGRESS: AtomicBool = AtomicBool::new(false);
+static POPUP_OFFSET: Mutex<(i32, i32)> = Mutex::new((20, 10));
 
 fn log_to_file(msg: &str) {
     if let Ok(mut file) = OpenOptions::new()
@@ -66,6 +68,12 @@ fn set_widget_position(app: tauri::AppHandle, x: f64, y: f64) -> Result<(), Stri
         .map_err(|e| e.to_string())?;
 
     Ok(())
+}
+
+#[tauri::command]
+fn set_popup_offset(x: i32, y: i32) {
+    let mut offset = POPUP_OFFSET.lock().unwrap();
+    *offset = (x, y);
 }
 
 #[tauri::command]
@@ -191,6 +199,36 @@ fn set_clipboard_text(text: String) -> Result<(), String> {
 
     clipboard.set_text(text)
         .map_err(|e| format!("Failed to write clipboard: {}", e))
+}
+
+#[tauri::command]
+fn set_clipboard_image(image_base64: String) -> Result<(), String> {
+    use std::io::Cursor;
+
+    // Decode base64 image
+    let image_data = BASE64.decode(&image_base64)
+        .map_err(|e| format!("Failed to decode base64: {}", e))?;
+
+    // Load as PNG
+    let img = image::load_from_memory(&image_data)
+        .map_err(|e| format!("Failed to load image: {}", e))?;
+
+    let rgba = img.to_rgba8();
+    let (width, height) = rgba.dimensions();
+
+    // Convert to arboard ImageData format
+    let image_bytes = rgba.into_raw();
+    let ab_image = arboard::ImageData {
+        width: width as usize,
+        height: height as usize,
+        bytes: std::borrow::Cow::Owned(image_bytes),
+    };
+
+    let mut clipboard = Clipboard::new()
+        .map_err(|e| format!("Failed to access clipboard: {}", e))?;
+
+    clipboard.set_image(ab_image)
+        .map_err(|e| format!("Failed to set clipboard image: {}", e))
 }
 
 #[tauri::command]
@@ -369,6 +407,11 @@ async fn show_result_window(app: tauri::AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("result") {
         window.show().map_err(|e| e.to_string())?;
         window.set_focus().map_err(|e| e.to_string())?;
+
+        // Notify widget that popup is actually visible now.
+        if let Some(widget_window) = app.get_webview_window("widget") {
+            let _ = widget_window.emit("popup-opened", ());
+        }
     }
     Ok(())
 }
@@ -464,6 +507,14 @@ fn show_window(app: tauri::AppHandle, label: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn is_window_visible(app: tauri::AppHandle, label: String) -> Result<bool, String> {
+    if let Some(window) = app.get_webview_window(&label) {
+        return window.is_visible().map_err(|e| e.to_string());
+    }
+    Ok(false)
+}
+
+#[tauri::command]
 fn show_popup_with_clipboard(app: tauri::AppHandle) -> Result<(), String> {
     let (x, y) = match mouse_position::mouse_position::Mouse::get_mouse_position() {
         mouse_position::mouse_position::Mouse::Position { x, y } => (x, y),
@@ -476,7 +527,42 @@ fn show_popup_with_clipboard(app: tauri::AppHandle) -> Result<(), String> {
     };
 
     if let Some(window) = app.get_webview_window("popup") {
-        window.set_position(PhysicalPosition::new(x, y))
+        let offset = *POPUP_OFFSET.lock().unwrap();
+        // Use default size if outer_size fails (e.g., window not fully initialized)
+        let window_size = window.outer_size().unwrap_or(tauri::PhysicalSize { width: 260, height: 400 });
+
+        // Get monitor bounds
+        let monitor = app.primary_monitor()
+            .map_err(|e| e.to_string())?
+            .ok_or("Primary monitor not found")?;
+        let monitor_position = monitor.position();
+        let monitor_size = monitor.size();
+
+        // Calculate popup position
+        let mut popup_x = x + offset.0;
+        let mut popup_y = y + offset.1;
+
+        // Adjust if popup goes beyond right edge
+        let max_x = monitor_position.x + monitor_size.width as i32 - window_size.width as i32;
+        if popup_x > max_x {
+            popup_x = max_x;
+        }
+
+        // Adjust if popup goes beyond bottom edge
+        let max_y = monitor_position.y + monitor_size.height as i32 - window_size.height as i32;
+        if popup_y > max_y {
+            popup_y = max_y;
+        }
+
+        // Ensure popup doesn't go beyond left/top edge
+        if popup_x < monitor_position.x {
+            popup_x = monitor_position.x;
+        }
+        if popup_y < monitor_position.y {
+            popup_y = monitor_position.y;
+        }
+
+        window.set_position(PhysicalPosition::new(popup_x, popup_y))
             .map_err(|e| e.to_string())?;
 
         let payload = ClipboardPayload { text, x, y };
@@ -487,6 +573,79 @@ fn show_popup_with_clipboard(app: tauri::AppHandle) -> Result<(), String> {
         window.set_focus().map_err(|e| e.to_string())?;
     }
 
+    Ok(())
+}
+
+#[tauri::command]
+fn update_popup_position(app: tauri::AppHandle, widget_x: i32, widget_y: i32) -> Result<(), String> {
+    let offset = *POPUP_OFFSET.lock().unwrap();
+    if let Some(window) = app.get_webview_window("popup") {
+        let window_size = window.outer_size().unwrap_or(tauri::PhysicalSize { width: 260, height: 400 });
+
+        // Get monitor bounds
+        let monitor = app.primary_monitor()
+            .map_err(|e| e.to_string())?
+            .ok_or("Primary monitor not found")?;
+        let monitor_position = monitor.position();
+        let monitor_size = monitor.size();
+
+        // Calculate popup position
+        let mut popup_x = widget_x + offset.0;
+        let mut popup_y = widget_y + offset.1;
+
+        // Adjust if popup goes beyond right edge
+        let max_x = monitor_position.x + monitor_size.width as i32 - window_size.width as i32;
+        if popup_x > max_x {
+            popup_x = max_x;
+        }
+
+        // Adjust if popup goes beyond bottom edge
+        let max_y = monitor_position.y + monitor_size.height as i32 - window_size.height as i32;
+        if popup_y > max_y {
+            popup_y = max_y;
+        }
+
+        // Ensure popup doesn't go beyond left/top edge
+        if popup_x < monitor_position.x {
+            popup_x = monitor_position.x;
+        }
+        if popup_y < monitor_position.y {
+            popup_y = monitor_position.y;
+        }
+
+        window.set_position(PhysicalPosition::new(popup_x, popup_y))
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn popup_ready(app: tauri::AppHandle) -> Result<(), String> {
+    // Emit event to widget so it knows popup is visible
+    if let Some(window) = app.get_webview_window("widget") {
+        let _ = window.emit("popup-opened", ());
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn popup_closed(app: tauri::AppHandle) -> Result<(), String> {
+    // Emit event to widget so it knows popup is closed
+    if let Some(window) = app.get_webview_window("widget") {
+        let _ = window.emit("popup-closed", ());
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn hide_popup(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("popup") {
+        window.hide().map_err(|e| e.to_string())?;
+        // Emit event to widget so it knows popup is closed
+        if let Some(widget_window) = app.get_webview_window("widget") {
+            let _ = widget_window.emit("popup-closed", ());
+        }
+    }
     Ok(())
 }
 
@@ -505,6 +664,21 @@ fn show_window_with_settings(app: tauri::AppHandle) -> Result<(), String> {
 #[tauri::command]
 fn quit_app(app: tauri::AppHandle) -> Result<(), String> {
     app.exit(0);
+    Ok(())
+}
+
+#[tauri::command]
+fn emit_to_widget(app: tauri::AppHandle, event: String, payload: serde_json::Value) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("widget") {
+        window.emit(&event, payload).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn notify_history_changed(app: tauri::AppHandle) -> Result<(), String> {
+    // Emit event to all windows so they can reload history
+    let _ = app.emit("history-changed", ());
     Ok(())
 }
 
@@ -643,6 +817,11 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             greet,
+            set_popup_offset,
+            update_popup_position,
+            popup_ready,
+            popup_closed,
+            hide_popup,
             set_widget_position,
             set_widget_default_position,
             get_primary_monitor_frame,
@@ -650,6 +829,7 @@ pub fn run() {
             center_window,
             get_clipboard_text,
             set_clipboard_text,
+            set_clipboard_image,
             get_mouse_position,
             set_clipboard_html,
             capture_fullscreen,
@@ -663,10 +843,13 @@ pub fn run() {
             hide_capture_window,
             hide_window,
             show_window,
+            is_window_visible,
             show_popup_with_clipboard,
             show_window_with_settings,
             quit_app,
-            trigger_capture
+            trigger_capture,
+            notify_history_changed,
+            emit_to_widget
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

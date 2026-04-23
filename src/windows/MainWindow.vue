@@ -19,8 +19,8 @@ const isStreaming = ref(false);
 const streamingText = ref('');
 const showSettings = ref(false);
 const showHistory = ref(false);
-const showWelcome = ref(false);
 const messagesContainer = ref<HTMLElement | null>(null);
+const openedFromPopup = ref(false);
 
 const scrollToBottom = async () => {
   await nextTick();
@@ -43,12 +43,13 @@ watch(messages, (newMessages) => {
   }
 }, { deep: true });
 
-// Listen for show-settings event from Rust
-onMounted(async () => {
-  showWelcome.value = true;
+// Show welcome once per app launch (runtime only)
+const showWelcome = ref(true);
 
+onMounted(async () => {
   await listen('show-settings', () => {
     showSettings.value = true;
+    openedFromPopup.value = true;
   });
 });
 
@@ -125,6 +126,8 @@ const sendMessage = async () => {
 };
 
 const closeWindow = async () => {
+  await invoke('set_widget_default_position');
+  await invoke('show_window', { label: 'widget' });
   await appWindow.hide();
 };
 
@@ -132,10 +135,21 @@ const openSettings = () => {
   showSettings.value = true;
 };
 
+const handleSettingsClose = async () => {
+  if (openedFromPopup.value) {
+    // If opened from popup, hide window instead of showing chat
+    await appWindow.hide();
+    openedFromPopup.value = false;
+  } else {
+    showSettings.value = false;
+  }
+};
+
 const finishWelcome = async () => {
   showWelcome.value = false;
   showSettings.value = false;
-  await invoke('set_widget_default_position');
+  // Emit event to widget to show it
+  await invoke('emit_to_widget', { event: 'welcome-closed', payload: null });
   await invoke('show_window', { label: 'widget' });
   await appWindow.hide();
 };
@@ -179,7 +193,7 @@ const handleHeaderMouseDown = async (e: MouseEvent) => {
 <template>
   <div class="main-window">
     <WelcomePanel v-if="showWelcome" @continue="finishWelcome" />
-    <SettingsPanel v-else-if="showSettings" @close="showSettings = false" />
+    <SettingsPanel v-else-if="showSettings" @close="handleSettingsClose" />
 
     <div v-else class="chat-view">
       <!-- Draggable Header -->
