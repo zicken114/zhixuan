@@ -1,609 +1,26 @@
-use tauri::{Manager, PhysicalPosition, Emitter, Listener};
-use std::fs::OpenOptions;
-use std::io::Write;
-use arboard::Clipboard;
-use serde::Serialize;
-use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
-use image::ImageFormat;
-use std::io::Cursor;
-use std::sync::atomic::{AtomicBool, Ordering};
-
-static CAPTURE_IN_PROGRESS: AtomicBool = AtomicBool::new(false);
-
-fn log_to_file(msg: &str) {
-    if let Ok(mut file) = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open("D:/temp/ai_research_log.txt")
-    {
-        let _ = writeln!(file, "{}", msg);
-    }
-}
-
-#[derive(Clone, Serialize)]
-struct ClipboardPayload {
-    text: String,
-    x: i32,
-    y: i32,
-}
-
-#[derive(Clone, Serialize)]
-struct ScreenshotPayload {
-    image: String,
-    width: u32,
-    height: u32,
-    x: i32,
-    y: i32,
-}
-
-#[derive(Clone, Serialize)]
-struct MonitorFrame {
-    x: i32,
-    y: i32,
-    width: u32,
-    height: u32,
-}
-
-#[derive(Clone, Serialize)]
-struct WidgetDockState {
-    side: String,
-    x: i32,
-    y: i32,
-}
-
-// Tauri commands
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
-}
-
-#[tauri::command]
-fn set_widget_position(app: tauri::AppHandle, x: f64, y: f64) -> Result<(), String> {
-    let window = app.get_webview_window("widget")
-        .ok_or("Widget window not found")?;
-
-    window.set_position(PhysicalPosition::new(x as i32, y as i32))
-        .map_err(|e| e.to_string())?;
-
-    Ok(())
-}
-
-#[tauri::command]
-fn set_widget_default_position(app: tauri::AppHandle) -> Result<(), String> {
-    let window = app.get_webview_window("widget")
-        .ok_or("Widget window not found")?;
-
-    let monitor = app.primary_monitor()
-        .map_err(|e| e.to_string())?
-        .ok_or("Primary monitor not found")?;
-
-    let monitor_size = monitor.size();
-    let monitor_position = monitor.position();
-    let window_size = window.outer_size().map_err(|e| e.to_string())?;
-
-    let x = monitor_position.x + ((monitor_size.width as f64 * 0.72) as i32) - (window_size.width as i32 / 2);
-    let y = monitor_position.y + ((monitor_size.height as f64 * 0.22) as i32) - (window_size.height as i32 / 2);
-
-    window.set_position(PhysicalPosition::new(x, y))
-        .map_err(|e| e.to_string())?;
-
-    Ok(())
-}
-
-#[tauri::command]
-fn get_primary_monitor_frame(app: tauri::AppHandle) -> Result<MonitorFrame, String> {
-    let monitor = app.primary_monitor()
-        .map_err(|e| e.to_string())?
-        .ok_or("Primary monitor not found")?;
-
-    let position = monitor.position();
-    let size = monitor.size();
-
-    Ok(MonitorFrame {
-        x: position.x,
-        y: position.y,
-        width: size.width,
-        height: size.height,
-    })
-}
-
-#[tauri::command]
-fn snap_widget_to_bounds(app: tauri::AppHandle) -> Result<WidgetDockState, String> {
-    let window = app.get_webview_window("widget")
-        .ok_or("Widget window not found")?;
-
-    let monitor = app.primary_monitor()
-        .map_err(|e| e.to_string())?
-        .ok_or("Primary monitor not found")?;
-
-    let monitor_position = monitor.position();
-    let monitor_size = monitor.size();
-    let window_position = window.outer_position().map_err(|e| e.to_string())?;
-    let window_size = window.outer_size().map_err(|e| e.to_string())?;
-
-    let min_x = monitor_position.x;
-    let min_y = monitor_position.y;
-    let max_x = monitor_position.x + monitor_size.width as i32 - window_size.width as i32;
-    let max_y = monitor_position.y + monitor_size.height as i32 - window_size.height as i32;
-
-    let mut target_x = window_position.x.clamp(min_x, max_x);
-    let target_y = window_position.y.clamp(min_y, max_y);
-
-    let threshold = 28;
-    let distance_to_left = (target_x - min_x).abs();
-    let distance_to_right = (max_x - target_x).abs();
-
-    let side = if distance_to_left <= threshold {
-        target_x = min_x;
-        "left"
-    } else if distance_to_right <= threshold {
-        target_x = max_x;
-        "right"
-    } else {
-        "none"
-    };
-
-    window.set_position(PhysicalPosition::new(target_x, target_y))
-        .map_err(|e| e.to_string())?;
-
-    Ok(WidgetDockState {
-        side: side.to_string(),
-        x: target_x,
-        y: target_y,
-    })
-}
-
-#[tauri::command]
-fn center_window(app: tauri::AppHandle, label: String) -> Result<(), String> {
-    let window = app.get_webview_window(&label)
-        .ok_or("Window not found")?;
-
-    let monitor = app.primary_monitor()
-        .map_err(|e| e.to_string())?
-        .ok_or("Primary monitor not found")?;
-
-    let monitor_size = monitor.size();
-    let monitor_position = monitor.position();
-    let window_size = window.outer_size().map_err(|e| e.to_string())?;
-
-    let x = monitor_position.x + ((monitor_size.width as i32 - window_size.width as i32) / 2);
-    let y = monitor_position.y + ((monitor_size.height as i32 - window_size.height as i32) / 2);
-
-    window.set_position(PhysicalPosition::new(x, y))
-        .map_err(|e| e.to_string())?;
-
-    Ok(())
-}
-
-#[tauri::command]
-fn get_clipboard_text() -> Result<String, String> {
-    let mut clipboard = Clipboard::new()
-        .map_err(|e| format!("Failed to access clipboard: {}", e))?;
-
-    clipboard.get_text()
-        .map_err(|e| format!("Failed to read clipboard: {}", e))
-}
-
-#[tauri::command]
-fn set_clipboard_text(text: String) -> Result<(), String> {
-    let mut clipboard = Clipboard::new()
-        .map_err(|e| format!("Failed to access clipboard: {}", e))?;
-
-    clipboard.set_text(text)
-        .map_err(|e| format!("Failed to write clipboard: {}", e))
-}
-
-#[tauri::command]
-fn get_mouse_position() -> Result<(i32, i32), String> {
-    match mouse_position::mouse_position::Mouse::get_mouse_position() {
-        mouse_position::mouse_position::Mouse::Position { x, y } => Ok((x, y)),
-        mouse_position::mouse_position::Mouse::Error => Err("Failed to get mouse position".to_string()),
-    }
-}
-
-#[tauri::command]
-fn capture_fullscreen() -> Result<ScreenshotPayload, String> {
-    use screenshots::Screen;
-
-    let screens = Screen::all()
-        .map_err(|e| format!("Failed to get screens: {:?}", e))?;
-
-    if screens.is_empty() {
-        return Err("No screens found".to_string());
-    }
-
-    let screen = &screens[0];
-
-    let image = screen.capture()
-        .map_err(|e| format!("Failed to capture screen: {:?}", e))?;
-
-    let mut png_bytes: Vec<u8> = Vec::new();
-    let rgba_image = image::RgbaImage::from_raw(
-        image.width(),
-        image.height(),
-        image.to_vec()
-    ).ok_or("Failed to create image from raw data")?;
-
-    rgba_image.write_to(&mut Cursor::new(&mut png_bytes), ImageFormat::Png)
-        .map_err(|e| format!("Failed to encode PNG: {}", e))?;
-
-    let base64_image = BASE64.encode(&png_bytes);
-
-    Ok(ScreenshotPayload {
-        image: base64_image,
-        width: image.width(),
-        height: image.height(),
-        x: screen.display_info.x,
-        y: screen.display_info.y,
-    })
-}
-
-#[tauri::command]
-fn capture_region(x: i32, y: i32, width: u32, height: u32) -> Result<String, String> {
-    use screenshots::Screen;
-
-    let screens = Screen::all()
-        .map_err(|e| format!("Failed to get screens: {:?}", e))?;
-
-    if screens.is_empty() {
-        return Err("No screens found".to_string());
-    }
-
-    let screen = screens.iter()
-        .find(|s| {
-            let info = &s.display_info;
-            x >= info.x && y >= info.y &&
-            x < info.x + info.width as i32 &&
-            y < info.y + info.height as i32
-        })
-        .ok_or("No screen found at the given position")?;
-
-    let image = screen.capture_area(x, y, width, height)
-        .map_err(|e| format!("Failed to capture region: {:?}", e))?;
-
-    let mut png_bytes: Vec<u8> = Vec::new();
-    let rgba_image = image::RgbaImage::from_raw(
-        image.width(),
-        image.height(),
-        image.to_vec()
-    ).ok_or("Failed to create image from raw data")?;
-
-    rgba_image.write_to(&mut Cursor::new(&mut png_bytes), ImageFormat::Png)
-        .map_err(|e| format!("Failed to encode PNG: {}", e))?;
-
-    Ok(BASE64.encode(&png_bytes))
-}
-
-#[tauri::command]
-fn set_clipboard_html(html: String) -> Result<(), String> {
-    #[cfg(target_os = "windows")]
-    {
-        use std::ffi::OsStr;
-        use std::os::windows::ffi::OsStrExt;
-        use std::ptr;
-
-        unsafe {
-            use windows_sys::Win32::Foundation::HANDLE;
-            use windows_sys::Win32::System::DataExchange::RegisterClipboardFormatW;
-            use windows_sys::Win32::System::Memory::{
-                GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE
-            };
-
-            #[link(name = "user32")]
-            extern "system" {
-                fn OpenClipboard(hwnd: HANDLE) -> i32;
-                fn CloseClipboard() -> i32;
-                fn EmptyClipboard() -> i32;
-                fn SetClipboardData(format: u32, mem: HANDLE) -> HANDLE;
-            }
-
-            if OpenClipboard(0) == 0 {
-                return Err("Failed to open clipboard".to_string());
-            }
-
-            if EmptyClipboard() == 0 {
-                CloseClipboard();
-                return Err("Failed to empty clipboard".to_string());
-            }
-
-            let format_name: Vec<u16> = OsStr::new("HTML Format")
-                .encode_wide()
-                .chain(std::iter::once(0))
-                .collect();
-            let cf_html = RegisterClipboardFormatW(format_name.as_ptr());
-
-            if cf_html == 0 {
-                CloseClipboard();
-                return Err("Failed to register HTML format".to_string());
-            }
-
-            let header = "Version:0.9\r\nStartHTML:0000000000\r\nEndHTML:0000000000\r\nStartFragment:0000000000\r\nEndFragment:0000000000\r\n";
-            let html_prefix = "<!DOCTYPE html><html><body><!--StartFragment-->";
-            let html_suffix = "<!--EndFragment--></body></html>";
-
-            let full_html = format!("{}{}{}", html_prefix, html, html_suffix);
-            let start_html = header.len();
-            let end_html = start_html + full_html.len();
-            let start_fragment = start_html + html_prefix.len();
-            let end_fragment = start_fragment + html.len();
-
-            let cf_html_string = format!(
-                "Version:0.9\r\nStartHTML:{:010}\r\nEndHTML:{:010}\r\nStartFragment:{:010}\r\nEndFragment:{:010}\r\n{}",
-                start_html, end_html, start_fragment, end_fragment, full_html
-            );
-
-            let bytes = cf_html_string.as_bytes();
-            let h_mem = GlobalAlloc(GMEM_MOVEABLE, bytes.len());
-            if h_mem.is_null() {
-                CloseClipboard();
-                return Err("Failed to allocate memory".to_string());
-            }
-
-            let p_mem = GlobalLock(h_mem);
-            if p_mem.is_null() {
-                CloseClipboard();
-                return Err("Failed to lock memory".to_string());
-            }
-
-            ptr::copy_nonoverlapping(bytes.as_ptr(), p_mem as *mut u8, bytes.len());
-            GlobalUnlock(h_mem);
-
-            if SetClipboardData(cf_html, h_mem as isize) == 0 {
-                CloseClipboard();
-                return Err("Failed to set clipboard data".to_string());
-            }
-
-            CloseClipboard();
-            Ok(())
-        }
-    }
-
-    #[cfg(not(target_os = "windows"))]
-    {
-        Err("HTML clipboard is only supported on Windows".to_string())
-    }
-}
-
-#[tauri::command]
-async fn show_result_window(app: tauri::AppHandle) -> Result<(), String> {
-    if let Some(window) = app.get_webview_window("result") {
-        window.show().map_err(|e| e.to_string())?;
-        window.set_focus().map_err(|e| e.to_string())?;
-    }
-    Ok(())
-}
-
-#[tauri::command]
-async fn wait_for_result_window_ready(app: tauri::AppHandle) -> Result<(), String> {
-    println!("[wait_for_result_window_ready] waiting for result-window-ready event");
-
-    // Use event listener to wait for the ready signal
-    let ready = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-    let ready_clone = ready.clone();
-
-    // Set up a listener for the ready event
-    app.once("result-window-ready", move |_| {
-        println!("[wait_for_result_window_ready] received result-window-ready");
-        ready_clone.store(true, std::sync::atomic::Ordering::SeqCst);
-    });
-
-    // Wait with timeout of 3 seconds
-    let start = std::time::Instant::now();
-    let timeout = std::time::Duration::from_secs(3);
-
-    while start.elapsed() < timeout {
-        if ready.load(std::sync::atomic::Ordering::SeqCst) {
-            println!("[wait_for_result_window_ready] ready signal received");
-            return Ok(());
-        }
-        std::thread::sleep(std::time::Duration::from_millis(10));
-    }
-
-    println!("[wait_for_result_window_ready] timeout waiting for ready event");
-    Ok(())
-}
-
-#[tauri::command]
-async fn result_window_ready(app: tauri::AppHandle) -> Result<(), String> {
-    println!("[result_window_ready] received from Vue");
-    // Emit the event to unblock wait_for_result_window_ready
-    let _ = app.emit("result-window-ready", ());
-    Ok(())
-}
-
-#[tauri::command]
-async fn emit_to_result(app: tauri::AppHandle, content: String) -> Result<(), String> {
-    let _ = app.emit("result-stream", content);
-    Ok(())
-}
-
-#[tauri::command]
-async fn emit_extraction_complete(app: tauri::AppHandle, icon: String, label: String, content: String) -> Result<(), String> {
-    println!("[emit_extraction_complete] content length: {}, checking windows...", content.len());
-    for (label, _) in app.webview_windows() {
-        println!("  window: {}", label);
-    }
-    let _ = app.emit("extraction-complete", serde_json::json!({"icon": icon, "label": label, "content": content}));
-    println!("[emit_extraction_complete] emit done");
-    Ok(())
-}
-
-#[tauri::command]
-async fn emit_extraction_error(app: tauri::AppHandle, error: String) -> Result<(), String> {
-    println!("[emit_extraction_error] emitting error: {}", error);
-    let _ = app.emit("extraction-error", error);
-    Ok(())
-}
-
-#[tauri::command]
-fn hide_capture_window(app: tauri::AppHandle) -> Result<(), String> {
-    println!("[hide_capture_window] called");
-    if let Some(window) = app.get_webview_window("capture") {
-        println!("[hide_capture_window] hiding capture window");
-        window.hide().map_err(|e| e.to_string())?;
-    } else {
-        println!("[hide_capture_window] capture window not found");
-    }
-    Ok(())
-}
-
-#[tauri::command]
-fn hide_window(app: tauri::AppHandle, label: String) -> Result<(), String> {
-    if let Some(window) = app.get_webview_window(&label) {
-        window.hide().map_err(|e| e.to_string())?;
-    }
-    Ok(())
-}
-
-#[tauri::command]
-fn show_window(app: tauri::AppHandle, label: String) -> Result<(), String> {
-    if let Some(window) = app.get_webview_window(&label) {
-        window.show().map_err(|e| e.to_string())?;
-    }
-    Ok(())
-}
-
-#[tauri::command]
-fn show_popup_with_clipboard(app: tauri::AppHandle) -> Result<(), String> {
-    let (x, y) = match mouse_position::mouse_position::Mouse::get_mouse_position() {
-        mouse_position::mouse_position::Mouse::Position { x, y } => (x, y),
-        mouse_position::mouse_position::Mouse::Error => return Err("Failed to get mouse position".to_string()),
-    };
-
-    let text = match Clipboard::new() {
-        Ok(mut cb) => cb.get_text().unwrap_or_default(),
-        Err(_) => String::new(),
-    };
-
-    if let Some(window) = app.get_webview_window("popup") {
-        window.set_position(PhysicalPosition::new(x, y))
-            .map_err(|e| e.to_string())?;
-
-        let payload = ClipboardPayload { text, x, y };
-        window.emit("clipboard-data", payload)
-            .map_err(|e| e.to_string())?;
-
-        window.show().map_err(|e| e.to_string())?;
-        window.set_focus().map_err(|e| e.to_string())?;
-    }
-
-    Ok(())
-}
-
-#[tauri::command]
-fn show_window_with_settings(app: tauri::AppHandle) -> Result<(), String> {
-    if let Some(window) = app.get_webview_window("main") {
-        window.show().map_err(|e| e.to_string())?;
-        window.set_focus().map_err(|e| e.to_string())?;
-        // Emit event to tell frontend to show settings
-        window.emit("show-settings", ())
-            .map_err(|e| e.to_string())?;
-    }
-    Ok(())
-}
-
-#[tauri::command]
-fn quit_app(app: tauri::AppHandle) -> Result<(), String> {
-    app.exit(0);
-    Ok(())
-}
-
-#[tauri::command]
-fn trigger_capture(app: tauri::AppHandle) -> Result<(), String> {
-    use screenshots::Screen;
-
-    // Prevent multiple captures
-    if CAPTURE_IN_PROGRESS.swap(true, Ordering::SeqCst) {
-        println!("Capture already in progress, skipping");
-        return Ok(());
-    }
-
-    println!("trigger_capture called");
-
-    // First capture the screenshot BEFORE showing the window
-    let screens = match Screen::all() {
-        Ok(s) => s,
-        Err(e) => {
-            CAPTURE_IN_PROGRESS.store(false, Ordering::SeqCst);
-            return Err(format!("Failed to get screens: {:?}", e));
-        }
-    };
-
-    if screens.is_empty() {
-        CAPTURE_IN_PROGRESS.store(false, Ordering::SeqCst);
-        return Err("No screens found".to_string());
-    }
-
-    let screen = &screens[0];
-    let image = match screen.capture() {
-        Ok(img) => img,
-        Err(e) => {
-            CAPTURE_IN_PROGRESS.store(false, Ordering::SeqCst);
-            return Err(format!("Failed to capture screen: {:?}", e));
-        }
-    };
-
-    let mut png_bytes: Vec<u8> = Vec::new();
-    let rgba_image = image::RgbaImage::from_raw(
-        image.width(),
-        image.height(),
-        image.to_vec()
-    ).ok_or_else(|| {
-        CAPTURE_IN_PROGRESS.store(false, Ordering::SeqCst);
-        "Failed to create image buffer".to_string()
-    })?;
-
-    if let Err(e) = rgba_image.write_to(&mut Cursor::new(&mut png_bytes), ImageFormat::Png) {
-        CAPTURE_IN_PROGRESS.store(false, Ordering::SeqCst);
-        return Err(format!("Failed to encode PNG: {}", e));
-    };
-
-    let base64_image = BASE64.encode(&png_bytes);
-    println!("Screenshot captured: {} bytes, {}x{}", png_bytes.len(), image.width(), image.height());
-
-    let screenshot = ScreenshotPayload {
-        image: base64_image,
-        width: image.width(),
-        height: image.height(),
-        x: screen.display_info.x,
-        y: screen.display_info.y,
-    };
-
-    // Hide result window when starting new capture
-    if let Some(result_window) = app.get_webview_window("result") {
-        println!("Hiding result window for new capture");
-        let _ = result_window.hide();
-    }
-
-    // Emit event to reset result window state for new capture
-    let _ = app.emit("new-capture-started", ());
-
-    // Now show the window
-    if let Some(window) = app.get_webview_window("capture") {
-        println!("Showing capture window");
-        if let Err(e) = window.show() {
-            CAPTURE_IN_PROGRESS.store(false, Ordering::SeqCst);
-            return Err(format!("Failed to show window: {}", e));
-        }
-        let _ = window.set_focus();
-
-        // Send screenshot to window
-        println!("Emitting screenshot-ready");
-        if let Err(e) = window.emit("screenshot-ready", screenshot) {
-            CAPTURE_IN_PROGRESS.store(false, Ordering::SeqCst);
-            return Err(format!("Failed to emit screenshot: {}", e));
-        }
-        println!("Emit complete");
-    }
-
-    // Reset the flag after a delay
-    std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_secs(2));
-        CAPTURE_IN_PROGRESS.store(false, Ordering::SeqCst);
-        println!("Capture flag reset");
-    });
-
-    Ok(())
+mod app_control;
+mod clipboard;
+mod event_collector;
+mod events;
+mod models;
+mod screenshot;
+mod window_detector;
+mod window_manager;
+
+use std::sync::{Arc, RwLock};
+use std::time::Duration;
+
+use tauri::{Emitter, Manager};
+
+use crate::event_collector::EventCollector;
+use crate::models::{AppType, WindowInfo};
+use crate::window_detector::WindowDetector;
+
+/// Shared application state holding services and cached detection results.
+pub struct AppState {
+    pub window_detector: Arc<dyn WindowDetector>,
+    pub current_window: Arc<RwLock<Option<WindowInfo>>>,
+    pub event_collector: Arc<EventCollector>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -611,21 +28,23 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::default().build())
+        .plugin(tauri_plugin_sql::Builder::default().build())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new()
             .with_handler(|app, shortcut, _event| {
-                println!("Shortcut triggered: {:?}", shortcut);
-                // Alt+Q
-                if shortcut.matches(tauri_plugin_global_shortcut::Modifiers::ALT, tauri_plugin_global_shortcut::Code::KeyQ) {
-                    let _ = show_popup_with_clipboard(app.clone());
+                use tauri_plugin_global_shortcut::{Code, Modifiers};
+
+                if shortcut.matches(Modifiers::ALT, Code::KeyQ) {
+                    let _ = app_control::show_popup_with_clipboard(app.clone());
                 }
-                // Alt+S
-                if shortcut.matches(tauri_plugin_global_shortcut::Modifiers::ALT, tauri_plugin_global_shortcut::Code::KeyS) {
-                    let _ = trigger_capture(app.clone());
+                if shortcut.matches(Modifiers::ALT, Code::KeyS) {
+                    let _ = screenshot::trigger_capture(app.clone());
                 }
             })
             .build())
         .setup(|app| {
-            // Register global shortcuts
             use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, Code, Modifiers};
 
             let alt_q = Shortcut::new(Some(Modifiers::ALT), Code::KeyQ);
@@ -638,35 +57,137 @@ pub fn run() {
                 eprintln!("Failed to register Alt+S: {}", e);
             }
 
+            // ── Event collector (Phase 0.2) ────────────────────────────────
+            let app_data_dir = app.path().app_data_dir()
+                .unwrap_or_else(|_| std::env::temp_dir());
+            let db_path = app_data_dir.join("ai_research_assistant.db");
+
+            let event_collector = Arc::new(EventCollector::new(db_path));
+            event_collector.clone().start_flush_task();
+
+            // Record app startup
+            event_collector.record(
+                "app_open",
+                None,
+                None,
+                None,
+                None,
+            );
+
+            // ── Window activity detector (Phase 0.1) ───────────────────────
+            let window_detector = window_detector::create_window_detector();
+            let current_window = Arc::new(RwLock::new(None));
+
+            let app_state = AppState {
+                window_detector: window_detector.clone(),
+                current_window: current_window.clone(),
+                event_collector: event_collector.clone(),
+            };
+            app.manage(app_state);
+
+            let app_handle = app.handle().clone();
+            let ec_for_window = event_collector.clone();
+            tauri::async_runtime::spawn(async move {
+                let mut interval = tokio::time::interval(Duration::from_secs(3));
+                let mut last_app_type: Option<AppType> = None;
+                let mut pdf_open_time: Option<std::time::Instant> = None;
+
+                loop {
+                    interval.tick().await;
+
+                    if let Some(info) = window_detector.detect_active_window() {
+                        let changed = {
+                            let current = current_window.read().unwrap();
+                            current.as_ref().map_or(true, |c| {
+                                c.process_name != info.process_name
+                                    || c.window_title != info.window_title
+                            })
+                        };
+
+                        if changed {
+                            // Track PDF transitions
+                            let entering_pdf = last_app_type != Some(AppType::PdfReader)
+                                && info.app_type == AppType::PdfReader;
+                            let leaving_pdf = last_app_type == Some(AppType::PdfReader)
+                                && info.app_type != AppType::PdfReader;
+
+                            if entering_pdf {
+                                pdf_open_time = Some(std::time::Instant::now());
+                                ec_for_window.record(
+                                    "pdf_open",
+                                    None,
+                                    None,
+                                    Some(info.window_title.clone()),
+                                    Some(format!("{{\"process\":\"{}\"}}", info.process_name)),
+                                );
+                            }
+
+                            if leaving_pdf {
+                                let duration = pdf_open_time.map(|t| t.elapsed().as_millis() as i64);
+                                ec_for_window.record(
+                                    "pdf_close",
+                                    None,
+                                    duration,
+                                    None,
+                                    None,
+                                );
+                                pdf_open_time = None;
+                            }
+
+                            last_app_type = Some(info.app_type.clone());
+
+                            *current_window.write().unwrap() = Some(info.clone());
+                            let _ = app_handle.emit("window:activity-changed", &info);
+                            println!(
+                                "[WindowDetector] {} -> {} ({:?})",
+                                info.process_name, info.window_title, info.app_type
+                            );
+                        }
+                    }
+                }
+            });
+
             println!("AI Research Assistant started");
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            greet,
-            set_widget_position,
-            set_widget_default_position,
-            get_primary_monitor_frame,
-            snap_widget_to_bounds,
-            center_window,
-            get_clipboard_text,
-            set_clipboard_text,
-            get_mouse_position,
-            set_clipboard_html,
-            capture_fullscreen,
-            capture_region,
-            show_result_window,
-            wait_for_result_window_ready,
-            result_window_ready,
-            emit_to_result,
-            emit_extraction_complete,
-            emit_extraction_error,
-            hide_capture_window,
-            hide_window,
-            show_window,
-            show_popup_with_clipboard,
-            show_window_with_settings,
-            quit_app,
-            trigger_capture
+            // Event collection
+            event_collector::record_event,
+            event_collector::set_incognito_mode,
+            event_collector::flush_events,
+            // Window detection
+            window_manager::get_active_window_info,
+            // Clipboard
+            clipboard::get_clipboard_text,
+            clipboard::set_clipboard_text,
+            clipboard::set_clipboard_html,
+            // Screenshot
+            screenshot::capture_fullscreen,
+            screenshot::capture_region,
+            screenshot::trigger_capture,
+            // Window management
+            window_manager::set_widget_position,
+            window_manager::set_widget_default_position,
+            window_manager::get_primary_monitor_frame,
+            window_manager::snap_widget_to_bounds,
+            window_manager::center_window,
+            window_manager::show_window,
+            window_manager::hide_window,
+            window_manager::hide_capture_window,
+            window_manager::show_result_window,
+            window_manager::wait_for_result_window_ready,
+            window_manager::result_window_ready,
+            // Events
+            events::emit_to_result,
+            events::emit_extraction_complete,
+            events::emit_extraction_error,
+            // App control
+            app_control::quit_app,
+            app_control::show_popup_with_clipboard,
+            app_control::show_window_with_settings,
+            app_control::write_text_file,
+            app_control::check_file_exists,
+            app_control::fetch_zotero,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

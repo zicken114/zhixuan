@@ -1,17 +1,36 @@
 <script setup lang="ts">
-import { ref, nextTick, watch, onMounted } from 'vue';
+import { ref, watch, onMounted, onUnmounted } from 'vue';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
-import { aiClient, type ChatMessage } from '../utils/aiClient';
+import { aiClient, type ChatMessage, type CallMetadata } from '../utils/aiClient';
 import { useSettingsStore } from '../stores/settings';
-import { useHistoryStore } from '../stores/history';
+import { useHistoryStore, toHistoryMessages } from '../stores/history';
+import { useProjectStore, PROJECT_COLORS } from '../stores/projects';
+import { useUsageStore } from '../stores/usage';
+import { useKnowledgeBaseStore } from '../stores/knowledgeBase';
+import { useWindow } from '../composables/useWindow';
+import { recordEvent } from '../composables/useEvents';
+import { saveNoteToObsidian, openNoteInObsidian } from '../utils/obsidianBridge';
+import { syncZoteroLibrary } from '../utils/zoteroBridge';
+import { type SearchResult } from '../utils/knowledgeBase';
+import { getProjectStats, type ProjectStats, updateConversationSummary, loadRecentConversationSummaries } from '../composables/useDatabase';
 import SettingsPanel from '../components/SettingsPanel.vue';
 import WelcomePanel from '../components/WelcomePanel.vue';
+import ChatHeader from '../components/ChatHeader.vue';
+import HistoryPanel from '../components/HistoryPanel.vue';
+import KnowledgePanel from '../components/KnowledgePanel.vue';
+import ChatMessageList from '../components/ChatMessageList.vue';
+import ChatInputArea from '../components/ChatInputArea.vue';
+import TodoPanel from '../components/TodoPanel.vue';
 
 const appWindow = getCurrentWebviewWindow();
 const settingsStore = useSettingsStore();
 const historyStore = useHistoryStore();
+const projectStore = useProjectStore();
+const usageStore = useUsageStore();
+const kbStore = useKnowledgeBaseStore();
+const { setWidgetDefaultPosition, show } = useWindow();
 
 const messages = ref<ChatMessage[]>([]);
 const inputText = ref('');
@@ -19,27 +38,49 @@ const isStreaming = ref(false);
 const streamingText = ref('');
 const showSettings = ref(false);
 const showHistory = ref(false);
+const showKnowledge = ref(false);
+const showTodos = ref(false);
 const showWelcome = ref(false);
-const messagesContainer = ref<HTMLElement | null>(null);
+const messageListRef = ref<InstanceType<typeof ChatMessageList> | null>(null);
 
-const scrollToBottom = async () => {
-  await nextTick();
-  if (messagesContainer.value) {
-    messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
+// Router metadata for each AI message (keyed by message index or timestamp)
+const messageMetadata = ref<Map<number, CallMetadata>>(new Map());
+
+// Project selector state
+const showProjectDropdown = ref(false);
+const showCreateProject = ref(false);
+const newProjectName = ref('');
+const newProjectColor = ref(PROJECT_COLORS[0]);
+const showUsage = ref(false);
+
+// Project statistics bar
+const projectStats = ref<ProjectStats>({ docCount: 0, conversationCount: 0, todoCount: 0 });
+
+const loadProjectStats = async () => {
+  try {
+    projectStats.value = await getProjectStats(projectStore.currentProjectId);
+  } catch (e) {
+    console.error('Failed to load project stats:', e);
   }
 };
 
+// Obsidian save state
+const showObsidianModal = ref(false);
+const obsidianContent = ref('');
+const obsidianTemplate = ref<'summary' | 'full' | 'qa'>('summary');
+const obsidianSaving = ref(false);
+const obsidianSaveResult = ref<string | null>(null);
+
+// Zotero periodic sync interval handle
+const zoteroSyncInterval = ref<number | null>(null);
+
+// Knowledge base citations for each assistant message (keyed by message index)
+const kbCitations = ref<Map<number, SearchResult[]>>(new Map());
+
 // Save messages to history when they change
-watch(messages, (newMessages) => {
+watch(messages, async (newMessages) => {
   if (newMessages.length > 0) {
-    // Transform messages to text-only format for history storage
-    const textMessages = newMessages.map(msg => ({
-      role: msg.role,
-      content: typeof msg.content === 'string'
-        ? msg.content
-        : msg.content.filter(c => c.type === 'text').map(c => (c as { type: 'text'; text: string }).text).join('')
-    }));
-    historyStore.updateCurrentMessages(textMessages);
+    await historyStore.updateCurrentMessages(toHistoryMessages(newMessages));
   }
 }, { deep: true });
 
@@ -50,18 +91,78 @@ onMounted(async () => {
   await listen('show-settings', () => {
     showSettings.value = true;
   });
+
+  // Phase 0.1: Listen for window activity changes (for testing / future use)
+  await listen('window:activity-changed', (event) => {
+    console.log('[WindowActivity]', event.payload);
+  });
+
+  // Test: fetch current window info once on mount
+  try {
+    const info = await invoke('get_active_window_info');
+    console.log('[WindowActivity] Current window:', info);
+  } catch (e) {
+    // Window detector may return None on non-Windows platforms
+  }
+
+  // Debug helpers for Phase 0.2 testing — exposed to browser console
+  (window as any).flushEvents = () => invoke('flush_events');
+  (window as any).queryEvents = async () => {
+    const { default: Database } = await import('@tauri-apps/plugin-sql');
+    const db = await Database.load('sqlite:ai_research_assistant.db');
+    return db.select('SELECT event_type, timestamp, duration_ms, metadata FROM activity_events ORDER BY timestamp DESC LIMIT 20');
+  };
+
+  // Load usage stats
+  usageStore.loadStats('today');
+  await loadProjectStats();
+
+  // Auto-sync Zotero on startup if enabled
+  if (settingsStore.config.externalTools.zoteroSyncEnabled) {
+    try {
+      const userId = settingsStore.config.externalTools.zoteroUserId || '0';
+      const collections = settingsStore.config.externalTools.zoteroSelectedCollections;
+      syncZoteroLibrary(userId, collections.length > 0 ? collections : undefined, false).catch((e) => {
+        console.warn('[Zotero] Auto-sync on startup failed:', e);
+      });
+    } catch (e) {
+      console.warn('[Zotero] Auto-sync init failed:', e);
+    }
+  }
+
+  // Set up periodic Zotero sync every 30 minutes
+  zoteroSyncInterval.value = window.setInterval(() => {
+    if (settingsStore.config.externalTools.zoteroSyncEnabled) {
+      try {
+        const userId = settingsStore.config.externalTools.zoteroUserId || '0';
+        const collections = settingsStore.config.externalTools.zoteroSelectedCollections;
+        syncZoteroLibrary(userId, collections.length > 0 ? collections : undefined, false).catch((e) => {
+          console.warn('[Zotero] Periodic sync failed:', e);
+        });
+      } catch (e) {
+        console.warn('[Zotero] Periodic sync init failed:', e);
+      }
+    }
+  }, 30 * 60 * 1000); // 30 minutes
 });
 
-const sendMessage = async () => {
-  console.log('sendMessage called, input:', inputText.value, 'streaming:', isStreaming.value);
+onUnmounted(() => {
+  if (zoteroSyncInterval.value) {
+    clearInterval(zoteroSyncInterval.value);
+    zoteroSyncInterval.value = null;
+  }
+});
 
+const stopStreaming = () => {
+  aiClient.cancel();
+};
+
+const sendMessage = async () => {
   if (!inputText.value.trim() || isStreaming.value) {
-    console.log('Early return: empty input or streaming');
     return;
   }
 
   if (!settingsStore.isTextConfigured()) {
-    console.log('Not configured, showing settings');
     showSettings.value = true;
     return;
   }
@@ -81,27 +182,168 @@ const sendMessage = async () => {
   isStreaming.value = true;
   streamingText.value = '';
 
-  await scrollToBottom();
+  await messageListRef.value?.scrollToBottom();
+
+  const chatStartTime = performance.now();
+  const modelUsed = settingsStore.config.textConfig.model;
+
+  recordEvent({
+    event_type: 'chat_start',
+    resource_id: historyStore.currentConversationId || undefined,
+    metadata: { model: modelUsed }
+  });
+
+  // ── Build system prompt with context injections ──
+  let systemContent = '';
+
+  // 1. Todo extraction instruction (Phase 1.1)
+  systemContent += `If the user expresses an intention to do something later (e.g., "I will try...", "I need to...", "I should...", "let me check..."), append a todo suggestion block at the very end of your response using this exact format:
+
+[TODOS]
+- <concise todo description>
+[/TODOS]
+
+Only include this block when there is a clear future action. Keep each todo under 15 words. Do NOT include the block if there is no actionable item.\n\n`;
+
+  // 2. Conversation History Summaries (Phase 1.1)
+  try {
+    const summaries = await loadRecentConversationSummaries(
+      projectStore.currentProjectId,
+      5
+    );
+    // Exclude current conversation from summaries
+    const otherSummaries = summaries.filter(s => s.id !== historyStore.currentConversationId);
+    if (otherSummaries.length > 0) {
+      const summaryText = otherSummaries
+        .map((s, i) => `${i + 1}. ${s.summary}`)
+        .join('\n');
+      systemContent += `Previous discussions in this project:\n${summaryText}\n\n`;
+    }
+  } catch (e) {
+    console.warn('[Summary] Failed to load conversation summaries:', e);
+  }
+
+  // 3. Knowledge Base Retrieval (Phase 1.3)
+  const currentProject = projectStore.currentProject();
+  if (
+    settingsStore.config.kbAutoRetrieve !== false &&
+    currentProject &&
+    kbStore.indexedDocs.length > 0
+  ) {
+    try {
+      const topK = settingsStore.config.kbTopK || 5;
+      const results = await kbStore.search(userMessage.content as string, topK);
+      if (results.length > 0) {
+        const context = kbStore.buildContextFromResults(results);
+        systemContent += `Use the following knowledge base passages to help answer the user's question. If the passages don't contain relevant information, answer based on your general knowledge.\n\n${context}`;
+        // Store citations for display with the upcoming assistant message
+        kbCitations.value.set(messages.value.length, results);
+      }
+    } catch (e) {
+      console.warn('[KB] Retrieval failed, continuing without context:', e);
+    }
+  }
+
+  let apiMessages = [...messages.value];
+  if (systemContent) {
+    const systemMsg: ChatMessage = {
+      role: 'system',
+      content: systemContent.trim()
+    };
+    // Insert system context before the user message (which is the last one)
+    apiMessages = [
+      ...messages.value.slice(0, -1),
+      systemMsg,
+      messages.value[messages.value.length - 1]
+    ];
+  }
 
   try {
-    await aiClient.chatStream(messages.value, {
+    await aiClient.chatStream(apiMessages, {
       onStart: () => {
         streamingText.value = '';
       },
       onToken: (token) => {
         streamingText.value += token;
-        scrollToBottom();
+        messageListRef.value?.scrollToBottom();
       },
-      onComplete: (fullText) => {
+      onComplete: (fullText, metadata) => {
+        const msgIndex = messages.value.length;
+        // Guard against empty responses so the UI doesn't show blank assistant messages
+        const content = fullText?.trim() || '[No response received]';
         messages.value.push({
           role: 'assistant',
-          content: fullText
+          content
+        });
+        if (metadata) {
+          messageMetadata.value.set(msgIndex, metadata);
+        }
+        streamingText.value = '';
+        isStreaming.value = false;
+        messageListRef.value?.scrollToBottom();
+
+        recordEvent({
+          event_type: 'chat_complete',
+          resource_id: historyStore.currentConversationId || undefined,
+          duration_ms: Math.round(performance.now() - chatStartTime),
+          metadata: {
+            model: metadata?.modelName || modelUsed,
+            success: true,
+            is_fallback: metadata?.isFallback,
+            latency_ms: metadata?.latencyMs,
+            cost: metadata?.estimatedCost
+          }
+        });
+
+        // ── Generate conversation summary in background (Phase 1.1) ──
+        // Fire-and-forget: does not block the user
+        if (historyStore.currentConversationId && messages.value.length >= 2) {
+          const convId = historyStore.currentConversationId;
+          const recentMsgs = messages.value.slice(-4); // last 2 exchanges max
+          const summaryInput = recentMsgs.map(m =>
+            `${m.role}: ${typeof m.content === 'string' ? m.content : JSON.stringify(m.content)}`
+          ).join('\n').slice(0, 800);
+
+          aiClient.chatOnce([
+            { role: 'system', content: 'Summarize the following research conversation in one concise sentence (max 25 words). Focus on the key question, insight, or decision.' },
+            { role: 'user', content: summaryInput }
+          ], false, 'chat').then(({ text }) => {
+            const cleanSummary = text.trim().replace(/^[""]|[""]$/g, '');
+            if (cleanSummary) {
+              updateConversationSummary(convId, cleanSummary).catch(() => {});
+            }
+          }).catch(() => {
+            // Silent fail — summary is non-critical
+          });
+        }
+      },
+      onInterrupted: (partialText, reason) => {
+        // Save the partial response as an assistant message so it stays in context
+        const content = partialText?.trim()
+          || (reason === 'user'
+            ? '[Response interrupted — no content received yet]'
+            : '[Response timed out — the model took too long to respond. You can retry or switch to a faster model.]');
+        messages.value.push({
+          role: 'assistant',
+          content
         });
         streamingText.value = '';
         isStreaming.value = false;
-        scrollToBottom();
+        messageListRef.value?.scrollToBottom();
+
+        recordEvent({
+          event_type: 'chat_interrupted',
+          resource_id: historyStore.currentConversationId || undefined,
+          duration_ms: Math.round(performance.now() - chatStartTime),
+          metadata: {
+            model: modelUsed,
+            success: false,
+            reason,
+            partial_length: partialText.length
+          }
+        });
       },
-      onError: (error) => {
+      onError: (error, metadata) => {
         console.error('AI Error:', error);
         messages.value.push({
           role: 'assistant',
@@ -109,9 +351,21 @@ const sendMessage = async () => {
         });
         streamingText.value = '';
         isStreaming.value = false;
-        scrollToBottom();
+        messageListRef.value?.scrollToBottom();
+
+        recordEvent({
+          event_type: 'chat_complete',
+          resource_id: historyStore.currentConversationId || undefined,
+          duration_ms: Math.round(performance.now() - chatStartTime),
+          metadata: {
+            model: metadata?.modelName || modelUsed,
+            success: false,
+            error: error.message,
+            is_fallback: metadata?.isFallback
+          }
+        });
       }
-    });
+    }, false, 'chat');
   } catch (error: any) {
     console.error('Failed to send message:', error);
     messages.value.push({
@@ -120,7 +374,14 @@ const sendMessage = async () => {
     });
     isStreaming.value = false;
     streamingText.value = '';
-    scrollToBottom();
+    messageListRef.value?.scrollToBottom();
+
+    recordEvent({
+      event_type: 'chat_complete',
+      resource_id: historyStore.currentConversationId || undefined,
+      duration_ms: Math.round(performance.now() - chatStartTime),
+      metadata: { model: modelUsed, success: false, error: error?.message || 'Unknown error' }
+    });
   }
 };
 
@@ -128,143 +389,346 @@ const closeWindow = async () => {
   await appWindow.hide();
 };
 
-const openSettings = () => {
-  showSettings.value = true;
-};
-
 const finishWelcome = async () => {
   showWelcome.value = false;
   showSettings.value = false;
-  await invoke('set_widget_default_position');
-  await invoke('show_window', { label: 'widget' });
+  await setWidgetDefaultPosition();
+  await show('widget');
   await appWindow.hide();
 };
 
-// New chat - clear current conversation
 const newChat = () => {
   messages.value = [];
   historyStore.createConversation();
   showHistory.value = false;
+  showTodos.value = false;
 };
 
-// Toggle history panel
 const toggleHistory = () => {
   showHistory.value = !showHistory.value;
+  showKnowledge.value = false;
+  showTodos.value = false;
 };
 
-// Load a conversation from history
+const toggleKnowledge = () => {
+  showKnowledge.value = !showKnowledge.value;
+  showHistory.value = false;
+  showTodos.value = false;
+};
+
+const toggleTodos = () => {
+  showTodos.value = !showTodos.value;
+  showHistory.value = false;
+  showKnowledge.value = false;
+};
+
 const loadFromHistory = (id: string) => {
   const conv = historyStore.loadConversation(id);
   if (conv) {
     messages.value = [...conv.messages];
     showHistory.value = false;
+    showTodos.value = false;
   }
 };
 
-// Delete a conversation
-const deleteFromHistory = (id: string, event: Event) => {
-  event.stopPropagation();
-  historyStore.deleteConversation(id);
+const deleteFromHistory = async (id: string) => {
+  await historyStore.deleteConversation(id);
 };
 
-// Header drag functionality
-const handleHeaderMouseDown = async (e: MouseEvent) => {
-  // Don't start dragging if clicking on buttons
-  if ((e.target as HTMLElement).closest('.header-actions')) return;
-  if ((e.target as HTMLElement).closest('.header-left')) return;
-  await appWindow.startDragging();
+/* ── Project selector handlers ── */
+
+const selectProject = async (projectId: string | null) => {
+  await projectStore.switchProject(projectId);
+  messages.value = [];
+  historyStore.currentConversationId = null;
+  showProjectDropdown.value = false;
+  await loadProjectStats();
+};
+
+const openCreateProject = () => {
+  showProjectDropdown.value = false;
+  newProjectName.value = '';
+  newProjectColor.value = PROJECT_COLORS[0];
+  showCreateProject.value = true;
+};
+
+const confirmCreateProject = async () => {
+  const name = newProjectName.value.trim();
+  if (!name) return;
+  await projectStore.createProject(name, newProjectColor.value);
+  showCreateProject.value = false;
+  messages.value = [];
+  historyStore.currentConversationId = null;
+};
+
+/* ── Obsidian save handlers ── */
+
+const openObsidianModal = (content: string) => {
+  obsidianContent.value = content;
+  obsidianTemplate.value = 'summary';
+  obsidianSaveResult.value = null;
+  showObsidianModal.value = true;
+};
+
+const saveToObsidian = async () => {
+  const vaultPath = settingsStore.config.externalTools.obsidianVaultPath;
+  const folder = settingsStore.config.externalTools.obsidianDefaultFolder;
+  if (!vaultPath) {
+    obsidianSaveResult.value = 'Please configure Obsidian Vault path in Settings.';
+    return;
+  }
+
+  obsidianSaving.value = true;
+  obsidianSaveResult.value = null;
+
+  try {
+    const project = projectStore.currentProject();
+    const title = project?.name || 'AI Conversation';
+    const date = new Date().toISOString().split('T')[0];
+
+    const result = await saveNoteToObsidian(
+      vaultPath,
+      folder,
+      {
+        title: `${date} ${title}`,
+        date,
+        tags: ['ai-research', 'auto-generated'],
+        source: historyStore.currentConversationId || 'unknown',
+        project: project?.name,
+        content: obsidianContent.value
+      },
+      obsidianTemplate.value
+    );
+
+    if (result.success) {
+      obsidianSaveResult.value = `Saved to ${result.fileName}`;
+      recordEvent({ event_type: 'note_save_to_obsidian', resource_id: result.filePath });
+      // Try to open in Obsidian
+      await openNoteInObsidian(vaultPath, result.filePath);
+    } else {
+      obsidianSaveResult.value = result.error || 'Save failed';
+    }
+  } catch (e: any) {
+    obsidianSaveResult.value = e?.message || 'Save failed';
+  } finally {
+    obsidianSaving.value = false;
+  }
 };
 </script>
 
 <template>
   <div class="main-window">
-    <WelcomePanel v-if="showWelcome" @continue="finishWelcome" />
+    <WelcomePanel v-if="showWelcome" @continue="finishWelcome" @create-project="showWelcome = false; showCreateProject = true" />
     <SettingsPanel v-else-if="showSettings" @close="showSettings = false" />
+    <KnowledgePanel v-else-if="showKnowledge" @close="showKnowledge = false" />
 
     <div v-else class="chat-view">
-      <!-- Draggable Header -->
-      <div
-        class="header"
-        @mousedown="handleHeaderMouseDown"
-      >
-        <div class="header-left" @mousedown.stop>
-          <button class="action-btn" @click="newChat" title="New Chat">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-            </svg>
-          </button>
-          <button class="action-btn" @click="toggleHistory" title="History">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </button>
+      <!-- Project selector bar -->
+      <div class="project-bar">
+        <div class="project-selector" @click="showProjectDropdown = !showProjectDropdown">
+          <span
+            class="project-dot"
+            :style="{ background: projectStore.currentProject()?.color || '#6b7280' }"
+          />
+          <span class="project-name">
+            {{ projectStore.currentProject()?.name || 'General Chat' }}
+          </span>
+          <span class="project-arrow">{{ showProjectDropdown ? '▲' : '▼' }}</span>
         </div>
-        <h2 class="header-title">AI Research Assistant</h2>
-        <div class="header-actions" @mousedown.stop>
-          <button class="icon-btn" @click="openSettings" title="Settings">⚙️</button>
-          <button class="close-btn" @click="closeWindow">×</button>
+        <!-- Project stats bar -->
+        <div v-if="projectStore.currentProjectId" class="project-stats-bar">
+          <span class="stat-item">📄 {{ projectStats.docCount }} docs</span>
+          <span class="stat-sep">·</span>
+          <span class="stat-item">💬 {{ projectStats.conversationCount }} chats</span>
+          <span class="stat-sep">·</span>
+          <span class="stat-item">📌 {{ projectStats.todoCount }} todos</span>
         </div>
-      </div>
 
-      <!-- History Panel -->
-      <div v-if="showHistory" class="history-panel">
-        <div class="history-header">
-          <span>History</span>
-          <button class="close-history" @click="showHistory = false">×</button>
-        </div>
-        <div class="history-list">
+        <!-- Project dropdown -->
+        <div v-if="showProjectDropdown" class="project-dropdown">
           <div
-            v-for="conv in historyStore.conversations"
-            :key="conv.id"
-            class="history-item"
-            @click="loadFromHistory(conv.id)"
+            class="project-option"
+            :class="{ active: !projectStore.currentProjectId }"
+            @click="selectProject(null)"
           >
-            <span class="history-title">{{ conv.title || 'New Chat' }}</span>
-            <button class="delete-btn" @click="deleteFromHistory(conv.id, $event)">×</button>
+            <span class="project-dot" style="background: #6b7280" />
+            <span>General Chat</span>
           </div>
-          <div v-if="historyStore.conversations.length === 0" class="history-empty">
-            No history yet
+          <div
+            v-for="project in projectStore.projects"
+            :key="project.id"
+            class="project-option"
+            :class="{ active: projectStore.currentProjectId === project.id }"
+            @click="selectProject(project.id)"
+          >
+            <span class="project-dot" :style="{ background: project.color }" />
+            <span>{{ project.name }}</span>
+          </div>
+          <div class="project-divider" />
+          <div class="project-option create" @click="openCreateProject">
+            <span>+ New Project</span>
           </div>
         </div>
       </div>
 
-      <div ref="messagesContainer" class="messages-container">
-        <div
-          v-for="(msg, idx) in messages"
-          :key="idx"
-          :class="['message', msg.role === 'user' ? 'user-message' : 'ai-message']"
-        >
-          <div class="message-content">{{ msg.content }}</div>
-        </div>
+      <ChatHeader
+        @new-chat="newChat"
+        @toggle-history="toggleHistory"
+        @toggle-knowledge="toggleKnowledge"
+        @toggle-todos="toggleTodos"
+        @open-settings="showSettings = true"
+        @close="closeWindow"
+      />
 
-        <div v-if="isStreaming && streamingText" class="message ai-message streaming">
-          <div class="message-content">{{ streamingText }}</div>
-          <div class="streaming-indicator">▋</div>
-        </div>
+      <HistoryPanel
+        v-if="showHistory"
+        :conversations="historyStore.projectConversations"
+        @load="loadFromHistory"
+        @delete="deleteFromHistory"
+        @close="showHistory = false"
+      />
 
-        <div v-if="messages.length === 0 && !isStreaming" class="empty-state">
-          <div class="empty-icon">💡</div>
-          <p class="empty-text">Ask me anything about your research</p>
-          <p class="empty-hint">LaTeX, citations, translations, and more</p>
-        </div>
+      <TodoPanel
+        v-if="showTodos"
+        :todos="projectStore.todos"
+        @toggle="projectStore.toggleTodo"
+        @delete="projectStore.deleteTodo"
+        @add="projectStore.addTodo"
+        @close="showTodos = false"
+      />
+
+      <ChatMessageList
+        ref="messageListRef"
+        :messages="messages"
+        :is-streaming="isStreaming"
+        :streaming-text="streamingText"
+        :metadata="messageMetadata"
+        :kb-citations="kbCitations"
+        @save-to-obsidian="openObsidianModal"
+        @add-todo="projectStore.addTodo"
+      />
+
+      <ChatInputArea
+        v-model="inputText"
+        :is-streaming="isStreaming"
+        @send="sendMessage"
+        @stop="stopStreaming"
+      />
+
+      <!-- Usage stats bar -->
+      <div class="usage-bar" @click="showUsage = !showUsage">
+        <span class="usage-label">📊 Usage</span>
+        <span v-if="usageStore.hasData" class="usage-mini">
+          {{ usageStore.todayStats?.totalCalls || 0 }} calls
+        </span>
+        <span v-else class="usage-mini">No data yet</span>
+        <span class="usage-toggle">{{ showUsage ? '▲' : '▼' }}</span>
       </div>
 
-      <div class="input-container">
+      <!-- Usage panel -->
+      <div v-if="showUsage" class="usage-panel">
+        <div class="usage-header">
+          <span>Model Usage Stats</span>
+          <button class="usage-close" @click.stop="showUsage = false">x</button>
+        </div>
+        <div v-if="usageStore.loading" class="usage-loading">Loading...</div>
+        <div v-else-if="!usageStore.hasData" class="usage-empty">
+          No usage data yet. Start chatting to see stats.
+        </div>
+        <div v-else class="usage-content">
+          <div class="usage-summary">
+            <div class="usage-metric">
+              <div class="metric-value">{{ usageStore.todayStats?.totalCalls || 0 }}</div>
+              <div class="metric-label">Calls</div>
+            </div>
+            <div class="usage-metric">
+              <div class="metric-value">{{ usageStore.todayStats?.totalTokens || 0 }}</div>
+              <div class="metric-label">Tokens</div>
+            </div>
+            <div class="usage-metric">
+              <div class="metric-value">{{ usageStore.todayStats?.avgLatencyMs || 0 }}ms</div>
+              <div class="metric-label">Avg Latency</div>
+            </div>
+          </div>
+          <div v-if="usageStore.todayStats?.modelBreakdown.length" class="usage-breakdown">
+            <div class="breakdown-title">By Model</div>
+            <div
+              v-for="item in usageStore.todayStats?.modelBreakdown"
+              :key="item.modelName"
+              class="breakdown-row"
+            >
+              <span>{{ item.modelName }}</span>
+              <span>{{ item.calls }} calls</span>
+            </div>
+          </div>
+          <div v-if="usageStore.todayStats?.taskBreakdown.length" class="usage-breakdown">
+            <div class="breakdown-title">By Task</div>
+            <div
+              v-for="item in usageStore.todayStats?.taskBreakdown"
+              :key="item.taskType"
+              class="breakdown-row"
+            >
+              <span>{{ item.taskType }}</span>
+              <span>{{ item.calls }} calls</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Create project modal -->
+    <div v-if="showCreateProject" class="modal-overlay" @click="showCreateProject = false">
+      <div class="modal-content" @click.stop>
+        <h3>Create New Project</h3>
         <input
-          v-model="inputText"
+          v-model="newProjectName"
           type="text"
-          placeholder="Ask me anything..."
-          class="input-field"
-          :disabled="isStreaming"
-          @keyup.enter="sendMessage"
+          class="input"
+          placeholder="Project name..."
+          @keydown.enter="confirmCreateProject"
         />
-        <button
-          class="send-btn"
-          :disabled="isStreaming || !inputText.trim()"
-          @click="sendMessage"
-        >
-          {{ isStreaming ? '...' : 'Send' }}
-        </button>
+        <div class="color-picker">
+          <button
+            v-for="color in PROJECT_COLORS"
+            :key="color"
+            class="color-swatch"
+            :class="{ active: newProjectColor === color }"
+            :style="{ background: color }"
+            @click="newProjectColor = color"
+          />
+        </div>
+        <div class="modal-actions">
+          <button class="btn-secondary" @click="showCreateProject = false">Cancel</button>
+          <button class="btn-primary" @click="confirmCreateProject">Create</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Save to Obsidian modal -->
+    <div v-if="showObsidianModal" class="modal-overlay" @click="showObsidianModal = false">
+      <div class="modal-content" @click.stop>
+        <h3>Save to Obsidian</h3>
+        <div class="form-group">
+          <label class="label">Template</label>
+          <select v-model="obsidianTemplate" class="input select-input">
+            <option value="summary">Summary</option>
+            <option value="full">Full Record</option>
+            <option value="qa">Q&A</option>
+          </select>
+        </div>
+        <div v-if="obsidianSaveResult" class="obsidian-result">
+          {{ obsidianSaveResult }}
+        </div>
+        <div class="modal-actions">
+          <button class="btn-secondary" @click="showObsidianModal = false">Cancel</button>
+          <button
+            class="btn-primary"
+            :disabled="obsidianSaving"
+            @click="saveToObsidian"
+          >
+            {{ obsidianSaving ? 'Saving...' : 'Save' }}
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -304,375 +768,392 @@ const handleHeaderMouseDown = async (e: MouseEvent) => {
   z-index: 1;
 }
 
-.header {
-  padding: 1rem 1.25rem;
+/* Project bar */
+.project-bar {
+  position: relative;
+  padding: 0.5rem 1rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.project-selector {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  padding: 0.35rem 0.75rem;
+  border-radius: 8px;
+  transition: background 0.2s ease;
+  width: fit-content;
+}
+
+.project-selector:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.project-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.project-name {
+  color: rgba(240, 240, 245, 0.85);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.project-arrow {
+  color: rgba(240, 240, 245, 0.4);
+  font-size: 0.65rem;
+  margin-left: 0.25rem;
+}
+
+/* Project stats bar */
+.project-stats-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.25rem;
+  padding-left: 0.75rem;
+  font-size: 0.7rem;
+  color: rgba(240, 240, 245, 0.35);
+}
+
+.stat-item {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.stat-sep {
+  color: rgba(240, 240, 245, 0.15);
+}
+
+/* Dropdown */
+.project-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 1rem;
+  min-width: 220px;
+  background: rgba(18, 18, 28, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 0.5rem;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+  z-index: 100;
+}
+
+.project-option {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 8px;
+  cursor: pointer;
+  color: rgba(240, 240, 245, 0.75);
+  font-size: 0.82rem;
+  transition: all 0.15s ease;
+}
+
+.project-option:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.project-option.active {
+  background: rgba(0, 229, 204, 0.12);
+  color: #00e5cc;
+}
+
+.project-option.create {
+  color: #3d74e7;
+  font-weight: 600;
+}
+
+.project-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.06);
+  margin: 0.35rem 0;
+}
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+
+.modal-content {
+  background: rgba(18, 18, 28, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 1.5rem;
+  width: 340px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+}
+
+.modal-content h3 {
+  margin: 0 0 1rem;
+  color: #f0f0f5;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.modal-content .input {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 0.7rem 0.9rem;
+  color: #f0f0f5;
+  font-size: 0.88rem;
+  outline: none;
+  margin-bottom: 1rem;
+}
+
+.modal-content .input:focus {
+  border-color: #00d1bb;
+}
+
+.color-picker {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.25rem;
+}
+
+.color-swatch {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+.color-swatch.active {
+  border-color: #ffffff;
+  transform: scale(1.15);
+}
+
+.modal-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+}
+
+.btn-secondary {
+  padding: 0.55rem 1rem;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: rgba(240, 240, 245, 0.7);
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.btn-primary {
+  padding: 0.55rem 1rem;
+  background: linear-gradient(135deg, #00e5cc 0%, #00b8a3 100%);
+  border: none;
+  border-radius: 8px;
+  color: #06211f;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.btn-primary:hover {
+  opacity: 0.9;
+}
+
+/* Usage bar and panel */
+.usage-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 1rem;
+  background: rgba(255, 255, 255, 0.02);
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  font-size: 0.75rem;
+  color: rgba(240, 240, 245, 0.4);
+  transition: background 0.2s ease;
+}
+
+.usage-bar:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.usage-label {
+  font-weight: 600;
+}
+
+.usage-mini {
+  margin-left: auto;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.usage-toggle {
+  font-size: 0.6rem;
+}
+
+.usage-panel {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(13, 13, 20, 0.98);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 1rem;
+  z-index: 50;
+  max-height: 300px;
+  overflow-y: auto;
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.usage-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  cursor: move;
-  user-select: none;
-  -webkit-app-region: drag;
-  background: rgba(13, 13, 20, 0.5);
-}
-
-.header-title {
-  font-family: 'Syne', sans-serif;
-  font-size: 1rem;
-  font-weight: 600;
+  margin-bottom: 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 700;
   color: #f0f0f5;
-  letter-spacing: -0.01em;
-  text-shadow: 0 0 20px rgba(0, 229, 204, 0.2);
 }
 
-.header-left {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
-  -webkit-app-region: no-drag;
-}
-
-.action-btn {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: rgba(240, 240, 245, 0.7);
-  cursor: pointer;
-  padding: 0.5rem;
-  width: 34px;
-  height: 34px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8px;
-  transition: all 0.2s ease;
-}
-
-.action-btn:hover {
-  background: rgba(0, 229, 204, 0.1);
-  border-color: rgba(0, 229, 204, 0.3);
-  color: #00e5cc;
-}
-
-.header-actions {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
-  -webkit-app-region: no-drag;
-}
-
-.icon-btn {
-  background: none;
+.usage-close {
+  background: rgba(255, 255, 255, 0.06);
   border: none;
-  color: rgba(240, 240, 245, 0.5);
-  font-size: 1.25rem;
+  border-radius: 6px;
+  color: rgba(240, 240, 245, 0.6);
+  width: 24px;
+  height: 24px;
   cursor: pointer;
-  padding: 0.25rem;
-  width: 34px;
-  height: 34px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8px;
-  transition: all 0.2s ease;
+  font-size: 0.8rem;
 }
 
-.icon-btn:hover {
-  background: rgba(0, 229, 204, 0.1);
-  color: #00e5cc;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  color: rgba(240, 240, 245, 0.5);
-  font-size: 1.5rem;
-  cursor: pointer;
-  padding: 0;
-  width: 34px;
-  height: 34px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8px;
-  transition: all 0.2s ease;
-}
-
-.close-btn:hover {
+.usage-close:hover {
   background: rgba(239, 68, 68, 0.15);
   color: #ef4444;
 }
 
-.history-panel {
-  background: rgba(13, 13, 20, 0.98);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  max-height: 280px;
-  overflow-y: auto;
-}
-
-.history-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.875rem 1.25rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  color: rgba(240, 240, 245, 0.5);
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-}
-
-.close-history {
-  background: none;
-  border: none;
-  color: rgba(240, 240, 245, 0.4);
-  font-size: 1.25rem;
-  cursor: pointer;
-  padding: 0;
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 6px;
-  transition: all 0.2s ease;
-}
-
-.close-history:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(240, 240, 245, 0.8);
-}
-
-.history-list {
-  padding: 0.5rem;
-}
-
-.history-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.75rem 1rem;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  border: 1px solid transparent;
-}
-
-.history-item:hover {
-  background: rgba(0, 229, 204, 0.06);
-  border-color: rgba(0, 229, 204, 0.1);
-}
-
-.history-title {
-  color: rgba(240, 240, 245, 0.8);
-  font-size: 0.875rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  flex: 1;
-}
-
-.delete-btn {
-  background: none;
-  border: none;
-  color: rgba(240, 240, 245, 0.3);
-  font-size: 1rem;
-  cursor: pointer;
-  padding: 0.25rem;
-  width: 26px;
-  height: 26px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 6px;
-  opacity: 0;
-  transition: all 0.2s ease;
-}
-
-.history-item:hover .delete-btn {
-  opacity: 1;
-}
-
-.delete-btn:hover {
-  background: rgba(239, 68, 68, 0.2);
-  color: #ef4444;
-}
-
-.history-empty {
-  padding: 2rem;
+.usage-loading,
+.usage-empty {
   text-align: center;
-  color: rgba(240, 240, 245, 0.3);
-  font-size: 0.875rem;
-}
-
-.messages-container {
-  flex: 1;
-  overflow-y: auto;
-  padding: 1.25rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.message {
-  padding: 0.875rem 1rem;
-  border-radius: 12px;
-  max-width: 85%;
-  word-wrap: break-word;
-  animation: messageIn 0.3s ease;
-}
-
-@keyframes messageIn {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.user-message {
-  background: linear-gradient(135deg, rgba(0, 229, 204, 0.15) 0%, rgba(0, 229, 204, 0.08) 100%);
-  border: 1px solid rgba(0, 229, 204, 0.2);
-  margin-left: auto;
-  color: #f0f0f5;
-  border-bottom-right-radius: 4px;
-}
-
-.ai-message {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  color: #f0f0f5;
-  margin-right: auto;
-  border-bottom-left-radius: 4px;
-}
-
-.streaming {
-  position: relative;
-}
-
-.streaming-indicator {
-  display: inline;
-  animation: blink 0.8s ease-in-out infinite;
-  margin-left: 2px;
-  color: #00e5cc;
-}
-
-@keyframes blink {
-  0%, 50% { opacity: 1; }
-  51%, 100% { opacity: 0; }
-}
-
-.message-content {
-  white-space: pre-wrap;
-  line-height: 1.6;
-  font-size: 0.9rem;
-}
-
-.empty-state {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  padding: 2rem;
-  animation: fadeIn 0.5s ease;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-.empty-icon {
-  font-size: 3.5rem;
-  margin-bottom: 1.25rem;
-  filter: grayscale(0.3);
-  animation: float 3s ease-in-out infinite;
-}
-
-@keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-8px); }
-}
-
-.empty-text {
-  color: #f0f0f5;
-  font-size: 1.1rem;
-  font-weight: 500;
-  margin-bottom: 0.5rem;
-  font-family: 'Syne', sans-serif;
-}
-
-.empty-hint {
+  padding: 1rem;
   color: rgba(240, 240, 245, 0.4);
-  font-size: 0.8rem;
-  letter-spacing: 0.02em;
+  font-size: 0.82rem;
 }
 
-.input-container {
-  padding: 1rem 1.25rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  display: flex;
+.usage-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
   gap: 0.75rem;
-  background: rgba(13, 13, 20, 0.5);
+  margin-bottom: 1rem;
 }
 
-.input-field {
+.usage-metric {
+  text-align: center;
+  padding: 0.6rem;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+}
+
+.metric-value {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #00e5cc;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.metric-label {
+  font-size: 0.7rem;
+  color: rgba(240, 240, 245, 0.4);
+  margin-top: 0.2rem;
+}
+
+.usage-breakdown {
+  margin-top: 0.75rem;
+}
+
+.breakdown-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: rgba(240, 240, 245, 0.6);
+  margin-bottom: 0.4rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.breakdown-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.35rem 0;
+  font-size: 0.78rem;
+  color: rgba(240, 240, 245, 0.7);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.breakdown-row span:first-child {
   flex: 1;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
-  padding: 0.75rem 1rem;
-  color: #f0f0f5;
-  outline: none;
-  transition: all 0.2s ease;
-  font-size: 0.9rem;
 }
 
-.input-field:focus {
-  border-color: rgba(0, 229, 204, 0.5);
-  box-shadow: 0 0 0 3px rgba(0, 229, 204, 0.1);
+.breakdown-row span:nth-child(2) {
+  color: rgba(240, 240, 245, 0.4);
+  margin-right: 1rem;
 }
 
-.input-field:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.breakdown-row span:last-child {
+  font-family: 'JetBrains Mono', monospace;
+  color: rgba(240, 240, 245, 0.4);
 }
 
-.input-field::placeholder {
-  color: rgba(240, 240, 245, 0.35);
+/* Obsidian modal */
+.obsidian-result {
+  padding: 0.6rem;
+  border-radius: 8px;
+  background: rgba(0, 229, 204, 0.08);
+  color: #00e5cc;
+  font-size: 0.82rem;
+  margin-bottom: 1rem;
 }
 
-.send-btn {
-  background: linear-gradient(135deg, #00e5cc 0%, #00b8a3 100%);
-  border: none;
-  border-radius: 10px;
-  padding: 0.75rem 1.5rem;
-  color: #07070d;
-  cursor: pointer;
+.form-group {
+  margin-bottom: 1rem;
+}
+
+.label {
+  display: block;
+  color: rgba(240, 240, 245, 0.6);
   font-weight: 600;
-  font-size: 0.875rem;
-  transition: all 0.2s ease;
-  min-width: 80px;
-  box-shadow: 0 2px 10px rgba(0, 229, 204, 0.2);
+  margin-bottom: 0.45rem;
+  font-size: 0.8rem;
 }
 
-.send-btn:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 15px rgba(0, 229, 204, 0.3);
+.select-input {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 0.6rem 0.8rem;
+  color: #f0f0f5;
+  font-size: 0.85rem;
+  outline: none;
 }
 
-.send-btn:active:not(:disabled) {
-  transform: translateY(0);
-}
-
-.send-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-  box-shadow: none;
+.select-input option {
+  background: #1a1a2e;
+  color: #f0f0f5;
 }
 </style>

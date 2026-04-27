@@ -20,6 +20,27 @@
     "opener:default",
     "global-shortcut:allow-register",
     "global-shortcut:allow-unregister",
-    "global-shortcut:allow-is-registered"
+    "global-shortcut:allow-is-registered",
+    "sql:default",
+    "sql:allow-load",
+    "sql:allow-execute",
+    "sql:allow-select",
+    "dialog:default",
+    "dialog:allow-open",
+    "fs:default",
+    "fs:allow-read-dir",
+    "fs:allow-read-file",
+    "fs:allow-app-read",
+    "fs:allow-write-file",
+    "fs:allow-mkdir",
+    "http:default",
+    "http:allow-fetch",
+    {
+      "identifier": "http:allow-fetch",
+      "allow": [
+        { "url": "https://hf-mirror.com" },
+        { "url": "https://huggingface.co" }
+      ]
+    }
   ]
 }

@@ -10,7 +10,12 @@
       "Bash(where cl.exe)",
       "Bash(where pacman:*)",
       "Read(//c/Program Files/Microsoft Visual Studio/**)",
-      "Read(//c/Program Files \\(x86\\)/Microsoft Visual Studio/**)"
+      "Read(//c/Program Files \\(x86\\)/Microsoft Visual Studio/**)",
+      "Bash(cargo check:*)",
+      "Bash(npx vue-tsc:*)",
+      "Bash(powershell.exe:*)",
+      "Bash(tasklist)",
+      "Bash(netstat -ano)"
     ]
   }
 }

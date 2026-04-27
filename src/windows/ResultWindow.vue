@@ -2,64 +2,38 @@
 import { ref, onMounted, onUnmounted } from 'vue';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
-import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { aiClient } from '../utils/aiClient';
+import { useProgress } from '../composables/useProgress';
+import { useWindow } from '../composables/useWindow';
 
-const appWindow = getCurrentWebviewWindow();
+const { hideCurrent } = useWindow();
+const { progress, label: progressLabel, start: startProgress, complete: completeProgress, stop: stopProgress } = useProgress();
+
 const resultData = ref<{ icon: string; label: string; content: string } | null>(null);
 const isProcessing = ref(true);
-const progress = ref(0);
-const progressLabel = ref('正在提取...');
-let progressTimer: number | null = null;
+
 let unlistenComplete: UnlistenFn | null = null;
 let unlistenError: UnlistenFn | null = null;
 let unlistenStream: UnlistenFn | null = null;
-let unlistenFocus: UnlistenFn | null = null;
 let unlistenNewCapture: UnlistenFn | null = null;
 const streamingContent = ref('');
 let isClosing = false;
 
 // Called when window needs to reset for new extraction
 const resetForNewExtraction = () => {
-  console.log('[ResultWindow] resetForNewExtraction');
-  if (progressTimer) {
-    clearInterval(progressTimer);
-    progressTimer = null;
-  }
+  stopProgress();
   resultData.value = null;
   isProcessing.value = true;
   streamingContent.value = '';
-  startProgress();
-};
-
-const startProgress = () => {
-  progress.value = 0;
-  progressLabel.value = '正在提取...';
-  progressTimer = window.setInterval(() => {
-    if (progress.value < 85) {
-      const increment = progress.value < 30 ? 2 : progress.value < 70 ? 3.5 : 1.5;
-      progress.value = Math.min(85, progress.value + increment);
-    }
-  }, 80);
-};
-
-const completeProgress = () => {
-  if (progressTimer) {
-    clearInterval(progressTimer);
-    progressTimer = null;
-  }
-  progress.value = 100;
-  progressLabel.value = '✓ 已复制到剪贴板';
+  startProgress('正在提取...');
 };
 
 onMounted(async () => {
-  console.log('[ResultWindow] mounted');
   // Reset state on mount - Vue component just mounted so we need fresh state
   resetForNewExtraction();
 
   unlistenComplete = await listen<{ icon: string; label: string; content: string }>('extraction-complete', (event) => {
-    if (isClosing) { console.log('[ResultWindow] ignoring extraction-complete, isClosing=true'); return; }
-    console.log('[ResultWindow] received extraction-complete, content length:', event.payload.content.length);
+    if (isClosing) return;
     resultData.value = event.payload;
     isProcessing.value = false;
     completeProgress();
@@ -67,7 +41,6 @@ onMounted(async () => {
 
   unlistenError = await listen<string>('extraction-error', (event) => {
     if (isClosing) return;
-    console.log('[ResultWindow] received extraction-error:', event.payload);
     resultData.value = { icon: '❌', label: '错误', content: event.payload };
     isProcessing.value = false;
     completeProgress();
@@ -78,20 +51,13 @@ onMounted(async () => {
     streamingContent.value = event.payload;
   });
 
-  // Listen for window focus event
-  unlistenFocus = await listen('tauri://focus', () => {
-    console.log('[ResultWindow] received focus event, isClosing:', isClosing, 'isProcessing:', isProcessing.value, 'resultData:', resultData.value !== null);
-  });
-
   // Listen for new capture started - reset state for new extraction
   unlistenNewCapture = await listen('new-capture-started', () => {
-    console.log('[ResultWindow] received new-capture-started, resetting state');
     isClosing = false;
     resetForNewExtraction();
   });
 
   // Emit ready event to signal that Vue has mounted and listeners are set up
-  console.log('[ResultWindow] emitting result-window-ready');
   await invoke('result_window_ready');
 });
 
@@ -99,27 +65,22 @@ onUnmounted(() => {
   if (unlistenComplete) unlistenComplete();
   if (unlistenError) unlistenError();
   if (unlistenStream) unlistenStream();
-  if (unlistenFocus) unlistenFocus();
   if (unlistenNewCapture) unlistenNewCapture();
-  if (progressTimer) clearInterval(progressTimer);
+  stopProgress();
 });
 
 const closeWindow = async () => {
   if (isClosing) return;
   isClosing = true;
-  console.log('[ResultWindow] closeWindow called, hiding window');
   try {
-    await appWindow.hide();
+    await hideCurrent();
   } catch (e) {
     console.warn('[ResultWindow] closeWindow error:', e);
   }
 };
 
 const cancelExtraction = async () => {
-  if (progressTimer) {
-    clearInterval(progressTimer);
-    progressTimer = null;
-  }
+  stopProgress();
   await aiClient.cancel();
   isProcessing.value = false;
   await closeWindow();

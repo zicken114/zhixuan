@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
-import { invoke } from '@tauri-apps/api/core';
+import { useWindow } from '../composables/useWindow';
 
 type DockSide = 'left' | 'right' | null;
 
@@ -12,6 +12,7 @@ interface WidgetDockState {
 }
 
 const appWindow = getCurrentWebviewWindow();
+const { showPopup: showPopupMenu, show, snapWidget: snapWidgetToBounds, setWidgetDefaultPosition, center } = useWindow();
 
 const collapsedOffset = 44;
 const collapseDelayMs = 1200;
@@ -67,7 +68,7 @@ const widgetCoreStyle = computed(() => {
 });
 
 const syncDockState = async () => {
-  const result = await invoke<WidgetDockState>('snap_widget_to_bounds');
+  const result = await snapWidgetToBounds() as WidgetDockState;
   dockSide.value = result.side === 'none' ? null : result.side;
   isExpanded.value = result.side === 'none';
 };
@@ -176,7 +177,7 @@ const handleDoubleClick = () => {
 
 const showPopup = async () => {
   try {
-    await invoke('show_popup_with_clipboard');
+    await showPopupMenu();
   } catch (error) {
     console.error('Failed to show popup:', error);
   }
@@ -184,7 +185,7 @@ const showPopup = async () => {
 
 const showMainWindow = async () => {
   try {
-    await invoke('show_window', { label: 'main' });
+    await show('main');
   } catch (error) {
     console.error('Failed to show main window:', error);
   }
@@ -195,10 +196,10 @@ const handleContextMenu = (e: MouseEvent) => {
 };
 
 onMounted(async () => {
-  await invoke('set_widget_default_position');
+  await setWidgetDefaultPosition();
   await appWindow.hide();
-  await invoke('center_window', { label: 'main' });
-  await invoke('show_window', { label: 'main' });
+  await center('main');
+  await show('main');
 
   unlistenMoved = await appWindow.onMoved(() => {
     scheduleDockSync();
@@ -262,16 +263,16 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   background: linear-gradient(180deg, rgba(18, 24, 33, 0.96) 0%, rgba(11, 15, 22, 0.96) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--border-light);
+  box-shadow: var(--shadow-widget);
   transition:
-    width 0.28s ease,
-    height 0.28s ease,
-    transform 0.24s ease,
-    border-radius 0.24s ease,
-    box-shadow 0.24s ease,
-    filter 0.24s ease,
-    background 0.24s ease;
+    width var(--transition-widget),
+    height var(--transition-widget),
+    transform var(--transition-slow),
+    border-radius var(--transition-slow),
+    box-shadow var(--transition-slow),
+    filter var(--transition-slow),
+    background var(--transition-slow);
 }
 
 .widget-core {
@@ -282,8 +283,8 @@ onUnmounted(() => {
   background-size: cover;
   background-position: center;
   transition:
-    opacity 0.2s ease,
-    transform 0.24s ease;
+    opacity var(--transition-base),
+    transform var(--transition-slow);
 }
 
 .widget-tab {
@@ -293,7 +294,7 @@ onUnmounted(() => {
   background:
     linear-gradient(180deg, rgba(0, 229, 204, 0.75) 0%, rgba(61, 116, 231, 0.82) 100%);
   opacity: 0;
-  transition: opacity 0.24s ease;
+  transition: opacity var(--transition-slow);
 }
 
 .widget-tab::after {
@@ -317,7 +318,7 @@ onUnmounted(() => {
 }
 
 .widget-container.is-collapsed .widget-shell {
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-sm);
   filter: saturate(0.94);
 }
 

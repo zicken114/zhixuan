@@ -1,6 +1,7 @@
 <script setup lang="ts">
 const emit = defineEmits<{
   continue: [];
+  'create-project': [];
 }>();
 </script>
 
@@ -40,6 +41,7 @@ const emit = defineEmits<{
 
     <div class="footer">
       <button class="primary-btn" @click="emit('continue')">Start With Floating Ball</button>
+      <button class="secondary-btn" @click="emit('create-project')">Create My First Research Project</button>
       <p class="footer-note">You can reopen the main window anytime by double-clicking the floating ball.</p>
     </div>
   </div>
@@ -168,6 +170,25 @@ const emit = defineEmits<{
 
 .primary-btn:hover {
   transform: translateY(-1px);
+}
+
+.secondary-btn {
+  width: 100%;
+  margin-top: 0.7rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  padding: 0.85rem 1.1rem;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(240, 240, 245, 0.85);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.secondary-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
 .footer-note {

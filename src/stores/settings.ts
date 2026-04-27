@@ -1,5 +1,17 @@
 import { defineStore } from 'pinia';
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
+import { emit, listen } from '@tauri-apps/api/event';
+import { loadSettings, saveSettings } from '../composables/useDatabase';
+import { setIncognitoMode } from '../composables/useEvents';
+import { setEmbedderMirrorUrl } from '../utils/embedder';
+
+/**
+ * Tauri event broadcast whenever settings are persisted in any window.
+ * Each webview has its own Pinia store, so without this event the
+ * popup/capture/result windows would keep stale configs after the user
+ * edits settings in the main window.
+ */
+const SETTINGS_UPDATED_EVENT = 'settings-updated';
 
 export interface ModelConfig {
   provider: ProviderPresetId;
@@ -54,6 +66,50 @@ export interface ProviderPreset {
   supportsVision: boolean;
 }
 
+export type TaskType =
+  | 'chat'
+  | 'translation'
+  | 'vision_extraction'
+  | 'literature_review'
+  | 'citation_format'
+  | 'text_cleanup'
+  | 'polish';
+
+export interface ModelProfile {
+  id: string;
+  name: string;
+  provider: ProviderPresetId;
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  capabilities: ('text' | 'vision' | 'long_context' | 'reasoning')[];
+  maxContextLength: number;
+  avgLatencyMs: number;
+  costPer1kTokens: number;
+  enabled: boolean;
+}
+
+export interface TaskRoutingRule {
+  taskType: TaskType;
+  preferredModelId: string;
+  fallbackModelIds: string[];
+  timeoutMs: number;
+}
+
+export interface RoutingConfig {
+  enabled: boolean;
+  profiles: ModelProfile[];
+  rules: TaskRoutingRule[];
+}
+
+export interface ExternalToolsConfig {
+  zoteroUserId: string;
+  zoteroSyncEnabled: boolean;
+  zoteroSelectedCollections: string[];
+  obsidianVaultPath: string;
+  obsidianDefaultFolder: string;
+}
+
 export interface AIConfig {
   textConfig: ModelConfig;
   visionConfig: ModelConfig;
@@ -62,9 +118,118 @@ export interface AIConfig {
   autoHideOnBlur: boolean;
   popupShortcut: string;
   captureShortcut: string;
+  incognitoMode: boolean;
+  providerKeys: Partial<Record<ProviderPresetId, string>>;
+  routing: RoutingConfig;
+  kbAutoRetrieve: boolean;
+  kbTopK: number;
+  hfMirrorUrl: string;
+  externalTools: ExternalToolsConfig;
 }
 
-const STORAGE_KEY = 'ai_assistant_settings';
+/** Legacy localStorage key (kept for migration reference). */
+export const SETTINGS_STORAGE_KEY = 'ai_assistant_settings';
+
+/** Legacy localStorage key for conversation history. */
+export const HISTORY_STORAGE_KEY = 'conversations';
+
+/**
+ * Build model profiles from configured providers only.
+ * Only providers with a non-empty apiKey in providerKeys are included.
+ */
+export const buildModelProfiles = (
+  providerKeys: Partial<Record<ProviderPresetId, string>>,
+  textConfig: ModelConfig,
+  visionConfig: ModelConfig
+): ModelProfile[] => {
+  const profiles: ModelProfile[] = [];
+
+  // Helper to add a profile for a provider if it has a key
+  const addProfile = (presetId: ProviderPresetId, preset: ProviderPreset | undefined, config: ModelConfig) => {
+    const key = providerKeys[presetId];
+    if (!key || !key.trim()) return;
+
+    const capabilities: ('text' | 'vision' | 'long_context' | 'reasoning')[] = ['text'];
+    if (preset?.supportsVision) capabilities.push('vision');
+
+    profiles.push({
+      id: `${presetId}-profile`,
+      name: preset?.label || config.model,
+      provider: presetId,
+      baseUrl: config.baseUrl || preset?.baseUrl || '',
+      apiKey: key,
+      model: config.model || preset?.textModel || '',
+      capabilities,
+      maxContextLength: 128000,
+      avgLatencyMs: 3000,
+      costPer1kTokens: 0.005,
+      enabled: true
+    });
+  };
+
+  // Add profile for text provider if configured
+  const textPreset = providerPresets.find(p => p.id === textConfig.provider);
+  addProfile(textConfig.provider, textPreset, textConfig);
+
+  // Add profile for vision provider if configured and different from text
+  if (visionConfig.provider !== textConfig.provider) {
+    const visionPreset = providerPresets.find(p => p.id === visionConfig.provider);
+    addProfile(visionConfig.provider, visionPreset, visionConfig);
+  }
+
+  // If no profiles were created (nothing configured), still create placeholders
+  // so the UI shows something, but mark them as not fully configured
+  if (profiles.length === 0) {
+    profiles.push({
+      id: `${textConfig.provider}-profile`,
+      name: textPreset?.label || textConfig.model || 'Text Model',
+      provider: textConfig.provider,
+      baseUrl: textConfig.baseUrl || textPreset?.baseUrl || '',
+      apiKey: textConfig.apiKey,
+      model: textConfig.model || textPreset?.textModel || '',
+      capabilities: ['text'],
+      maxContextLength: 128000,
+      avgLatencyMs: 2500,
+      costPer1kTokens: 0.005,
+      enabled: true
+    });
+
+    if (visionConfig.provider !== textConfig.provider) {
+      const visionPreset = providerPresets.find(p => p.id === visionConfig.provider);
+      profiles.push({
+        id: `${visionConfig.provider}-profile`,
+        name: visionPreset?.label || visionConfig.model || 'Vision Model',
+        provider: visionConfig.provider,
+        baseUrl: visionConfig.baseUrl || visionPreset?.baseUrl || '',
+        apiKey: visionConfig.apiKey,
+        model: visionConfig.model || visionPreset?.visionModel || '',
+        capabilities: ['text', 'vision'],
+        maxContextLength: 128000,
+        avgLatencyMs: 4000,
+        costPer1kTokens: 0.015,
+        enabled: true
+      });
+    }
+  }
+
+  return profiles;
+};
+
+export const defaultRoutingRules = (textProvider: ProviderPresetId, visionProvider: ProviderPresetId): TaskRoutingRule[] => {
+  const textProfile = `${textProvider}-profile`;
+  const visionProfile = `${visionProvider}-profile`;
+  const hasSeparateVision = textProvider !== visionProvider;
+
+  return [
+    { taskType: 'chat', preferredModelId: textProfile, fallbackModelIds: hasSeparateVision ? [visionProfile] : [], timeoutMs: 80000 },
+    { taskType: 'translation', preferredModelId: textProfile, fallbackModelIds: hasSeparateVision ? [visionProfile] : [], timeoutMs: 8000 },
+    { taskType: 'vision_extraction', preferredModelId: hasSeparateVision ? visionProfile : textProfile, fallbackModelIds: [], timeoutMs: 30000 },
+    { taskType: 'literature_review', preferredModelId: textProfile, fallbackModelIds: hasSeparateVision ? [visionProfile] : [], timeoutMs: 120000 },
+    { taskType: 'citation_format', preferredModelId: textProfile, fallbackModelIds: hasSeparateVision ? [visionProfile] : [], timeoutMs: 8000 },
+    { taskType: 'text_cleanup', preferredModelId: textProfile, fallbackModelIds: hasSeparateVision ? [visionProfile] : [], timeoutMs: 8000 },
+    { taskType: 'polish', preferredModelId: textProfile, fallbackModelIds: hasSeparateVision ? [visionProfile] : [], timeoutMs: 10000 }
+  ];
+};
 
 export const providerPresets: ProviderPreset[] = [
   {
@@ -144,28 +309,51 @@ export const providerPresets: ProviderPreset[] = [
   }
 ];
 
-const defaultConfig: AIConfig = {
-  textConfig: {
+const createDefaultConfig = (): AIConfig => {
+  const textConfig: ModelConfig = {
     provider: 'openai',
     baseUrl: 'https://api.openai.com/v1',
     apiKey: '',
     model: 'gpt-4o'
-  },
-  visionConfig: {
+  };
+  const visionConfig: ModelConfig = {
     provider: 'openai',
     baseUrl: 'https://api.openai.com/v1',
     apiKey: '',
     model: 'gpt-4o'
-  },
-  translateConfig: {
-    sourceLang: 'auto',
-    targetLang: 'zh'
-  },
-  hasCompletedWelcome: false,
-  autoHideOnBlur: true,
-  popupShortcut: 'Alt+Q',
-  captureShortcut: 'Alt+S'
+  };
+  return {
+    textConfig,
+    visionConfig,
+    translateConfig: {
+      sourceLang: 'auto',
+      targetLang: 'zh'
+    },
+    hasCompletedWelcome: false,
+    autoHideOnBlur: true,
+    popupShortcut: 'Alt+Q',
+    captureShortcut: 'Alt+S',
+    incognitoMode: false,
+    providerKeys: {},
+    routing: {
+      enabled: false,
+      profiles: buildModelProfiles({}, textConfig, visionConfig),
+      rules: defaultRoutingRules(textConfig.provider, visionConfig.provider)
+    },
+    kbAutoRetrieve: true,
+    kbTopK: 5,
+    hfMirrorUrl: 'https://hf-mirror.com/',
+    externalTools: {
+      zoteroUserId: '',
+      zoteroSyncEnabled: false,
+      zoteroSelectedCollections: [],
+      obsidianVaultPath: '',
+      obsidianDefaultFolder: 'AI-Research-Assistant'
+    }
+  };
 };
+
+const defaultConfig = createDefaultConfig();
 
 const inferProvider = (baseUrl: string | undefined): ProviderPresetId => {
   const normalizedBaseUrl = (baseUrl || '').trim().toLowerCase();
@@ -191,7 +379,24 @@ const normalizeModelConfig = (
   model: partial?.model ?? fallback.model
 });
 
-const normalizeConfig = (partial: Partial<AIConfig> | undefined): AIConfig => ({
+const normalizeRoutingConfig = (
+  partial: Partial<RoutingConfig> | undefined,
+  providerKeys: Partial<Record<ProviderPresetId, string>>,
+  textConfig: ModelConfig,
+  visionConfig: ModelConfig
+): RoutingConfig => {
+  // Regenerate profiles from configured providers on every load
+  // This ensures profiles stay in sync with current providerKeys
+  const profiles = buildModelProfiles(providerKeys, textConfig, visionConfig);
+
+  return {
+    enabled: partial?.enabled ?? false,
+    profiles,
+    rules: partial?.rules && partial.rules.length > 0 ? partial.rules : defaultRoutingRules(textConfig.provider, visionConfig.provider)
+  };
+};
+
+export const normalizeConfig = (partial: Partial<AIConfig> | undefined): AIConfig => ({
   textConfig: normalizeModelConfig(partial?.textConfig, defaultConfig.textConfig),
   visionConfig: normalizeModelConfig(partial?.visionConfig, defaultConfig.visionConfig),
   translateConfig: {
@@ -201,34 +406,88 @@ const normalizeConfig = (partial: Partial<AIConfig> | undefined): AIConfig => ({
   hasCompletedWelcome: partial?.hasCompletedWelcome ?? defaultConfig.hasCompletedWelcome,
   autoHideOnBlur: partial?.autoHideOnBlur ?? defaultConfig.autoHideOnBlur,
   popupShortcut: partial?.popupShortcut ?? defaultConfig.popupShortcut,
-  captureShortcut: partial?.captureShortcut ?? defaultConfig.captureShortcut
+  captureShortcut: partial?.captureShortcut ?? defaultConfig.captureShortcut,
+  incognitoMode: partial?.incognitoMode ?? defaultConfig.incognitoMode,
+  providerKeys: partial?.providerKeys ?? {},
+  routing: normalizeRoutingConfig(
+    partial?.routing,
+    partial?.providerKeys ?? {},
+    normalizeModelConfig(partial?.textConfig, defaultConfig.textConfig),
+    normalizeModelConfig(partial?.visionConfig, defaultConfig.visionConfig)
+  ),
+  kbAutoRetrieve: partial?.kbAutoRetrieve ?? defaultConfig.kbAutoRetrieve,
+  kbTopK: partial?.kbTopK ?? defaultConfig.kbTopK,
+  hfMirrorUrl: partial?.hfMirrorUrl ?? defaultConfig.hfMirrorUrl,
+  externalTools: {
+    zoteroUserId: partial?.externalTools?.zoteroUserId ?? defaultConfig.externalTools.zoteroUserId,
+    zoteroSyncEnabled: partial?.externalTools?.zoteroSyncEnabled ?? defaultConfig.externalTools.zoteroSyncEnabled,
+    zoteroSelectedCollections: partial?.externalTools?.zoteroSelectedCollections ?? defaultConfig.externalTools.zoteroSelectedCollections,
+    obsidianVaultPath: partial?.externalTools?.obsidianVaultPath ?? defaultConfig.externalTools.obsidianVaultPath,
+    obsidianDefaultFolder: partial?.externalTools?.obsidianDefaultFolder ?? defaultConfig.externalTools.obsidianDefaultFolder
+  }
 });
 
 export const useSettingsStore = defineStore('settings', () => {
   const config = ref<AIConfig>(defaultConfig);
 
-  // Load from localStorage on init
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    console.log('[Settings] Raw localStorage:', stored);
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      console.log('[Settings] Parsed config:', JSON.stringify(parsed, null, 2));
-      if (parsed.textConfig && parsed.visionConfig) {
-        config.value = normalizeConfig(parsed);
-        console.log('[Settings] Loaded config into store');
-      }
-    }
-  } catch (e) {
-    console.error('Failed to load settings:', e);
-  }
+  /** Track whether the cross-window sync listener has been wired up. */
+  let crossWindowListenerReady = false;
 
-  const saveToStorage = () => {
+  /**
+   * Reload the in-memory config from SQLite without re-running side-effects
+   * that should only fire on the very first load (incognito sync, embedder mirror).
+   * Intended to be invoked when another window has just persisted new settings.
+   */
+  const reloadFromDb = async () => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(config.value));
-      console.log('[Settings] Saved to localStorage:', JSON.stringify(config.value, null, 2));
+      const stored = await loadSettings();
+      if (stored) {
+        config.value = normalizeConfig(stored);
+      }
     } catch (e) {
-      console.error('Failed to save settings:', e);
+      console.warn('[Settings] Failed to reload after sync event:', e);
+    }
+  };
+
+  /** Load settings from SQLite on app start. */
+  const init = async () => {
+    try {
+      const stored = await loadSettings();
+      if (stored) {
+        config.value = normalizeConfig(stored);
+      }
+      // Sync incognito mode with Rust backend
+      await setIncognitoMode(config.value.incognitoMode);
+      // Configure embedding model mirror URL
+      setEmbedderMirrorUrl(config.value.hfMirrorUrl);
+
+      // Subscribe once to cross-window settings updates so popup/capture/result
+      // windows pick up changes saved from the main window's SettingsPanel.
+      if (!crossWindowListenerReady) {
+        crossWindowListenerReady = true;
+        try {
+          await listen(SETTINGS_UPDATED_EVENT, () => {
+            void reloadFromDb();
+          });
+        } catch (e) {
+          console.warn('[Settings] Failed to register sync listener:', e);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load settings from DB:', e);
+    }
+  };
+
+  // Watch incognito mode changes and sync to Rust
+  watch(() => config.value.incognitoMode, async (enabled) => {
+    await setIncognitoMode(enabled);
+  });
+
+  const saveToDb = async () => {
+    try {
+      await saveSettings(config.value);
+    } catch (e) {
+      console.error('Failed to save settings to DB:', e);
     }
   };
 
@@ -237,11 +496,6 @@ export const useSettingsStore = defineStore('settings', () => {
   };
 
   const isVisionConfigured = () => {
-    console.log('[Settings] isVisionConfigured check:', {
-      visionApiKey: config.value.visionConfig.apiKey,
-      visionBaseUrl: config.value.visionConfig.baseUrl,
-      result: config.value.visionConfig.apiKey.trim() !== '' && config.value.visionConfig.baseUrl.trim() !== ''
-    });
     return config.value.visionConfig.apiKey.trim() !== '' && config.value.visionConfig.baseUrl.trim() !== '';
   };
 
@@ -249,21 +503,33 @@ export const useSettingsStore = defineStore('settings', () => {
     return isTextConfigured() && isVisionConfigured();
   };
 
-  const updateConfig = (newConfig: AIConfig) => {
-    config.value = normalizeConfig(JSON.parse(JSON.stringify(newConfig)));
-    saveToStorage();
+  /** Notify other windows so their stores reload from SQLite. */
+  const broadcastUpdate = async () => {
+    try {
+      await emit(SETTINGS_UPDATED_EVENT);
+    } catch (e) {
+      console.warn('[Settings] Failed to broadcast update:', e);
+    }
   };
 
-  const completeWelcome = () => {
+  const updateConfig = async (newConfig: AIConfig) => {
+    config.value = normalizeConfig(JSON.parse(JSON.stringify(newConfig)));
+    await saveToDb();
+    await broadcastUpdate();
+  };
+
+  const completeWelcome = async () => {
     config.value = {
       ...config.value,
       hasCompletedWelcome: true
     };
-    saveToStorage();
+    await saveToDb();
+    await broadcastUpdate();
   };
 
   return {
     config,
+    init,
     isConfigured,
     isTextConfigured,
     isVisionConfigured,

@@ -10,6 +10,8 @@ import {
   type ProviderPreset,
   type ProviderPresetId
 } from '../stores/settings';
+import { resetAllData } from '../composables/useDatabase';
+import { setEmbedderMirrorUrl } from '../utils/embedder';
 
 const appWindow = getCurrentWebviewWindow();
 const settingsStore = useSettingsStore();
@@ -28,6 +30,10 @@ const textExpanded = ref(true);
 const visionExpanded = ref(false);
 const shortcutsExpanded = ref(false);
 const translateExpanded = ref(false);
+const privacyExpanded = ref(false);
+const routingExpanded = ref(false);
+const knowledgeExpanded = ref(false);
+const externalToolsExpanded = ref(false);
 
 const emit = defineEmits<{
   close: [];
@@ -48,11 +54,32 @@ const visionProviderPresets = computed(() =>
 const getPreset = (presetId: ProviderPresetId): ProviderPreset =>
   providerPresets.find((preset) => preset.id === presetId) || providerPresets[0];
 
+const getProfileName = (profileId: string): string => {
+  const profile = localConfig.value.routing.profiles.find((p) => p.id === profileId);
+  return profile?.name || profileId;
+};
+
 const applyPreset = (target: 'textConfig' | 'visionConfig', presetId: ProviderPresetId) => {
+  const currentProvider = localConfig.value[target].provider;
+  const currentKey = localConfig.value[target].apiKey;
+
+  // Save current API key under its provider
+  if (currentKey.trim()) {
+    localConfig.value.providerKeys = {
+      ...localConfig.value.providerKeys,
+      [currentProvider]: currentKey
+    };
+  }
+
   const preset = getPreset(presetId);
+
+  // Restore API key for the new provider if previously saved
+  const restoredKey = localConfig.value.providerKeys[presetId] || '';
+
   const nextConfig: ModelConfig = {
     ...localConfig.value[target],
-    provider: preset.id
+    provider: preset.id,
+    apiKey: restoredKey
   };
 
   if (preset.baseUrl) {
@@ -75,8 +102,24 @@ const saveSettings = async () => {
   saveStatus.value = 'saving';
 
   try {
-    settingsStore.updateConfig(localConfig.value);
+    // Sync current API keys into providerKeys before saving
+    const updatedProviderKeys = {
+      ...localConfig.value.providerKeys,
+      [localConfig.value.textConfig.provider]: localConfig.value.textConfig.apiKey,
+      [localConfig.value.visionConfig.provider]: localConfig.value.visionConfig.apiKey
+    };
+
+    const configToSave = {
+      ...localConfig.value,
+      providerKeys: updatedProviderKeys
+    };
+
+    await settingsStore.updateConfig(configToSave);
+    localConfig.value = JSON.parse(JSON.stringify(settingsStore.config));
     saveStatus.value = 'saved';
+
+    // Apply embedding mirror URL immediately
+    setEmbedderMirrorUrl(localConfig.value.hfMirrorUrl);
 
     window.setTimeout(() => {
       saveStatus.value = 'idle';
@@ -87,16 +130,24 @@ const saveSettings = async () => {
   }
 };
 
-const resetSettings = () => {
-  localStorage.clear();
+const resetSettings = async () => {
+  try {
+    await resetAllData();
+  } catch (e) {
+    console.error('Failed to reset database:', e);
+  }
   location.reload();
 };
 
-const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate') => {
+const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate' | 'privacy' | 'routing' | 'knowledge' | 'external') => {
   if (target === 'text') textExpanded.value = !textExpanded.value;
   if (target === 'vision') visionExpanded.value = !visionExpanded.value;
   if (target === 'shortcuts') shortcutsExpanded.value = !shortcutsExpanded.value;
   if (target === 'translate') translateExpanded.value = !translateExpanded.value;
+  if (target === 'privacy') privacyExpanded.value = !privacyExpanded.value;
+  if (target === 'routing') routingExpanded.value = !routingExpanded.value;
+  if (target === 'knowledge') knowledgeExpanded.value = !knowledgeExpanded.value;
+  if (target === 'external') externalToolsExpanded.value = !externalToolsExpanded.value;
 };
 </script>
 
@@ -304,6 +355,217 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate') => {
               placeholder="Alt+S"
               readonly
             />
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <button class="card-header" @click="toggleCard('privacy')">
+          <div>
+            <h3 class="card-title">Privacy</h3>
+            <p class="card-subtitle">Control data collection and local storage.</p>
+          </div>
+          <span class="card-toggle">{{ privacyExpanded ? 'Hide' : 'Show' }}</span>
+        </button>
+
+        <div v-if="privacyExpanded" class="card-body">
+          <div class="form-group toggle-row">
+            <div>
+              <label class="label">Incognito Mode</label>
+              <p class="hint">When enabled, the app stops recording all activity events. Other features are unaffected.</p>
+            </div>
+            <button
+              class="toggle-switch"
+              :class="{ active: localConfig.incognitoMode }"
+              @click="localConfig.incognitoMode = !localConfig.incognitoMode"
+            >
+              <span class="toggle-knob"></span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <button class="card-header" @click="toggleCard('routing')">
+          <div>
+            <h3 class="card-title">Model Routing</h3>
+            <p class="card-subtitle">Auto-select models by task type with fallback and usage tracking.</p>
+          </div>
+          <span class="card-toggle">{{ routingExpanded ? 'Hide' : 'Show' }}</span>
+        </button>
+
+        <div v-if="routingExpanded" class="card-body">
+          <div class="form-group toggle-row">
+            <div>
+              <label class="label">Enable Smart Routing</label>
+              <p class="hint">When enabled, the app automatically selects the best model for each task type.</p>
+            </div>
+            <button
+              class="toggle-switch"
+              :class="{ active: localConfig.routing.enabled }"
+              @click="localConfig.routing.enabled = !localConfig.routing.enabled"
+            >
+              <span class="toggle-knob"></span>
+            </button>
+          </div>
+
+          <div v-if="localConfig.routing.enabled" class="routing-section">
+            <div class="routing-label">Configured Profiles</div>
+            <div class="profile-list">
+              <div
+                v-for="profile in localConfig.routing.profiles"
+                :key="profile.id"
+                class="profile-item"
+              >
+                <div class="profile-header">
+                  <span class="profile-name">{{ profile.name }}</span>
+                  <span class="profile-provider">{{ profile.provider }}</span>
+                  <span
+                    class="profile-status"
+                    :class="{ disabled: !profile.enabled }"
+                  >
+                    {{ profile.enabled ? 'Enabled' : 'Disabled' }}
+                  </span>
+                </div>
+                <div class="profile-meta">
+                  <span class="meta-tag">{{ profile.model }}</span>
+                  <span class="meta-tag">{{ profile.capabilities.join(', ') }}</span>
+                  <span class="meta-tag">~{{ profile.avgLatencyMs }}ms</span>
+                  <span class="meta-tag">${{ profile.costPer1kTokens }}/1k tokens</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="routing-label" style="margin-top: 1rem;">Task Routing Rules</div>
+            <div class="rule-list">
+              <div
+                v-for="rule in localConfig.routing.rules"
+                :key="rule.taskType"
+                class="rule-item"
+              >
+                <span class="rule-task">{{ rule.taskType }}</span>
+                <span class="rule-arrow">→</span>
+                <span class="rule-model">{{ getProfileName(rule.preferredModelId) }}</span>
+                <span v-if="rule.fallbackModelIds.length" class="rule-fallback">
+                  (fallback: {{ rule.fallbackModelIds.map(getProfileName).join(', ') }})
+                </span>
+                <span class="rule-timeout">{{ rule.timeoutMs }}ms</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <button class="card-header" @click="toggleCard('knowledge')">
+          <div>
+            <h3 class="card-title">Knowledge Base</h3>
+            <p class="card-subtitle">Local document indexing and semantic search settings.</p>
+          </div>
+          <span class="card-toggle">{{ knowledgeExpanded ? 'Hide' : 'Show' }}</span>
+        </button>
+
+        <div v-if="knowledgeExpanded" class="card-body">
+          <div class="form-group toggle-row">
+            <div>
+              <label class="label">Auto-Retrieve in Chat</label>
+              <p class="hint">When enabled, the app automatically searches the knowledge base for relevant context before each chat message.</p>
+            </div>
+            <button
+              class="toggle-switch"
+              :class="{ active: localConfig.kbAutoRetrieve !== false }"
+              @click="localConfig.kbAutoRetrieve = !localConfig.kbAutoRetrieve"
+            >
+              <span class="toggle-knob"></span>
+            </button>
+          </div>
+
+          <div class="form-group">
+            <label class="label">Retrieval Top-K</label>
+            <input
+              v-model.number="localConfig.kbTopK"
+              type="number"
+              class="input"
+              min="1"
+              max="20"
+              placeholder="5"
+            />
+            <p class="hint">Number of most-relevant passages to include as context (1-20).</p>
+          </div>
+
+          <div class="form-group">
+            <label class="label">HuggingFace Mirror URL</label>
+            <input
+              v-model="localConfig.hfMirrorUrl"
+              type="text"
+              class="input"
+              placeholder="https://hf-mirror.com/"
+            />
+            <p class="hint">Mirror site for downloading embedding models. Default: https://hf-mirror.com/</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <button class="card-header" @click="toggleCard('external')">
+          <div>
+            <h3 class="card-title">External Tools</h3>
+            <p class="card-subtitle">Connect Zotero and Obsidian for deep research integration.</p>
+          </div>
+          <span class="card-toggle">{{ externalToolsExpanded ? 'Hide' : 'Show' }}</span>
+        </button>
+
+        <div v-if="externalToolsExpanded" class="card-body">
+          <!-- Zotero -->
+          <div class="form-group">
+            <label class="label">Zotero User ID</label>
+            <input
+              v-model="localConfig.externalTools.zoteroUserId"
+              type="text"
+              class="input"
+              placeholder="0"
+            />
+            <p class="hint">
+              Use <code>0</code> for your local library. This is NOT your online Zotero account ID.
+              Zotero must be running with the local API enabled (Edit → Preferences → Advanced → "Allow other applications...").
+            </p>
+          </div>
+
+          <div class="form-group toggle-row">
+            <div>
+              <label class="label">Auto-Sync Zotero</label>
+              <p class="hint">Automatically sync Zotero library when the app starts.</p>
+            </div>
+            <button
+              class="toggle-switch"
+              :class="{ active: localConfig.externalTools.zoteroSyncEnabled }"
+              @click="localConfig.externalTools.zoteroSyncEnabled = !localConfig.externalTools.zoteroSyncEnabled"
+            >
+              <span class="toggle-knob"></span>
+            </button>
+          </div>
+
+          <!-- Obsidian -->
+          <div class="form-group">
+            <label class="label">Obsidian Vault Path</label>
+            <input
+              v-model="localConfig.externalTools.obsidianVaultPath"
+              type="text"
+              class="input"
+              placeholder="C:/Users/.../Documents/Obsidian Vault"
+            />
+            <p class="hint">Absolute path to your Obsidian Vault folder.</p>
+          </div>
+
+          <div class="form-group">
+            <label class="label">Default Notes Folder</label>
+            <input
+              v-model="localConfig.externalTools.obsidianDefaultFolder"
+              type="text"
+              class="input"
+              placeholder="AI-Research-Assistant"
+            />
+            <p class="hint">Subfolder inside the vault where AI-generated notes are saved.</p>
           </div>
         </div>
       </div>
@@ -616,5 +878,163 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate') => {
   background-repeat: no-repeat;
   background-size: 1.5em 1.5em;
   padding-right: 2.5rem;
+}
+
+.toggle-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.toggle-switch {
+  flex-shrink: 0;
+  width: 48px;
+  height: 26px;
+  border-radius: 999px;
+  background: #d1d5db;
+  border: none;
+  cursor: pointer;
+  position: relative;
+  transition: background 0.2s ease;
+  padding: 0;
+  margin-top: 2px;
+}
+
+.toggle-switch.active {
+  background: linear-gradient(135deg, #00e5cc 0%, #00b8a3 100%);
+}
+
+.toggle-knob {
+  display: block;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #ffffff;
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  transition: transform 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.toggle-switch.active .toggle-knob {
+  transform: translateX(22px);
+}
+
+/* Routing section */
+.routing-section {
+  margin-top: 1rem;
+}
+
+.routing-label {
+  color: #374151;
+  font-weight: 600;
+  margin-bottom: 0.6rem;
+  font-size: 0.8rem;
+}
+
+.profile-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.profile-item {
+  background: rgba(15, 23, 42, 0.03);
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  border-radius: 10px;
+  padding: 0.7rem 0.85rem;
+}
+
+.profile-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.3rem;
+}
+
+.profile-name {
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: #111827;
+}
+
+.profile-provider {
+  font-size: 0.75rem;
+  color: #6b7280;
+  background: rgba(15, 23, 42, 0.06);
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+}
+
+.profile-status {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #10b981;
+  margin-left: auto;
+}
+
+.profile-status.disabled {
+  color: #9ca3af;
+}
+
+.profile-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.meta-tag {
+  font-size: 0.72rem;
+  color: #6b7280;
+  background: rgba(15, 23, 42, 0.04);
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.rule-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.rule-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+  padding: 0.4rem 0.5rem;
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.02);
+}
+
+.rule-task {
+  font-weight: 600;
+  color: #374151;
+  min-width: 100px;
+  text-transform: capitalize;
+}
+
+.rule-arrow {
+  color: #9ca3af;
+}
+
+.rule-model {
+  color: #3d74e7;
+  font-weight: 600;
+}
+
+.rule-fallback {
+  font-size: 0.75rem;
+  color: #9ca3af;
+}
+
+.rule-timeout {
+  margin-left: auto;
+  font-size: 0.72rem;
+  color: #9ca3af;
+  font-family: 'JetBrains Mono', monospace;
 }
 </style>

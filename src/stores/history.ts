@@ -1,13 +1,29 @@
 import { defineStore } from 'pinia';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
+import type { ChatMessage } from '../utils/aiClient';
+import {
+  loadConversations,
+  loadMessages,
+  saveConversation,
+  saveMessages,
+  deleteConversation as dbDeleteConversation
+} from '../composables/useDatabase';
+import { useProjectStore } from './projects';
+
+/**
+ * A simplified message type for history storage.
+ * History only persists text content (images are too large for localStorage).
+ */
+export interface HistoryMessage {
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+}
 
 export interface Conversation {
   id: string;
   title: string;
-  messages: Array<{
-    role: 'user' | 'assistant' | 'system';
-    content: string;
-  }>;
+  projectId?: string | null;
+  messages: HistoryMessage[];
   createdAt: number;
   updatedAt: number;
 }
@@ -15,40 +31,43 @@ export interface Conversation {
 export const useHistoryStore = defineStore('history', () => {
   const conversations = ref<Conversation[]>([]);
   const currentConversationId = ref<string | null>(null);
+  const projectStore = useProjectStore();
 
-  // Load from localStorage on init
-  const loadFromStorage = () => {
+  /** Conversations filtered by current project. */
+  const projectConversations = computed(() => {
+    const pid = projectStore.currentProjectId;
+    return conversations.value.filter(c => c.projectId === pid);
+  });
+
+  /** Load all conversations (with messages) from SQLite on app start. */
+  const init = async () => {
     try {
-      const stored = localStorage.getItem('conversations');
-      if (stored) {
-        conversations.value = JSON.parse(stored);
+      const convs = await loadConversations();
+      for (const conv of convs) {
+        conv.messages = await loadMessages(conv.id);
       }
+      conversations.value = convs;
+      currentConversationId.value = convs[0]?.id || null;
     } catch (e) {
-      console.error('Failed to load conversations:', e);
+      console.error('Failed to load conversations from DB:', e);
     }
   };
 
-  // Save to localStorage
-  const saveToStorage = () => {
-    try {
-      localStorage.setItem('conversations', JSON.stringify(conversations.value));
-    } catch (e) {
-      console.error('Failed to save conversations:', e);
-    }
-  };
-
-  // Create new conversation
+  // Create new conversation (optionally under current project)
   const createConversation = (): Conversation => {
+    const projectId = projectStore.currentProjectId;
     const conv: Conversation = {
       id: Date.now().toString(),
       title: 'New Chat',
+      projectId: projectId || null,
       messages: [],
       createdAt: Date.now(),
       updatedAt: Date.now()
     };
     conversations.value.unshift(conv);
     currentConversationId.value = conv.id;
-    saveToStorage();
+    // Persist async — fire and forget, errors logged in composable
+    saveConversation(conv).catch(() => {});
     return conv;
   };
 
@@ -59,7 +78,7 @@ export const useHistoryStore = defineStore('history', () => {
   };
 
   // Update current conversation messages
-  const updateCurrentMessages = (messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>) => {
+  const updateCurrentMessages = async (messages: HistoryMessage[]) => {
     if (!currentConversationId.value) return;
     const conv = conversations.value.find(c => c.id === currentConversationId.value);
     if (conv) {
@@ -69,7 +88,8 @@ export const useHistoryStore = defineStore('history', () => {
       if (messages.length > 0 && messages[0].role === 'user') {
         conv.title = messages[0].content.slice(0, 30) + (messages[0].content.length > 30 ? '...' : '');
       }
-      saveToStorage();
+      await saveConversation(conv);
+      await saveMessages(conv.id, messages);
     }
   };
 
@@ -84,23 +104,22 @@ export const useHistoryStore = defineStore('history', () => {
   };
 
   // Delete a conversation
-  const deleteConversation = (id: string) => {
+  const deleteConversation = async (id: string) => {
     const index = conversations.value.findIndex(c => c.id === id);
     if (index !== -1) {
       conversations.value.splice(index, 1);
       if (currentConversationId.value === id) {
         currentConversationId.value = conversations.value[0]?.id || null;
       }
-      saveToStorage();
+      await dbDeleteConversation(id);
     }
   };
-
-  // Initialize
-  loadFromStorage();
 
   return {
     conversations,
     currentConversationId,
+    projectConversations,
+    init,
     createConversation,
     getCurrentConversation,
     updateCurrentMessages,
@@ -108,3 +127,24 @@ export const useHistoryStore = defineStore('history', () => {
     deleteConversation
   };
 });
+
+/**
+ * Convert ChatMessage[] to HistoryMessage[] by stripping non-text content.
+ * Vision messages (with images) are reduced to their text parts only.
+ */
+export function toHistoryMessages(messages: ChatMessage[]): HistoryMessage[] {
+  return messages.map(msg => {
+    let text: string;
+    if (typeof msg.content === 'string') {
+      text = msg.content;
+    } else if (Array.isArray(msg.content)) {
+      text = msg.content
+        .filter((c): c is { type: 'text'; text: string } => c.type === 'text')
+        .map(c => c.text)
+        .join('');
+    } else {
+      text = '';
+    }
+    return { role: msg.role, content: text };
+  });
+}
