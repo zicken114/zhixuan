@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { listen } from '@tauri-apps/api/event';
 import { aiClient } from '../utils/aiClient';
 import { marked } from 'marked';
@@ -62,6 +62,8 @@ const menuItems = computed(() => {
 });
 
 let blurTimeout: number | null = null;
+let unlistenClipboard: (() => void) | null = null;
+let unlistenWindowActivity: (() => void) | null = null;
 
 const handleBlur = () => {
   // Don't auto-cancel when losing focus - let the AI request complete
@@ -84,18 +86,32 @@ const handleFocus = () => {
 
 onMounted(async () => {
   // Listen for clipboard data from Rust
-  await listen<ClipboardPayload>('clipboard-data', (event) => {
+  unlistenClipboard = await listen<ClipboardPayload>('clipboard-data', (event) => {
     clipboardText.value = event.payload.text;
   });
 
   // Listen for window activity changes to adapt menu
-  await listen<WindowInfoPayload>('window:activity-changed', (event) => {
+  unlistenWindowActivity = await listen<WindowInfoPayload>('window:activity-changed', (event) => {
     currentAppType.value = event.payload.app_type;
   });
 
   // Add blur/focus listeners for auto-hide
   window.addEventListener('blur', handleBlur);
   window.addEventListener('focus', handleFocus);
+});
+
+onUnmounted(() => {
+  if (unlistenClipboard) {
+    unlistenClipboard();
+  }
+  if (unlistenWindowActivity) {
+    unlistenWindowActivity();
+  }
+  window.removeEventListener('blur', handleBlur);
+  window.removeEventListener('focus', handleFocus);
+  if (blurTimeout) {
+    clearTimeout(blurTimeout);
+  }
 });
 
 const handleAction = async (action: string) => {

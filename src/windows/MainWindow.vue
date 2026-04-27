@@ -86,7 +86,8 @@ watch(messages, async (newMessages) => {
 
 // Listen for show-settings event from Rust
 onMounted(async () => {
-  showWelcome.value = true;
+  await settingsStore.init();
+  showWelcome.value = !settingsStore.config.hasCompletedWelcome;
 
   await listen('show-settings', () => {
     showSettings.value = true;
@@ -390,11 +391,18 @@ const closeWindow = async () => {
 };
 
 const finishWelcome = async () => {
+  await settingsStore.completeWelcome();
   showWelcome.value = false;
   showSettings.value = false;
   await setWidgetDefaultPosition();
   await show('widget');
   await appWindow.hide();
+};
+
+const skipWelcomeAndCreateProject = async () => {
+  await settingsStore.completeWelcome();
+  showWelcome.value = false;
+  showCreateProject.value = true;
 };
 
 const newChat = () => {
@@ -518,7 +526,7 @@ const saveToObsidian = async () => {
 
 <template>
   <div class="main-window">
-    <WelcomePanel v-if="showWelcome" @continue="finishWelcome" @create-project="showWelcome = false; showCreateProject = true" />
+    <WelcomePanel v-if="showWelcome" @continue="finishWelcome" @create-project="skipWelcomeAndCreateProject" />
     <SettingsPanel v-else-if="showSettings" @close="showSettings = false" />
     <KnowledgePanel v-else-if="showKnowledge" @close="showKnowledge = false" />
 

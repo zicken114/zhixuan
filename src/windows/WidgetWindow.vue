@@ -197,7 +197,6 @@ const handleContextMenu = (e: MouseEvent) => {
 
 onMounted(async () => {
   await setWidgetDefaultPosition();
-  await appWindow.hide();
   await center('main');
   await show('main');
 

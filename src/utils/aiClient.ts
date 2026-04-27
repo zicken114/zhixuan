@@ -69,6 +69,7 @@ function estimateMessagesTokens(messages: ChatMessage[]): { input: number; outpu
 export class AIClient {
   private abortController: AbortController | null = null;
   private isUserCancelled = false;
+  private isTimedOut = false;
 
   cancel() {
     this.isUserCancelled = true;
@@ -349,8 +350,11 @@ export class AIClient {
       return { success: true, fullText, inputTokens: tokenEstimate.input, outputTokens: outputTokens || tokenEstimate.output };
     } catch (error) {
       if ((error as Error).name === 'AbortError' || (error as Error).message?.includes('abort')) {
-        const reason = this.isUserCancelled ? 'user' : 'timeout';
-        callbacks.onInterrupted?.(fullText, reason);
+        // 超时导致的 abort 不调用 onInterrupted（由上层触发 fallback）
+        if (!this.isTimedOut) {
+          const reason = this.isUserCancelled ? 'user' : 'timeout';
+          callbacks.onInterrupted?.(fullText, reason);
+        }
         throw error;
       }
       throw error;
@@ -376,13 +380,15 @@ export class AIClient {
     let profilesToTry = [primary, ...fallbacks];
 
     for (const profile of profilesToTry) {
+      let timeoutId: ReturnType<typeof setTimeout> | null = null;
       try {
-        const timeoutId = setTimeout(() => {
+        this.isTimedOut = false;
+        timeoutId = setTimeout(() => {
+          this.isTimedOut = true;
           this.abortController?.abort();
         }, timeoutMs);
 
         const result = await this.doChatStream(messages, callbacks, profile, doStream);
-        clearTimeout(timeoutId);
 
         const latencyMs = Math.round(performance.now() - startTime);
         const metadata = this.buildMetadata(profile, latencyMs, result.inputTokens, result.outputTokens, isFallback, fallbackReason);
@@ -390,14 +396,27 @@ export class AIClient {
         callbacks.onComplete?.(result.fullText, metadata);
         return;
       } catch (error) {
-        if ((error as Error).name === 'AbortError' || (error as Error).message?.includes('abort')) {
-          // User cancelled — onInterrupted was already fired inside doChatStream
+        if (this.isUserCancelled) {
+          // 用户取消 — onInterrupted 已在 doChatStream 中被调用
           return;
+        }
+        if (this.isTimedOut) {
+          // 超时 — 应继续 fallback
+          this.isTimedOut = false;
+          lastError = new Error(`Model ${profile.name} timed out after ${timeoutMs}ms`);
+          console.warn(`[AI Router] Model ${profile.name} timed out after ${timeoutMs}ms`);
+          isFallback = true;
+          fallbackReason = `首选模型 ${primary.name} 超时 (${timeoutMs}ms)`;
+          continue;
         }
         lastError = error as Error;
         console.warn(`[AI Router] Model ${profile.name} failed:`, lastError.message);
         isFallback = true;
         fallbackReason = `首选模型 ${primary.name} 失败: ${lastError.message}`;
+      } finally {
+        if (timeoutId !== null) {
+          clearTimeout(timeoutId);
+        }
       }
     }
 
@@ -413,6 +432,7 @@ export class AIClient {
   async chatOnce(messages: ChatMessage[], useVision: boolean = false, taskType?: TaskType): Promise<{ text: string; metadata: CallMetadata }> {
     const { primary, fallbacks, timeoutMs } = this.selectProfiles(taskType, useVision);
     const startTime = performance.now();
+    this.isUserCancelled = false;
 
     let isFallback = false;
     let fallbackReason: string | undefined;
@@ -420,11 +440,14 @@ export class AIClient {
     let profilesToTry = [primary, ...fallbacks];
 
     for (const profile of profilesToTry) {
+      let timeoutId: ReturnType<typeof setTimeout> | null = null;
       try {
+        this.isTimedOut = false;
         const requestUrl = this.resolveChatCompletionsUrl(profile.baseUrl);
         this.abortController = new AbortController();
 
-        const timeoutId = setTimeout(() => {
+        timeoutId = setTimeout(() => {
+          this.isTimedOut = true;
           this.abortController?.abort();
         }, timeoutMs);
 
@@ -444,8 +467,6 @@ export class AIClient {
           signal: this.abortController.signal
         });
 
-        clearTimeout(timeoutId);
-
         if (!response.ok) {
           throw new Error(`API request failed: ${response.status} ${response.statusText}`);
         }
@@ -459,13 +480,25 @@ export class AIClient {
         this.recordUsage(taskType, metadata, true);
         return { text, metadata };
       } catch (error) {
-        if ((error as Error).name === 'AbortError' || (error as Error).message?.includes('abort')) {
+        if (this.isUserCancelled) {
           throw error;
+        }
+        if (this.isTimedOut) {
+          this.isTimedOut = false;
+          lastError = new Error(`Model ${profile.name} timed out after ${timeoutMs}ms`);
+          console.warn(`[AI Router] Model ${profile.name} timed out after ${timeoutMs}ms`);
+          isFallback = true;
+          fallbackReason = `首选模型 ${primary.name} 超时 (${timeoutMs}ms)`;
+          continue;
         }
         lastError = error as Error;
         console.warn(`[AI Router] Model ${profile.name} failed:`, lastError.message);
         isFallback = true;
         fallbackReason = `首选模型 ${primary.name} 失败: ${lastError.message}`;
+      } finally {
+        if (timeoutId !== null) {
+          clearTimeout(timeoutId);
+        }
       }
     }
 
