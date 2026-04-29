@@ -125,6 +125,7 @@ export interface AIConfig {
   kbTopK: number;
   hfMirrorUrl: string;
   externalTools: ExternalToolsConfig;
+  summaryInterval: number; // 0 = disabled, N = generate summary every N user messages
 }
 
 /** Legacy localStorage key (kept for migration reference). */
@@ -349,7 +350,8 @@ const createDefaultConfig = (): AIConfig => {
       zoteroSelectedCollections: [],
       obsidianVaultPath: '',
       obsidianDefaultFolder: 'AI-Research-Assistant'
-    }
+    },
+    summaryInterval: 5
   };
 };
 
@@ -424,7 +426,8 @@ export const normalizeConfig = (partial: Partial<AIConfig> | undefined): AIConfi
     zoteroSelectedCollections: partial?.externalTools?.zoteroSelectedCollections ?? defaultConfig.externalTools.zoteroSelectedCollections,
     obsidianVaultPath: partial?.externalTools?.obsidianVaultPath ?? defaultConfig.externalTools.obsidianVaultPath,
     obsidianDefaultFolder: partial?.externalTools?.obsidianDefaultFolder ?? defaultConfig.externalTools.obsidianDefaultFolder
-  }
+  },
+  summaryInterval: partial?.summaryInterval ?? defaultConfig.summaryInterval
 });
 
 export const useSettingsStore = defineStore('settings', () => {

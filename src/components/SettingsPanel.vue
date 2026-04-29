@@ -12,6 +12,7 @@ import {
 } from '../stores/settings';
 import { resetAllData } from '../composables/useDatabase';
 import { setEmbedderMirrorUrl } from '../utils/embedder';
+import { checkZoteroConnection } from '../utils/zoteroBridge';
 
 const appWindow = getCurrentWebviewWindow();
 const settingsStore = useSettingsStore();
@@ -26,6 +27,8 @@ const localConfig = ref<AIConfig>(JSON.parse(JSON.stringify(settingsStore.config
 const showTextPassword = ref(false);
 const showVisionPassword = ref(false);
 const saveStatus = ref<'idle' | 'saving' | 'saved' | 'error'>('idle');
+const zoteroConnectionStatus = ref<'unknown' | 'connected' | 'disconnected'>('unknown');
+const zoteroConnectionChecking = ref(false);
 const textExpanded = ref(true);
 const visionExpanded = ref(false);
 const shortcutsExpanded = ref(false);
@@ -41,7 +44,21 @@ const emit = defineEmits<{
 
 onMounted(() => {
   localConfig.value = JSON.parse(JSON.stringify(settingsStore.config));
+  void checkZoteroStatus();
 });
+
+const checkZoteroStatus = async () => {
+  zoteroConnectionChecking.value = true;
+  try {
+    const userId = localConfig.value.externalTools.zoteroUserId || '0';
+    const connected = await checkZoteroConnection(userId);
+    zoteroConnectionStatus.value = connected ? 'connected' : 'disconnected';
+  } catch {
+    zoteroConnectionStatus.value = 'disconnected';
+  } finally {
+    zoteroConnectionChecking.value = false;
+  }
+};
 
 const textProviderPresets = computed(() =>
   providerPresets.filter((preset) => preset.supportsText)
@@ -503,6 +520,19 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate' | 'pri
             />
             <p class="hint">Mirror site for downloading embedding models. Default: https://hf-mirror.com/</p>
           </div>
+
+          <div class="form-group">
+            <label class="label">Session Summary Interval</label>
+            <input
+              v-model.number="localConfig.summaryInterval"
+              type="number"
+              class="input"
+              min="0"
+              max="50"
+              placeholder="5"
+            />
+            <p class="hint">Generate an AI summary every N user messages (0 = disabled). Summaries help maintain long-term context across sessions.</p>
+          </div>
         </div>
       </div>
 
@@ -529,6 +559,29 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate' | 'pri
               Use <code>0</code> for your local library. This is NOT your online Zotero account ID.
               Zotero must be running with the local API enabled (Edit → Preferences → Advanced → "Allow other applications...").
             </p>
+          </div>
+
+          <div class="form-group toggle-row">
+            <div>
+              <label class="label">Zotero Connection Status</label>
+              <p class="hint">
+                <span
+                  class="status-dot"
+                  :class="zoteroConnectionStatus"
+                />
+                <span v-if="zoteroConnectionChecking">Checking...</span>
+                <span v-else-if="zoteroConnectionStatus === 'connected'">Connected — Zotero is running and API is reachable.</span>
+                <span v-else-if="zoteroConnectionStatus === 'disconnected'">Disconnected — Please start Zotero and enable the local API.</span>
+                <span v-else>Click "Test Connection" to check.</span>
+              </p>
+            </div>
+            <button
+              class="btn-secondary test-btn"
+              :disabled="zoteroConnectionChecking"
+              @click="checkZoteroStatus"
+            >
+              {{ zoteroConnectionChecking ? 'Checking...' : 'Test Connection' }}
+            </button>
           </div>
 
           <div class="form-group toggle-row">
@@ -1036,5 +1089,31 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate' | 'pri
   font-size: 0.72rem;
   color: #9ca3af;
   font-family: 'JetBrains Mono', monospace;
+}
+
+/* Zotero connection status */
+.status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+  background: #9ca3af;
+}
+
+.status-dot.connected {
+  background: #10b981;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.4);
+}
+
+.status-dot.disconnected {
+  background: #ef4444;
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.3);
+}
+
+.test-btn {
+  padding: 0.5rem 0.9rem;
+  font-size: 0.78rem;
+  white-space: nowrap;
 }
 </style>
