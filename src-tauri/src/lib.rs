@@ -3,7 +3,10 @@ mod clipboard;
 mod event_collector;
 mod events;
 mod models;
+mod pdf_detection;
 mod screenshot;
+mod text_injection;
+mod text_selection;
 mod window_detector;
 mod window_manager;
 
@@ -14,6 +17,7 @@ use tauri::{Emitter, Manager};
 
 use crate::event_collector::EventCollector;
 use crate::models::{AppType, WindowInfo};
+use crate::text_selection::TextSelector;
 use crate::window_detector::WindowDetector;
 
 /// Shared application state holding services and cached detection results.
@@ -21,6 +25,7 @@ pub struct AppState {
     pub window_detector: Arc<dyn WindowDetector>,
     pub current_window: Arc<RwLock<Option<WindowInfo>>>,
     pub event_collector: Arc<EventCollector>,
+    pub text_selector: Arc<dyn TextSelector>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -74,6 +79,9 @@ pub fn run() {
                 None,
             );
 
+            // ── Text selection service (Phase 3 infrastructure) ────────────
+            let text_selector = text_selection::create_text_selector();
+
             // ── Window activity detector (Phase 0.1) ───────────────────────
             let window_detector = window_detector::create_window_detector();
             let current_window = Arc::new(RwLock::new(None));
@@ -82,6 +90,7 @@ pub fn run() {
                 window_detector: window_detector.clone(),
                 current_window: current_window.clone(),
                 event_collector: event_collector.clone(),
+                text_selector: text_selector.clone(),
             };
             app.manage(app_state);
 
@@ -188,6 +197,15 @@ pub fn run() {
             app_control::write_text_file,
             app_control::check_file_exists,
             app_control::fetch_zotero,
+            // Text selection (Phase 3)
+            text_selection::get_selected_text,
+            text_selection::get_selected_text_via_clipboard,
+            // Text injection (Phase 3)
+            text_injection::replace_selected_text,
+            text_injection::simulate_text_input,
+            // PDF detection (Phase 3)
+            pdf_detection::get_current_pdf_path,
+            pdf_detection::estimate_pdf_page,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
