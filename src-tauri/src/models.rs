@@ -18,7 +18,7 @@ pub struct WindowInfo {
     pub process_name: String,
     pub window_title: String,
     pub app_type: AppType,
-    pub document_path: Option<String>,
+    pub document_path: Option<String>, // e.g., the PDF being read
 }
 
 /// Payload for clipboard content with mouse position.

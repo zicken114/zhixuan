@@ -69,34 +69,38 @@ impl EventCollector {
             metadata,
         };
 
-        {
+        // Atomically insert the event and drain the buffer if it reaches capacity.
+        // The lock is held for the entire check+drain to prevent race conditions
+        // with concurrent record() or flush() calls.
+        let events_to_flush: Vec<AppEvent> = {
             let mut buffer = self.buffer.lock().unwrap();
             if buffer.len() >= RING_BUFFER_CAPACITY {
                 // Drop oldest event to make room (ring buffer behavior)
                 buffer.pop_front();
             }
             buffer.push_back(event);
-        }
 
-        // If buffer is at capacity after insertion, flush immediately
-        let should_flush = self.buffer.lock().unwrap().len() >= RING_BUFFER_CAPACITY;
-        if should_flush {
-            if let Err(e) = self.flush() {
+            // If buffer is at capacity after insertion, drain immediately
+            if buffer.len() >= RING_BUFFER_CAPACITY {
+                buffer.drain(..).collect()
+            } else {
+                vec![]
+            }
+        };
+
+        if !events_to_flush.is_empty() {
+            if let Err(e) = self.flush_events(events_to_flush) {
                 eprintln!("[EventCollector] Immediate flush failed: {}", e);
             }
         }
     }
 
-    /// Flush all buffered events to SQLite.
-    pub fn flush(&self
-    ) -> Result<usize, rusqlite::Error> {
-        let events: Vec<AppEvent> = {
-            let mut buffer = self.buffer.lock().unwrap();
-            if buffer.is_empty() {
-                return Ok(0);
-            }
-            buffer.drain(..).collect()
-        };
+    /// Flush a pre-extracted vector of events to SQLite.
+    /// This helper does not touch the buffer lock — callers must extract events themselves.
+    fn flush_events(&self, events: Vec<AppEvent>) -> Result<usize, rusqlite::Error> {
+        if events.is_empty() {
+            return Ok(0);
+        }
 
         let mut conn = Connection::open(&self.db_path)?;
         let tx = conn.transaction()?;
@@ -119,6 +123,19 @@ impl EventCollector {
 
         tx.commit()?;
         Ok(events.len())
+    }
+
+    /// Flush all buffered events to SQLite.
+    pub fn flush(&self) -> Result<usize, rusqlite::Error> {
+        let events: Vec<AppEvent> = {
+            let mut buffer = self.buffer.lock().unwrap();
+            if buffer.is_empty() {
+                return Ok(0);
+            }
+            buffer.drain(..).collect()
+        };
+
+        self.flush_events(events)
     }
 
     /// Create the activity_events table and indexes if they don't exist.

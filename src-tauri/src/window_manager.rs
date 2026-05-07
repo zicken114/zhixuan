@@ -147,6 +147,16 @@ pub fn show_window(app: tauri::AppHandle, label: String) -> Result<(), String> {
     Ok(())
 }
 
+/// Resize a window by label.
+#[tauri::command]
+pub fn resize_window(app: tauri::AppHandle, label: String, width: f64, height: f64) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window(&label) {
+        window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(width, height)))
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 /// Hide a window by label.
 #[tauri::command]
 pub fn hide_window(app: tauri::AppHandle, label: String) -> Result<(), String> {

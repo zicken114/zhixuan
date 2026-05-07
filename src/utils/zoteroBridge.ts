@@ -20,6 +20,8 @@ import {
   type ZoteroCollection
 } from '../composables/useDatabase';
 
+export type { ZoteroItem, ZoteroCollection };
+
 const ZOTERO_BASE = 'http://127.0.0.1:23119/api';
 
 export interface ZoteroApiItemData {
@@ -146,43 +148,45 @@ export async function fetchCollections(userId: string): Promise<ZoteroApiCollect
 /** Item types to skip — these are notes, attachments, etc. that aren't actual publications. */
 const SKIP_ITEM_TYPES = new Set(['note', 'attachment', 'annotation']);
 
-function toCacheItem(item: ZoteroApiItem): ZoteroItem | null {
-  if (!item.key) {
-    console.warn('[ZoteroBridge] Skipping item without key:', item);
+function toCacheItem(raw: any): ZoteroItem | null {
+  // Zotero API v3 wraps fields in `data`, but some local API responses may put them at top level.
+  const item = raw.data || raw;
+  const key = raw.key || item.key;
+
+  if (!key) {
+    console.warn('[ZoteroBridge] Skipping item without key:', raw);
     return null;
   }
 
-  // Zotero API v3 wraps fields in `data`, but some local API responses may put them at top level.
-  const d: any = item.data || item;
-  const itemType = (d.itemType)?.trim() || 'unknown';
+  const itemType = (item.itemType)?.trim() || 'unknown';
 
   if (SKIP_ITEM_TYPES.has(itemType)) {
-    console.log('[ZoteroBridge] Skipping non-publication item:', item.key, itemType);
+    console.log('[ZoteroBridge] Skipping non-publication item:', key, itemType);
     return null;
   }
 
-  const creators = (d.creators || [])
+  const creators = (item.creators || [])
     .map((c: any) => `${c.firstName || ''} ${c.lastName}`.trim())
     .join(', ');
 
   const result = {
     id: 0, // auto-assigned by SQLite
-    key: item.key,
+    key,
     itemType,
-    title: d.title,
+    title: item.title,
     creators: creators || undefined,
-    abstract: d.abstractNote,
-    url: d.url,
-    doi: d.DOI,
-    date: d.date,
-    publication: d.publicationTitle,
-    tags: (d.tags || []).map((t: any) => t.tag).join(', ') || undefined,
-    collections: (d.collections || []).join(', ') || undefined,
-    jsonData: JSON.stringify(item),
-    version: item.version || 0,
+    abstract: item.abstractNote,
+    url: item.url,
+    doi: item.DOI,
+    date: item.date,
+    publication: item.publicationTitle,
+    tags: (item.tags || []).map((t: any) => t.tag).join(', ') || undefined,
+    collections: (item.collections || []).join(', ') || undefined,
+    jsonData: JSON.stringify(raw),
+    version: raw.version || item.version || 0,
     syncedAt: Date.now()
   };
-  console.log('[ZoteroBridge] toCacheItem:', item.key, 'type=', itemType, 'title=', d.title);
+  console.log('[ZoteroBridge] toCacheItem:', key, 'type=', itemType, 'title=', item.title);
   return result;
 }
 
@@ -310,7 +314,11 @@ export async function resetZoteroCache(): Promise<void> {
  * Build a citation string from a Zotero item in a given style.
  * Supported: 'apa', 'ieee', 'gb7714'.
  */
-export function formatCitation(item: ZoteroItem, style: 'apa' | 'ieee' | 'gb7714' = 'gb7714'): string {
+export function formatCitation(
+  item: ZoteroItem,
+  style: 'apa' | 'ieee' | 'gb7714' = 'gb7714',
+  index?: number
+): string {
   const authors = item.creators || 'Unknown';
   const year = item.date ? item.date.split('-')[0] : 'n.d.';
   const title = item.title || 'Untitled';
@@ -320,8 +328,10 @@ export function formatCitation(item: ZoteroItem, style: 'apa' | 'ieee' | 'gb7714
   switch (style) {
     case 'apa':
       return `${authors} (${year}). ${title}. ${pub}${doi ? ` https://doi.org/${doi}` : ''}`;
-    case 'ieee':
-      return `[1] ${authors}, "${title}," ${pub}, ${year}.`;
+    case 'ieee': {
+      const idx = index ?? 1;
+      return `[${idx}] ${authors}, "${title}," ${pub}, ${year}.`;
+    }
     case 'gb7714':
     default:
       return `${authors}. ${title}[J]. ${pub}, ${year}.${doi ? ` DOI:${doi}.` : ''}`;

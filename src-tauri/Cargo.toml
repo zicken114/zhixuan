@@ -30,6 +30,8 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["time", "rt-multi-thread"] }
 reqwest = { version = "0.12", features = ["json"] }
+chrono = "0.4"
+urlencoding = "2"
 arboard = { version = "3", features = ["image-data"] }
 mouse_position = "0.1"
 screenshots = "0.8"

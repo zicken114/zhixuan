@@ -11,6 +11,9 @@ export function useWindow() {
   /** Show a window by its label. */
   const show = (label: string) => invoke('show_window', { label });
 
+  /** Resize a window by its label. */
+  const resize = (label: string, width: number, height: number) => invoke('resize_window', { label, width, height });
+
   /** Hide a window by its label. */
   const hide = (label: string) => invoke('hide_window', { label });
 
@@ -41,6 +44,9 @@ export function useWindow() {
   /** Show the popup menu at the current mouse position. */
   const showPopup = () => invoke('show_popup_with_clipboard');
 
+  /** Show the sentinel brief window. */
+  const showSentinelBrief = () => show('sentinel_brief');
+
   /** Show the main window and open settings inside it. */
   const showSettings = async () => {
     await show('main');
@@ -55,6 +61,7 @@ export function useWindow() {
 
   return {
     show,
+    resize,
     hide,
     hideCapture,
     center,
@@ -65,6 +72,7 @@ export function useWindow() {
     startDragging,
     quitApp,
     showPopup,
+    showSentinelBrief,
     showSettings,
     setWidgetDefaultPosition,
     snapWidget,

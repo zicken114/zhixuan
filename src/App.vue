@@ -5,6 +5,9 @@ import MainWindow from './windows/MainWindow.vue';
 import PopupWindow from './windows/PopupWindow.vue';
 import CaptureWindow from './windows/CaptureWindow.vue';
 import ResultWindow from './windows/ResultWindow.vue';
+import SentinelBriefWindow from './windows/SentinelBriefWindow.vue';
+import ExperimentSnapshotWindow from './windows/ExperimentSnapshotWindow.vue';
+import ReviewWizardWindow from './windows/ReviewWizardWindow.vue';
 
 const windowType = ref<string>('widget');
 
@@ -21,6 +24,10 @@ onMounted(() => {
     <PopupWindow v-else-if="windowType === 'popup'" />
     <CaptureWindow v-else-if="windowType === 'capture'" />
     <ResultWindow v-else-if="windowType === 'result'" />
+    <SentinelBriefWindow v-else-if="windowType === 'sentinel_brief'" />
+    <ExperimentSnapshotWindow v-else-if="windowType === 'experiment_snapshot'" />
+    <ReviewWizardWindow v-else-if="windowType === 'review_wizard'" />
+    <ExperimentSnapshotWindow v-else-if="windowType === 'experiment_snapshot'" />
   </div>
 </template>
 

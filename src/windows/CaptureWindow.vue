@@ -56,6 +56,9 @@ const extractionPrompts: ExtractionPrompt[] = [
   { label: '提取伪代码/流程', icon: '🔣', prompt: '请将图片中的伪代码、算法流程图或流程描述提取为清晰的步骤说明，返回结构化的文本描述。', format: 'text' },
 ];
 
+const presetHint = ref<string>('');
+let presetPromptIndex = -1;
+
 let unlisten: UnlistenFn | null = null;
 
 onMounted(async () => {
@@ -69,6 +72,8 @@ onMounted(async () => {
     showResult.value = false;
     processingResult.value = '';
     selectedPrompt.value = null;
+    presetHint.value = '';
+    presetPromptIndex = -1;
   });
 
   window.addEventListener('error', (e) => {
@@ -76,6 +81,17 @@ onMounted(async () => {
   });
 
   window.addEventListener('keydown', handleKeyDown);
+
+  // Listen for preset triggers from reading-companion hotkeys (F2=formula, F3=table)
+  listen<string>('capture:preset', (event) => {
+    if (event.payload === 'formula') {
+      presetHint.value = '阅读助手：拖拽选择公式区域，按 Enter 提取为 LaTeX';
+      presetPromptIndex = 0; // LaTeX extraction
+    } else if (event.payload === 'table') {
+      presetHint.value = '阅读助手：拖拽选择表格区域，按 Enter 提取为 Markdown';
+      presetPromptIndex = 1; // Markdown table extraction
+    }
+  });
 });
 
 onUnmounted(() => {
@@ -102,7 +118,8 @@ const handleKeyDown = async (e: KeyboardEvent) => {
   if (e.key === 'Escape') {
     await hideCapture();
   } else if (e.key === 'Enter' && hasSelected) {
-    await extractWithPrompt(extractionPrompts[0]);
+    const promptIndex = presetPromptIndex >= 0 ? presetPromptIndex : 0;
+    await extractWithPrompt(extractionPrompts[promptIndex]);
   }
 };
 
@@ -219,6 +236,8 @@ const cancelSelection = async () => {
   showResult.value = false;
   processingResult.value = '';
   selectedPrompt.value = null;
+  presetHint.value = '';
+  presetPromptIndex = -1;
   await hideCapture();
 };
 </script>
@@ -254,7 +273,10 @@ const cancelSelection = async () => {
 
     <!-- Instructions (before selection) -->
     <div v-if="!hasSelected && !isProcessing" class="instructions">
-      <p class="text-white text-sm">拖动选择区域 • 按 ESC 取消</p>
+      <p class="text-white text-sm">
+        <span v-if="presetHint">{{ presetHint }}</span>
+        <span v-else>拖动选择区域 • 按 ESC 取消</span>
+      </p>
     </div>
 
     <!-- Prompt menu (after selection) -->

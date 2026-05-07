@@ -117,3 +117,42 @@ pub fn show_window_with_settings(app: tauri::AppHandle) -> Result<(), String> {
     }
     Ok(())
 }
+
+/// Show the popup window and dispatch a pre-selected action immediately.
+/// Used by reading-companion hotkeys (F1 = reading note, etc.) so the popup
+/// can fire a specific menu action without the user having to click.
+#[tauri::command]
+pub fn show_popup_with_action(app: tauri::AppHandle, action: String) -> Result<(), String> {
+    use mouse_position::mouse_position::Mouse;
+
+    let (x, y) = match Mouse::get_mouse_position() {
+        Mouse::Position { x, y } => (x, y),
+        Mouse::Error => return Err("Failed to get mouse position".to_string()),
+    };
+
+    let text = match Clipboard::new() {
+        Ok(mut cb) => cb.get_text().unwrap_or_default(),
+        Err(_) => String::new(),
+    };
+
+    if let Some(window) = app.get_webview_window("popup") {
+        window
+            .set_position(PhysicalPosition::new(x, y))
+            .map_err(|e| e.to_string())?;
+
+        let payload = ClipboardPayload { text, x, y };
+        window
+            .emit("clipboard-data", payload)
+            .map_err(|e| e.to_string())?;
+
+        // Tell the popup to auto-dispatch the action right after it mounts/is shown.
+        window
+            .emit("popup:auto-action", action)
+            .map_err(|e| e.to_string())?;
+
+        window.show().map_err(|e| e.to_string())?;
+        window.set_focus().map_err(|e| e.to_string())?;
+    }
+
+    Ok(())
+}

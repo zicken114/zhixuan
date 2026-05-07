@@ -228,7 +228,7 @@ export const defaultRoutingRules = (textProvider: ProviderPresetId, visionProvid
     { taskType: 'literature_review', preferredModelId: textProfile, fallbackModelIds: hasSeparateVision ? [visionProfile] : [], timeoutMs: 120000 },
     { taskType: 'citation_format', preferredModelId: textProfile, fallbackModelIds: hasSeparateVision ? [visionProfile] : [], timeoutMs: 8000 },
     { taskType: 'text_cleanup', preferredModelId: textProfile, fallbackModelIds: hasSeparateVision ? [visionProfile] : [], timeoutMs: 8000 },
-    { taskType: 'polish', preferredModelId: textProfile, fallbackModelIds: hasSeparateVision ? [visionProfile] : [], timeoutMs: 10000 }
+    { taskType: 'polish', preferredModelId: textProfile, fallbackModelIds: hasSeparateVision ? [visionProfile] : [], timeoutMs: 60000 }
   ];
 };
 

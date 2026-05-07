@@ -134,10 +134,22 @@ fn classify_app(process_name: &str, window_title: &str) -> AppType {
     let name = process_name.to_lowercase();
     let title = window_title.to_lowercase();
 
+    // If the window title clearly indicates a PDF document, treat it as a PDF reader
+    // regardless of which application is hosting it (WPS, browser, etc.)
+    if title.ends_with(".pdf") || title.contains(".pdf ") || title.contains(".pdf-") {
+        return AppType::PdfReader;
+    }
+
     match name.as_str() {
-        "winword.exe" | "soffice.bin" | "soffice.exe" | "typora.exe" => AppType::Writing,
+        "winword.exe" | "soffice.bin" | "soffice.exe" | "typora.exe"
+        | "wps.exe" | "et.exe" | "wpp.exe" | "texstudio.exe" => AppType::Writing,
         "code.exe" | "code - insiders.exe" | "cursor.exe" | "windsurf.exe" => {
-            AppType::CodeEditor
+            // Treat VS Code as a writing app when editing LaTeX files
+            if title.contains(".tex") || title.contains("latex") || title.contains("overleaf") {
+                AppType::Writing
+            } else {
+                AppType::CodeEditor
+            }
         }
         "sumatrapdf.exe"
         | "acrord32.exe"

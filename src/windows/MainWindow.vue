@@ -6,7 +6,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { aiClient, type ChatMessage, type CallMetadata } from '../utils/aiClient';
 import { useSettingsStore } from '../stores/settings';
 import { useHistoryStore, toHistoryMessages } from '../stores/history';
-import { useProjectStore, PROJECT_COLORS } from '../stores/projects';
+import { useProjectStore, PROJECT_COLORS, type Project } from '../stores/projects';
 import { useUsageStore } from '../stores/usage';
 import { useKnowledgeBaseStore } from '../stores/knowledgeBase';
 import { useWindow } from '../composables/useWindow';
@@ -14,7 +14,13 @@ import { recordEvent } from '../composables/useEvents';
 import { saveNoteToObsidian, openNoteInObsidian } from '../utils/obsidianBridge';
 import { syncZoteroLibrary } from '../utils/zoteroBridge';
 import { type SearchResult } from '../utils/knowledgeBase';
-import { getProjectStats, type ProjectStats, updateConversationSummary, loadRecentConversationSummaries } from '../composables/useDatabase';
+import {
+  getProjectStats, type ProjectStats, loadRecentConversationSummaries,
+  loadZoteroCollections, type ZoteroCollection, countUnreadSentinelPapers
+} from '../composables/useDatabase';
+import type { CitationStyle } from '../stores/projects';
+import { generateSessionSummary, shouldGenerateSummary } from '../composables/useSessionSummary';
+import { open } from '@tauri-apps/plugin-dialog';
 import SettingsPanel from '../components/SettingsPanel.vue';
 import WelcomePanel from '../components/WelcomePanel.vue';
 import ChatHeader from '../components/ChatHeader.vue';
@@ -23,6 +29,13 @@ import KnowledgePanel from '../components/KnowledgePanel.vue';
 import ChatMessageList from '../components/ChatMessageList.vue';
 import ChatInputArea from '../components/ChatInputArea.vue';
 import TodoPanel from '../components/TodoPanel.vue';
+import LiteratureSidebar from '../components/LiteratureSidebar.vue';
+import WritingHistoryPanel from '../components/WritingHistoryPanel.vue';
+import SentinelPanel from '../components/SentinelPanel.vue';
+import ExperimentPanel from '../components/ExperimentPanel.vue';
+import DashboardPanel from '../components/DashboardPanel.vue';
+import PluginPanel from '../components/PluginPanel.vue';
+import TeamPanel from '../components/TeamPanel.vue';
 
 const appWindow = getCurrentWebviewWindow();
 const settingsStore = useSettingsStore();
@@ -40,6 +53,13 @@ const showSettings = ref(false);
 const showHistory = ref(false);
 const showKnowledge = ref(false);
 const showTodos = ref(false);
+const showLiterature = ref(false);
+const showWritingHistory = ref(false);
+const showSentinel = ref(false);
+const showExperiment = ref(false);
+const showDashboard = ref(false);
+const showPlugin = ref(false);
+const showTeam = ref(false);
 const showWelcome = ref(false);
 const messageListRef = ref<InstanceType<typeof ChatMessageList> | null>(null);
 
@@ -53,12 +73,25 @@ const newProjectName = ref('');
 const newProjectColor = ref(PROJECT_COLORS[0]);
 const showUsage = ref(false);
 
+// Project configuration (create/edit modal)
+const newProjectKeywords = ref('');
+const newProjectFolderPath = ref('');
+const newProjectZoteroCollection = ref('');
+const newProjectObsidianVault = ref('');
+const newProjectCitationStyle = ref<CitationStyle>('gb7714');
+const availableZoteroCollections = ref<ZoteroCollection[]>([]);
+const loadingZoteroCollections = ref(false);
+const isEditingProject = ref(false);
+const editProjectId = ref<string | null>(null);
+
 // Project statistics bar
 const projectStats = ref<ProjectStats>({ docCount: 0, conversationCount: 0, todoCount: 0 });
+const sentinelUnreadCount = ref(0);
 
 const loadProjectStats = async () => {
   try {
     projectStats.value = await getProjectStats(projectStore.currentProjectId);
+    sentinelUnreadCount.value = await countUnreadSentinelPapers(projectStore.currentProjectId);
   } catch (e) {
     console.error('Failed to load project stats:', e);
   }
@@ -73,6 +106,9 @@ const obsidianSaveResult = ref<string | null>(null);
 
 // Zotero periodic sync interval handle
 const zoteroSyncInterval = ref<number | null>(null);
+
+// Sentinel periodic check interval handle
+const sentinelCheckInterval = ref<number | null>(null);
 
 // Knowledge base citations for each assistant message (keyed by message index)
 const kbCitations = ref<Map<number, SearchResult[]>>(new Map());
@@ -91,6 +127,11 @@ onMounted(async () => {
 
   await listen('show-settings', () => {
     showSettings.value = true;
+  });
+
+  // Phase 4.2: Listen for experiment snapshot hotkey
+  await listen('experiment:show-snapshot-panel', () => {
+    showExperiment.value = !showExperiment.value;
   });
 
   // Phase 0.1: Listen for window activity changes (for testing / future use)
@@ -145,12 +186,74 @@ onMounted(async () => {
       }
     }
   }, 30 * 60 * 1000); // 30 minutes
+
+  // Phase 4.1: Periodic sentinel auto-check every 6 hours
+  // This runs in the background and fetches new papers for active sentinel topics
+  sentinelCheckInterval.value = window.setInterval(async () => {
+    try {
+      const { getSentinelTopics, getSentinelPapers, createSentinelPaper, updateSentinelTopic, createSentinelCheck } = await import('../composables/useDatabase');
+      const topics = await getSentinelTopics(projectStore.currentProjectId);
+      const activeTopics = topics.filter((t) => t.isActive !== false);
+      if (activeTopics.length === 0) return;
+
+      for (const topic of activeTopics) {
+        if (!topic.id) continue;
+        const checkStartTime = Date.now();
+        const arxivPapers: Array<{
+          title: string; authors: string[]; summary: string; id: string; pdf_url: string; published: string; doi?: string;
+        }> = await invoke('search_arxiv_command', { keywords: topic.keywords, days: 7 });
+
+        const existingPapers = await getSentinelPapers(topic.id, undefined, undefined, 10000);
+        const existingTitles = new Set(existingPapers.map((p) => p.title.toLowerCase().trim()));
+
+        let createdCount = 0;
+        for (const paper of arxivPapers.slice(0, 5)) {
+          const titleKey = paper.title.toLowerCase().trim();
+          if (existingTitles.has(titleKey)) continue;
+          await createSentinelPaper({
+            topicId: topic.id!,
+            title: paper.title,
+            authors: paper.authors.join(', '),
+            abstract: paper.summary,
+            url: paper.id,
+            pdfUrl: paper.pdf_url,
+            doi: paper.doi || undefined,
+            publishedDate: paper.published,
+            source: 'arxiv',
+            isRead: false,
+            isIgnored: false
+          });
+          existingTitles.add(titleKey);
+          createdCount++;
+        }
+
+        if (createdCount > 0) {
+          await updateSentinelTopic({ ...topic, lastCheckAt: Date.now() });
+          await createSentinelCheck({
+            timestamp: Date.now(),
+            topicsChecked: 1,
+            papersFound: createdCount,
+            durationMs: Date.now() - checkStartTime,
+            metadata: { source: 'auto', topicId: topic.id, keywords: topic.keywords, checkedSources: ['arxiv'] }
+          });
+          // Update unread count display
+          sentinelUnreadCount.value = await countUnreadSentinelPapers(projectStore.currentProjectId);
+        }
+      }
+    } catch (e) {
+      console.warn('[Sentinel] Auto-check failed:', e);
+    }
+  }, 6 * 60 * 60 * 1000); // 6 hours
 });
 
 onUnmounted(() => {
   if (zoteroSyncInterval.value) {
     clearInterval(zoteroSyncInterval.value);
     zoteroSyncInterval.value = null;
+  }
+  if (sentinelCheckInterval.value) {
+    clearInterval(sentinelCheckInterval.value);
+    sentinelCheckInterval.value = null;
   }
 });
 
@@ -245,6 +348,30 @@ Only include this block when there is a clear future action. Keep each todo unde
     }
   }
 
+  // 4. Pending todos reminder (Phase 1.1)
+  if (currentProject) {
+    const pendingTodos = projectStore.todos.filter((t) => t.status === 'pending');
+    if (pendingTodos.length > 0) {
+      const todoText = pendingTodos
+        .slice(0, 3)
+        .map((t, i) => `${i + 1}. ${t.content}`)
+        .join('\n');
+      systemContent += `Pending todos in this project (${pendingTodos.length} total, showing top 3):\n${todoText}\n\n`;
+    }
+  }
+
+  // 5. New literature reminder (Phase 4.1)
+  if (currentProject) {
+    try {
+      const unreadCount = await countUnreadSentinelPapers(projectStore.currentProjectId);
+      if (unreadCount > 0) {
+        systemContent += `Note: ${unreadCount} new paper(s) arrived this week from the literature sentinel. You can check them in the sentinel panel.\n\n`;
+      }
+    } catch (e) {
+      // Silently ignore sentinel count failures
+    }
+  }
+
   let apiMessages = [...messages.value];
   if (systemContent) {
     const systemMsg: ChatMessage = {
@@ -296,26 +423,16 @@ Only include this block when there is a clear future action. Keep each todo unde
           }
         });
 
-        // ── Generate conversation summary in background (Phase 1.1) ──
-        // Fire-and-forget: does not block the user
-        if (historyStore.currentConversationId && messages.value.length >= 2) {
+        // ── Generate conversation summary in background (Phase 2) ──
+        // Trigger based on user-configured interval (0 = disabled)
+        const userMsgCount = messages.value.filter(m => m.role === 'user').length;
+        if (shouldGenerateSummary(userMsgCount, settingsStore.config.summaryInterval)) {
           const convId = historyStore.currentConversationId;
-          const recentMsgs = messages.value.slice(-4); // last 2 exchanges max
-          const summaryInput = recentMsgs.map(m =>
-            `${m.role}: ${typeof m.content === 'string' ? m.content : JSON.stringify(m.content)}`
-          ).join('\n').slice(0, 800);
-
-          aiClient.chatOnce([
-            { role: 'system', content: 'Summarize the following research conversation in one concise sentence (max 25 words). Focus on the key question, insight, or decision.' },
-            { role: 'user', content: summaryInput }
-          ], false, 'chat').then(({ text }) => {
-            const cleanSummary = text.trim().replace(/^[""]|[""]$/g, '');
-            if (cleanSummary) {
-              updateConversationSummary(convId, cleanSummary).catch(() => {});
-            }
-          }).catch(() => {
-            // Silent fail — summary is non-critical
-          });
+          if (convId) {
+            generateSessionSummary(convId, messages.value).catch(() => {
+              // Silent fail — summary is non-critical
+            });
+          }
         }
       },
       onInterrupted: (partialText, reason) => {
@@ -410,24 +527,121 @@ const newChat = () => {
   historyStore.createConversation();
   showHistory.value = false;
   showTodos.value = false;
+  showLiterature.value = false;
+  showWritingHistory.value = false;
+  showSentinel.value = false;
+  showExperiment.value = false;
+  showDashboard.value = false;
+  showPlugin.value = false;
+  showTeam.value = false;
 };
 
 const toggleHistory = () => {
   showHistory.value = !showHistory.value;
-  showKnowledge.value = false;
+  showLiterature.value = false;
   showTodos.value = false;
+  showWritingHistory.value = false;
+  showSentinel.value = false;
+  showExperiment.value = false;
+  showDashboard.value = false;
+  showPlugin.value = false;
+  showTeam.value = false;
 };
 
 const toggleKnowledge = () => {
-  showKnowledge.value = !showKnowledge.value;
+  showLiterature.value = !showLiterature.value;
   showHistory.value = false;
   showTodos.value = false;
+  showWritingHistory.value = false;
+  showSentinel.value = false;
+  showExperiment.value = false;
+  showDashboard.value = false;
+  showPlugin.value = false;
+  showTeam.value = false;
 };
 
 const toggleTodos = () => {
   showTodos.value = !showTodos.value;
   showHistory.value = false;
-  showKnowledge.value = false;
+  showLiterature.value = false;
+  showWritingHistory.value = false;
+  showSentinel.value = false;
+  showExperiment.value = false;
+  showDashboard.value = false;
+  showPlugin.value = false;
+  showTeam.value = false;
+};
+
+const toggleWritingHistory = () => {
+  showWritingHistory.value = !showWritingHistory.value;
+  showHistory.value = false;
+  showTodos.value = false;
+  showLiterature.value = false;
+  showSentinel.value = false;
+  showExperiment.value = false;
+  showDashboard.value = false;
+  showPlugin.value = false;
+  showTeam.value = false;
+};
+
+const toggleSentinel = () => {
+  showSentinel.value = !showSentinel.value;
+  showHistory.value = false;
+  showTodos.value = false;
+  showLiterature.value = false;
+  showWritingHistory.value = false;
+  showExperiment.value = false;
+  showDashboard.value = false;
+  showPlugin.value = false;
+  showTeam.value = false;
+};
+
+const toggleExperiment = () => {
+  showExperiment.value = !showExperiment.value;
+  showHistory.value = false;
+  showTodos.value = false;
+  showLiterature.value = false;
+  showWritingHistory.value = false;
+  showSentinel.value = false;
+  showDashboard.value = false;
+  showPlugin.value = false;
+  showTeam.value = false;
+};
+
+const toggleDashboard = () => {
+  showDashboard.value = !showDashboard.value;
+  showHistory.value = false;
+  showTodos.value = false;
+  showLiterature.value = false;
+  showWritingHistory.value = false;
+  showSentinel.value = false;
+  showExperiment.value = false;
+  showPlugin.value = false;
+  showTeam.value = false;
+};
+
+const togglePlugin = () => {
+  showPlugin.value = !showPlugin.value;
+  showHistory.value = false;
+  showTodos.value = false;
+  showLiterature.value = false;
+  showWritingHistory.value = false;
+  showSentinel.value = false;
+  showExperiment.value = false;
+  showDashboard.value = false;
+  showTeam.value = false;
+};
+
+const toggleTeam = () => {
+  showTeam.value = !showTeam.value;
+  showHistory.value = false;
+  showTodos.value = false;
+  showLiterature.value = false;
+  showWritingHistory.value = false;
+  showSentinel.value = false;
+  showExperiment.value = false;
+  showDashboard.value = false;
+  showPlugin.value = false;
 };
 
 const loadFromHistory = (id: string) => {
@@ -435,7 +649,12 @@ const loadFromHistory = (id: string) => {
   if (conv) {
     messages.value = [...conv.messages];
     showHistory.value = false;
+    showDashboard.value = false;
     showTodos.value = false;
+    showLiterature.value = false;
+    showWritingHistory.value = false;
+    showSentinel.value = false;
+    showExperiment.value = false;
   }
 };
 
@@ -453,20 +672,101 @@ const selectProject = async (projectId: string | null) => {
   await loadProjectStats();
 };
 
-const openCreateProject = () => {
-  showProjectDropdown.value = false;
+const resetProjectModal = () => {
   newProjectName.value = '';
   newProjectColor.value = PROJECT_COLORS[0];
+  newProjectKeywords.value = '';
+  newProjectFolderPath.value = '';
+  newProjectZoteroCollection.value = '';
+  newProjectObsidianVault.value = '';
+  newProjectCitationStyle.value = 'gb7714';
+  availableZoteroCollections.value = [];
+  isEditingProject.value = false;
+  editProjectId.value = null;
+};
+
+const openCreateProject = () => {
+  showProjectDropdown.value = false;
+  resetProjectModal();
   showCreateProject.value = true;
 };
 
-const confirmCreateProject = async () => {
+const openEditProject = (project: Project) => {
+  showProjectDropdown.value = false;
+  isEditingProject.value = true;
+  editProjectId.value = project.id;
+  newProjectName.value = project.name;
+  newProjectColor.value = project.color;
+  newProjectKeywords.value = project.keywords?.join(', ') || '';
+  newProjectFolderPath.value = project.folderPath || '';
+  newProjectZoteroCollection.value = project.zoteroCollection || '';
+  newProjectObsidianVault.value = project.obsidianVault || '';
+  newProjectCitationStyle.value = project.citationStyle || 'gb7714';
+  showCreateProject.value = true;
+  void loadZoteroCollectionsForProject();
+};
+
+const pickProjectFolder = async () => {
+  const selected = await open({ directory: true, multiple: false });
+  if (selected && !Array.isArray(selected)) {
+    newProjectFolderPath.value = selected;
+  }
+};
+
+const pickProjectObsidianVault = async () => {
+  const selected = await open({ directory: true, multiple: false });
+  if (selected && !Array.isArray(selected)) {
+    newProjectObsidianVault.value = selected;
+  }
+};
+
+const loadZoteroCollectionsForProject = async () => {
+  loadingZoteroCollections.value = true;
+  try {
+    availableZoteroCollections.value = await loadZoteroCollections();
+  } catch (e) {
+    console.warn('[ProjectConfig] Failed to load Zotero collections:', e);
+    availableZoteroCollections.value = [];
+  } finally {
+    loadingZoteroCollections.value = false;
+  }
+};
+
+const confirmCreateOrUpdateProject = async () => {
   const name = newProjectName.value.trim();
   if (!name) return;
-  await projectStore.createProject(name, newProjectColor.value);
+
+  const keywords = newProjectKeywords.value
+    .split(/[,，]/)
+    .map((k) => k.trim())
+    .filter(Boolean);
+
+  if (isEditingProject.value && editProjectId.value) {
+    const project = projectStore.projects.find((p) => p.id === editProjectId.value);
+    if (!project) return;
+    project.name = name;
+    project.color = newProjectColor.value;
+    project.keywords = keywords;
+    project.folderPath = newProjectFolderPath.value || undefined;
+    project.zoteroCollection = newProjectZoteroCollection.value || undefined;
+    project.obsidianVault = newProjectObsidianVault.value || undefined;
+    project.citationStyle = newProjectCitationStyle.value || undefined;
+    await projectStore.updateProject(project);
+  } else {
+    const project = await projectStore.createProject(name, newProjectColor.value);
+    project.keywords = keywords;
+    project.folderPath = newProjectFolderPath.value || undefined;
+    project.zoteroCollection = newProjectZoteroCollection.value || undefined;
+    project.obsidianVault = newProjectObsidianVault.value || undefined;
+    project.citationStyle = newProjectCitationStyle.value || undefined;
+    await projectStore.updateProject(project);
+    messages.value = [];
+    historyStore.currentConversationId = null;
+  }
+
   showCreateProject.value = false;
-  messages.value = [];
-  historyStore.currentConversationId = null;
+  resetProjectModal();
+  await loadProjectStats();
 };
 
 /* ── Obsidian save handlers ── */
@@ -476,6 +776,116 @@ const openObsidianModal = (content: string) => {
   obsidianTemplate.value = 'summary';
   obsidianSaveResult.value = null;
   showObsidianModal.value = true;
+};
+
+/** Save the entire current conversation to Obsidian with auto-generated summary. */
+const saveConversationToObsidian = async () => {
+  const vaultPath = settingsStore.config.externalTools.obsidianVaultPath;
+  const folder = settingsStore.config.externalTools.obsidianDefaultFolder;
+  if (!vaultPath) {
+    showSettings.value = true;
+    return;
+  }
+  if (messages.value.length === 0) {
+    return;
+  }
+
+  obsidianSaving.value = true;
+  obsidianSaveResult.value = null;
+
+  try {
+    const project = projectStore.currentProject();
+    const title = project?.name || 'AI Conversation';
+    const date = new Date().toISOString().split('T')[0];
+
+    // Build full conversation text
+    const conversationText = messages.value
+      .map((m) => `${m.role === 'user' ? 'User' : 'AI'}: ${typeof m.content === 'string' ? m.content : JSON.stringify(m.content)}`)
+      .join('\n\n');
+
+    // Generate AI summary, key points, and hypotheses
+    let summary = '';
+    let keyPoints: string[] = [];
+    let hypotheses: string[] = [];
+
+    try {
+      const { text: summaryText } = await aiClient.chatOnce([
+        {
+          role: 'system',
+          content: 'Summarize the following research conversation in 2-3 concise sentences. Focus on the key question, main insights, and any decisions made. Respond in the same language as the conversation.'
+        },
+        { role: 'user', content: conversationText.slice(0, 3000) }
+      ], false, 'chat');
+      summary = summaryText.trim();
+    } catch (e) {
+      console.warn('[ObsidianSummary] Summary generation failed:', e);
+    }
+
+    try {
+      const { text: kpText } = await aiClient.chatOnce([
+        {
+          role: 'system',
+          content: 'Extract 3-5 key points or conclusions from the following conversation. Return each point on a separate line starting with "- ". Only return the bullet points, no extra text. Respond in the same language as the conversation.'
+        },
+        { role: 'user', content: conversationText.slice(0, 3000) }
+      ], false, 'chat');
+      keyPoints = kpText
+        .split('\n')
+        .map((l) => l.trim())
+        .filter((l) => l.startsWith('- '))
+        .map((l) => l.slice(2).trim())
+        .filter(Boolean);
+    } catch (e) {
+      console.warn('[ObsidianSummary] Key points generation failed:', e);
+    }
+
+    try {
+      const { text: hypText } = await aiClient.chatOnce([
+        {
+          role: 'system',
+          content: 'Extract any hypotheses, assumptions, or claims that need verification from the following conversation. Return each on a separate line starting with "- ". Only return the bullet points, no extra text. If none, return "None". Respond in the same language as the conversation.'
+        },
+        { role: 'user', content: conversationText.slice(0, 3000) }
+      ], false, 'chat');
+      hypotheses = hypText
+        .split('\n')
+        .map((l) => l.trim())
+        .filter((l) => l.startsWith('- '))
+        .map((l) => l.slice(2).trim())
+        .filter((l) => l.toLowerCase() !== 'none');
+    } catch (e) {
+      console.warn('[ObsidianSummary] Hypotheses generation failed:', e);
+    }
+
+    const result = await saveNoteToObsidian(
+      vaultPath,
+      folder,
+      {
+        title: `${date} ${title}`,
+        date,
+        tags: ['ai-research', 'auto-generated'],
+        source: historyStore.currentConversationId || 'unknown',
+        project: project?.name,
+        content: conversationText,
+        summary,
+        keyPoints,
+        hypotheses
+      },
+      'summary'
+    );
+
+    if (result.success) {
+      obsidianSaveResult.value = `Saved to ${result.fileName}`;
+      recordEvent({ event_type: 'note_save_to_obsidian', resource_id: result.filePath });
+      await openNoteInObsidian(vaultPath, result.filePath);
+    } else {
+      obsidianSaveResult.value = result.error || 'Save failed';
+    }
+  } catch (e: any) {
+    obsidianSaveResult.value = e?.message || 'Save failed';
+  } finally {
+    obsidianSaving.value = false;
+  }
 };
 
 const saveToObsidian = async () => {
@@ -550,6 +960,14 @@ const saveToObsidian = async () => {
           <span class="stat-item">💬 {{ projectStats.conversationCount }} chats</span>
           <span class="stat-sep">·</span>
           <span class="stat-item">📌 {{ projectStats.todoCount }} todos</span>
+          <span v-if="sentinelUnreadCount > 0" class="stat-sep">·</span>
+          <span
+            v-if="sentinelUnreadCount > 0"
+            class="stat-item sentinel-badge"
+            @click="showSentinel = true"
+          >
+            📡 {{ sentinelUnreadCount }} new papers
+          </span>
         </div>
 
         <!-- Project dropdown -->
@@ -567,10 +985,18 @@ const saveToObsidian = async () => {
             :key="project.id"
             class="project-option"
             :class="{ active: projectStore.currentProjectId === project.id }"
-            @click="selectProject(project.id)"
           >
-            <span class="project-dot" :style="{ background: project.color }" />
-            <span>{{ project.name }}</span>
+            <div class="project-option-main" @click="selectProject(project.id)">
+              <span class="project-dot" :style="{ background: project.color }" />
+              <span>{{ project.name }}</span>
+            </div>
+            <button
+              class="project-edit-btn"
+              title="Edit project"
+              @click.stop="openEditProject(project)"
+            >
+              ✎
+            </button>
           </div>
           <div class="project-divider" />
           <div class="project-option create" @click="openCreateProject">
@@ -584,7 +1010,14 @@ const saveToObsidian = async () => {
         @toggle-history="toggleHistory"
         @toggle-knowledge="toggleKnowledge"
         @toggle-todos="toggleTodos"
+        @toggle-writing-history="toggleWritingHistory"
+        @toggle-sentinel="toggleSentinel"
+        @toggle-experiment="toggleExperiment"
+        @toggle-dashboard="toggleDashboard"
+        @toggle-plugin="togglePlugin"
+        @toggle-team="toggleTeam"
         @open-settings="showSettings = true"
+        @save-to-obsidian="saveConversationToObsidian"
         @close="closeWindow"
       />
 
@@ -603,6 +1036,41 @@ const saveToObsidian = async () => {
         @delete="projectStore.deleteTodo"
         @add="projectStore.addTodo"
         @close="showTodos = false"
+      />
+
+      <LiteratureSidebar
+        v-if="showLiterature"
+        @open-knowledge-panel="showKnowledge = true"
+      />
+
+      <WritingHistoryPanel
+        v-if="showWritingHistory"
+        @close="showWritingHistory = false"
+      />
+
+      <SentinelPanel
+        v-if="showSentinel"
+        @close="showSentinel = false"
+      />
+
+      <ExperimentPanel
+        v-if="showExperiment"
+        @close="showExperiment = false"
+      />
+
+      <DashboardPanel
+        v-if="showDashboard"
+        @close="showDashboard = false"
+      />
+
+      <PluginPanel
+        v-if="showPlugin"
+        @close="showPlugin = false"
+      />
+
+      <TeamPanel
+        v-if="showTeam"
+        @close="showTeam = false"
       />
 
       <ChatMessageList
@@ -684,30 +1152,116 @@ const saveToObsidian = async () => {
       </div>
     </div>
 
-    <!-- Create project modal -->
+    <!-- Create / Edit project modal -->
     <div v-if="showCreateProject" class="modal-overlay" @click="showCreateProject = false">
-      <div class="modal-content" @click.stop>
-        <h3>Create New Project</h3>
-        <input
-          v-model="newProjectName"
-          type="text"
-          class="input"
-          placeholder="Project name..."
-          @keydown.enter="confirmCreateProject"
-        />
-        <div class="color-picker">
-          <button
-            v-for="color in PROJECT_COLORS"
-            :key="color"
-            class="color-swatch"
-            :class="{ active: newProjectColor === color }"
-            :style="{ background: color }"
-            @click="newProjectColor = color"
+      <div class="modal-content project-modal" @click.stop>
+        <h3>{{ isEditingProject ? 'Edit Project' : 'Create New Project' }}</h3>
+
+        <div class="form-group">
+          <label class="label">Project Name</label>
+          <input
+            v-model="newProjectName"
+            type="text"
+            class="input"
+            placeholder="Project name..."
+            @keydown.enter="confirmCreateOrUpdateProject"
           />
         </div>
+
+        <div class="form-group">
+          <label class="label">Color</label>
+          <div class="color-picker">
+            <button
+              v-for="color in PROJECT_COLORS"
+              :key="color"
+              class="color-swatch"
+              :class="{ active: newProjectColor === color }"
+              :style="{ background: color }"
+              @click="newProjectColor = color"
+            />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="label">Keywords (comma-separated)</label>
+          <input
+            v-model="newProjectKeywords"
+            type="text"
+            class="input"
+            placeholder="e.g. multimodal, hallucination detection, LLM"
+          />
+        </div>
+
+        <div class="form-group">
+          <label class="label">Associated Literature Folder</label>
+          <div class="path-input-row">
+            <input
+              v-model="newProjectFolderPath"
+              type="text"
+              class="input"
+              readonly
+              placeholder="Select a folder to auto-index..."
+            />
+            <button class="btn-secondary" @click="pickProjectFolder">Browse</button>
+            <button
+              v-if="newProjectFolderPath"
+              class="btn-secondary"
+              @click="newProjectFolderPath = ''"
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="label">Default Zotero Collection</label>
+          <select v-model="newProjectZoteroCollection" class="input select-input">
+            <option value="">All collections</option>
+            <option
+              v-for="coll in availableZoteroCollections"
+              :key="coll.key"
+              :value="coll.key"
+            >
+              {{ coll.name }}
+            </option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="label">Obsidian Vault Path</label>
+          <div class="path-input-row">
+            <input
+              v-model="newProjectObsidianVault"
+              type="text"
+              class="input"
+              readonly
+              placeholder="Select Obsidian Vault folder..."
+            />
+            <button class="btn-secondary" @click="pickProjectObsidianVault">Browse</button>
+            <button
+              v-if="newProjectObsidianVault"
+              class="btn-secondary"
+              @click="newProjectObsidianVault = ''"
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="label">Default Citation Style</label>
+          <select v-model="newProjectCitationStyle" class="input select-input">
+            <option value="gb7714">GB/T 7714 (Chinese)</option>
+            <option value="apa">APA 7th</option>
+            <option value="ieee">IEEE</option>
+          </select>
+        </div>
+
         <div class="modal-actions">
           <button class="btn-secondary" @click="showCreateProject = false">Cancel</button>
-          <button class="btn-primary" @click="confirmCreateProject">Create</button>
+          <button class="btn-primary" @click="confirmCreateOrUpdateProject">
+            {{ isEditingProject ? 'Save Changes' : 'Create' }}
+          </button>
         </div>
       </div>
     </div>
@@ -837,6 +1391,16 @@ const saveToObsidian = async () => {
   color: rgba(240, 240, 245, 0.15);
 }
 
+.sentinel-badge {
+  color: #ef4444;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.sentinel-badge:hover {
+  color: #f87171;
+}
+
 /* Dropdown */
 .project-dropdown {
   position: absolute;
@@ -875,6 +1439,34 @@ const saveToObsidian = async () => {
 .project-option.create {
   color: #3d74e7;
   font-weight: 600;
+}
+
+.project-option-main {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex: 1;
+}
+
+.project-edit-btn {
+  background: none;
+  border: none;
+  color: rgba(240, 240, 245, 0.3);
+  font-size: 0.75rem;
+  cursor: pointer;
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  opacity: 0;
+  transition: all 0.15s ease;
+}
+
+.project-option:hover .project-edit-btn {
+  opacity: 1;
+}
+
+.project-edit-btn:hover {
+  color: #00e5cc;
+  background: rgba(0, 229, 204, 0.1);
 }
 
 .project-divider {
@@ -924,6 +1516,53 @@ const saveToObsidian = async () => {
 
 .modal-content .input:focus {
   border-color: #00d1bb;
+}
+
+.modal-content .select-input {
+  appearance: auto;
+  cursor: pointer;
+}
+
+.modal-content .select-input option {
+  background: #1a1a2e;
+  color: #f0f0f5;
+}
+
+.project-modal {
+  max-height: 85vh;
+  overflow-y: auto;
+  width: 380px;
+}
+
+.project-modal .form-group {
+  margin-bottom: 0.875rem;
+}
+
+.project-modal .label {
+  display: block;
+  color: rgba(240, 240, 245, 0.6);
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-bottom: 0.35rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.path-input-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.path-input-row .input {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.path-input-row .btn-secondary {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.75rem;
+  white-space: nowrap;
 }
 
 .color-picker {

@@ -1,4 +1,4 @@
-import { aiClient } from '../utils/aiClient';
+import { aiClient, type ChatMessage } from '../utils/aiClient';
 import { updateConversationSummary } from './useDatabase';
 
 const SUMMARY_SYSTEM_PROMPT = `You are a research assistant. Summarize the following conversation into a single concise sentence (max 80 characters in Chinese or 120 in English) that captures the core conclusion or decision. Only output the summary sentence, no explanations, no quotes.`;
@@ -12,7 +12,7 @@ const SUMMARY_SYSTEM_PROMPT = `You are a research assistant. Summarize the follo
  */
 export async function generateSessionSummary(
   conversationId: string,
-  messages: Array<{ role: string; content: string }>
+  messages: ChatMessage[]
 ): Promise<string> {
   // Build a compact transcript for the AI.
   const transcript = messages

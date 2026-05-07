@@ -5,12 +5,16 @@ import { invoke } from '@tauri-apps/api/core';
 import { aiClient } from '../utils/aiClient';
 import { useProgress } from '../composables/useProgress';
 import { useWindow } from '../composables/useWindow';
+import { createReadingNote } from '../composables/useDatabase';
+import { useReadingSessionState } from '../composables/useReadingSession';
 
 const { hideCurrent } = useWindow();
 const { progress, label: progressLabel, start: startProgress, complete: completeProgress, stop: stopProgress } = useProgress();
+const { activeSession } = useReadingSessionState();
 
 const resultData = ref<{ icon: string; label: string; content: string } | null>(null);
 const isProcessing = ref(true);
+const noteSaved = ref(false);
 
 let unlistenComplete: UnlistenFn | null = null;
 let unlistenError: UnlistenFn | null = null;
@@ -85,6 +89,40 @@ const cancelExtraction = async () => {
   isProcessing.value = false;
   await closeWindow();
 };
+
+const saveToReadingNotes = async () => {
+  if (!resultData.value?.content) return;
+
+  const session = activeSession.value;
+  if (!session) {
+    // No active reading session — show a transient hint (could be expanded later)
+    return;
+  }
+
+  try {
+    const contentType = resultData.value.label.includes('公式')
+      ? 'formula'
+      : resultData.value.label.includes('表格')
+        ? 'table'
+        : 'text';
+
+    await createReadingNote({
+      sessionId: session.id ?? null,
+      documentTitle: session.documentTitle,
+      pageNumber: session.endPage,
+      contentType: contentType as any,
+      content: resultData.value.content,
+      source: resultData.value.label
+    });
+
+    noteSaved.value = true;
+    setTimeout(() => {
+      noteSaved.value = false;
+    }, 2000);
+  } catch (e) {
+    console.error('[ResultWindow] Failed to save reading note:', e);
+  }
+};
 </script>
 
 <template>
@@ -114,7 +152,17 @@ const cancelExtraction = async () => {
       </div>
       <div class="result-footer">
         <span>✓ 已复制到剪贴板，可直接粘贴</span>
-        <button class="close-btn" @click="closeWindow">关闭</button>
+        <div class="result-actions">
+          <button
+            v-if="activeSession"
+            class="note-btn"
+            :class="{ saved: noteSaved }"
+            @click="saveToReadingNotes"
+          >
+            {{ noteSaved ? '已保存 ✓' : '加入阅读笔记' }}
+          </button>
+          <button class="close-btn" @click="closeWindow">关闭</button>
+        </div>
       </div>
     </div>
   </div>
@@ -279,5 +327,33 @@ const cancelExtraction = async () => {
 
 .close-btn:hover {
   background: rgba(0, 229, 204, 0.25);
+}
+
+.result-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.note-btn {
+  padding: 5px 14px;
+  background: rgba(61, 116, 231, 0.15);
+  border: 1px solid rgba(61, 116, 231, 0.25);
+  border-radius: 8px;
+  color: #3d74e7;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+
+.note-btn:hover {
+  background: rgba(61, 116, 231, 0.25);
+}
+
+.note-btn.saved {
+  background: rgba(34, 197, 94, 0.15);
+  border-color: rgba(34, 197, 94, 0.3);
+  color: #22c55e;
 }
 </style>

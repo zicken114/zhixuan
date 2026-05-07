@@ -12,6 +12,7 @@ import {
 import { isEmbedderLoaded, preloadEmbedder, type EmbedderProgress } from '../utils/embedder';
 import type { KnowledgeDoc } from '../composables/useDatabase';
 import { useProjectStore } from './projects';
+import { recordEvent } from '../composables/useEvents';
 
 export const useKnowledgeBaseStore = defineStore('knowledgeBase', () => {
   const projectStore = useProjectStore();
@@ -109,6 +110,15 @@ export const useKnowledgeBaseStore = defineStore('knowledgeBase', () => {
     isIndexing.value = true;
     indexProgress.value = { current: 0, total: 0 };
 
+    await recordEvent({
+      event_type: 'kb_index_start',
+      project_id: projectStore.currentProjectId ?? undefined,
+      metadata: { source: 'folder', folder_path: folderPath },
+    });
+    const startTime = Date.now();
+    let addedCount = 0;
+    let success = false;
+
     try {
       const added = await addFolderToKnowledgeBase(
         folderPath,
@@ -118,12 +128,20 @@ export const useKnowledgeBaseStore = defineStore('knowledgeBase', () => {
         }
       );
       documents.value.unshift(...added);
+      addedCount = added.length;
+      success = true;
     } catch (e: any) {
       console.error('[KB Store] Failed to add folder:', e);
       lastError.value = e?.message || 'Failed to add folder';
     } finally {
       isIndexing.value = false;
       indexProgress.value = { current: 0, total: 0 };
+      await recordEvent({
+        event_type: 'kb_index_complete',
+        project_id: projectStore.currentProjectId ?? undefined,
+        duration_ms: Date.now() - startTime,
+        metadata: { source: 'folder', folder_path: folderPath, documents_added: addedCount, success, error: lastError.value ?? undefined },
+      });
     }
   };
 
@@ -132,17 +150,34 @@ export const useKnowledgeBaseStore = defineStore('knowledgeBase', () => {
     const ready = await ensureEmbedder();
     if (!ready) return;
 
+    await recordEvent({
+      event_type: 'kb_index_start',
+      project_id: projectStore.currentProjectId ?? undefined,
+      resource_id: doc.id,
+      metadata: { source: 'reindex', file_name: doc.fileName },
+    });
+    const startTime = Date.now();
+    let success = false;
+
     try {
       isIndexing.value = true;
       lastError.value = null;
       await indexDocument(doc);
       // Refresh doc status
       await loadDocuments();
+      success = true;
     } catch (e: any) {
       console.error('[KB Store] Failed to reindex:', e);
       lastError.value = e?.message || 'Reindex failed';
     } finally {
       isIndexing.value = false;
+      await recordEvent({
+        event_type: 'kb_index_complete',
+        project_id: projectStore.currentProjectId ?? undefined,
+        resource_id: doc.id,
+        duration_ms: Date.now() - startTime,
+        metadata: { source: 'reindex', file_name: doc.fileName, success, error: lastError.value ?? undefined },
+      });
     }
   };
 

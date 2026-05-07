@@ -13,12 +13,15 @@ import {
   type ZoteroSyncResult
 } from '../utils/zoteroBridge';
 import { useClipboard } from '../composables/useClipboard';
+import { useWindow } from '../composables/useWindow';
+import { recordEvent } from '../composables/useEvents';
 import type { ZoteroItem, ZoteroCollection } from '../composables/useDatabase';
 
 const appWindow = getCurrentWebviewWindow();
 const kbStore = useKnowledgeBaseStore();
 const projectStore = useProjectStore();
 const settingsStore = useSettingsStore();
+const { show: showWindow } = useWindow();
 
 const emit = defineEmits<{
   close: [];
@@ -172,14 +175,31 @@ const handleZoteroSync = async (forceFullSync = true) => {
   const collectionKeys = settingsStore.config.externalTools.zoteroSelectedCollections;
   zoteroSyncing.value = true;
   zoteroSyncResult.value = null;
+  const startTime = Date.now();
+  let result: ZoteroSyncResult | null = null;
   try {
-    const result = await syncZoteroLibrary(userId, collectionKeys.length > 0 ? collectionKeys : undefined, forceFullSync);
+    result = await syncZoteroLibrary(userId, collectionKeys.length > 0 ? collectionKeys : undefined, forceFullSync);
     zoteroSyncResult.value = result;
     if (result.success) {
       await handleZoteroSearch();
     }
+  } catch (e: any) {
+    result = { itemsSynced: 0, collectionsSynced: 0, success: false, error: e?.message || 'Unknown error' };
+    zoteroSyncResult.value = result;
   } finally {
     zoteroSyncing.value = false;
+    await recordEvent({
+      event_type: 'zotero_sync',
+      project_id: projectStore.currentProjectId ?? undefined,
+      duration_ms: Date.now() - startTime,
+      metadata: {
+        items_synced: result?.itemsSynced ?? 0,
+        collections_synced: result?.collectionsSynced ?? 0,
+        success: result?.success ?? false,
+        force_full_sync: forceFullSync,
+        error: result?.error ?? undefined,
+      },
+    });
   }
 };
 
@@ -259,6 +279,9 @@ const copyCitation = async (item: ZoteroItem) => {
           Zotero
         </button>
       </div>
+      <button class="review-btn" @click="showWindow('review_wizard')">
+        📚 生成综述
+      </button>
 
       <div v-if="activeTab === 'docs'" class="tab-actions">
         <button
@@ -952,6 +975,24 @@ const copyCitation = async (item: ZoteroItem) => {
   display: flex;
   gap: 0.3rem;
   margin-bottom: 0.5rem;
+}
+
+.review-btn {
+  width: 100%;
+  padding: 0.5rem;
+  background: rgba(139, 92, 246, 0.12);
+  border: 1px solid rgba(139, 92, 246, 0.25);
+  border-radius: 8px;
+  color: #8b5cf6;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-bottom: 0.5rem;
+}
+
+.review-btn:hover {
+  background: rgba(139, 92, 246, 0.2);
 }
 
 .tab-btn {

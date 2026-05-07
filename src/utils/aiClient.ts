@@ -127,7 +127,7 @@ export class AIClient {
         costPer1kTokens: 0.015,
         enabled: true
       };
-      return { primary: profile, fallbacks: [], timeoutMs: 30000 };
+      return { primary: profile, fallbacks: [], timeoutMs: 60000 };
     }
 
     // Routing disabled: use text config as the only profile
@@ -146,7 +146,7 @@ export class AIClient {
         costPer1kTokens: 0.005,
         enabled: true
       };
-      return { primary: profile, fallbacks: [], timeoutMs: 30000 };
+      return { primary: profile, fallbacks: [], timeoutMs: 60000 };
     }
 
     // Find the routing rule for this task type
@@ -167,7 +167,7 @@ export class AIClient {
         costPer1kTokens: 0.005,
         enabled: true
       };
-      return { primary: profile, fallbacks: [], timeoutMs: 30000 };
+      return { primary: profile, fallbacks: [], timeoutMs: 60000 };
     }
 
     // Filter to only profiles that are actually configured (have apiKey and baseUrl)

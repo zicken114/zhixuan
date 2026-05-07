@@ -10,6 +10,8 @@ import {
 } from '../composables/useDatabase';
 import { recordEvent } from '../composables/useEvents';
 
+export type CitationStyle = 'apa' | 'ieee' | 'gb7714';
+
 export interface Project {
   id: string;
   name: string;
@@ -18,6 +20,7 @@ export interface Project {
   folderPath?: string;
   zoteroCollection?: string;
   obsidianVault?: string;
+  citationStyle?: CitationStyle;
   createdAt: number;
   updatedAt: number;
 }
