@@ -995,61 +995,38 @@ const cancelProgress = async () => {
 .popup-window {
   width: 100%;
   height: 100%;
-  background: rgba(13, 13, 20, 0.95);
-  backdrop-filter: blur(20px);
-  border-radius: 12px;
-  padding: 0.5rem;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  background: var(--bg-elevated);
+  border-radius: var(--radius-lg);
+  padding: var(--space-xs);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border-light);
   position: relative;
   overflow-x: hidden;
   overflow-y: auto;
 }
 
-/* Subtle glow effect at top */
-.popup-window::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 60%;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(0, 229, 204, 0.5), transparent);
-}
-
 .menu-item {
   display: flex;
   align-items: center;
-  gap: 0.875rem;
-  padding: 0.875rem 1rem;
-  border-radius: 8px;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all 0.2s ease;
-  color: rgba(240, 240, 245, 0.8);
+  transition: all var(--transition-fast);
+  color: var(--text-secondary);
   position: relative;
   overflow: hidden;
-}
-
-.menu-item::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 3px;
-  background: #00e5cc;
-  transform: scaleY(0);
-  transition: transform 0.2s ease;
-  border-radius: 0 2px 2px 0;
+  font-size: 0.875rem;
+  font-weight: 500;
 }
 
 .menu-item:hover:not(.processing) {
-  background: rgba(0, 229, 204, 0.08);
-  color: #f0f0f5;
+  background: var(--accent-subtle);
+  color: var(--accent-text);
 }
 
-.menu-item:hover:not(.processing)::before {
-  transform: scaleY(1);
+.menu-item:active {
+  background: var(--accent-border);
 }
 
 .menu-item.processing {
@@ -1058,8 +1035,8 @@ const cancelProgress = async () => {
 }
 
 .icon {
-  font-size: 1.25rem;
-  width: 28px;
+  font-size: 1.125rem;
+  width: 24px;
   text-align: center;
 }
 
@@ -1071,73 +1048,64 @@ const cancelProgress = async () => {
 
 .processing-overlay {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(7, 7, 13, 0.85);
+  inset: 0;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 12px;
-  backdrop-filter: blur(8px);
+  border-radius: var(--radius-lg);
 }
 
 .progress-container {
   width: 80%;
-  max-width: 260px;
+  max-width: 280px;
   text-align: center;
 }
 
 .progress-label {
-  color: rgba(240, 240, 245, 0.7);
-  font-size: 13px;
-  margin-bottom: 14px;
-  letter-spacing: 0.02em;
-  min-height: 20px;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  margin-bottom: var(--space-md);
 }
 
 .progress-bar-track {
   width: 100%;
-  height: 6px;
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 3px;
+  height: 4px;
+  background: var(--border-subtle);
+  border-radius: 2px;
   overflow: hidden;
-  margin-bottom: 10px;
 }
 
 .progress-bar-fill {
   height: 100%;
-  background: linear-gradient(90deg, #00e5cc 0%, #00b8a3 100%);
-  border-radius: 3px;
-  transition: width 0.1s ease;
-  box-shadow: 0 0 10px rgba(0, 229, 204, 0.4);
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.3s ease;
 }
 
 .progress-percent {
-  color: #00e5cc;
-  font-size: 12px;
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
   font-weight: 600;
-  font-family: 'JetBrains Mono', monospace;
-  margin-bottom: 14px;
+  margin-top: var(--space-sm);
 }
 
 .cancel-btn {
-  margin-top: 12px;
-  padding: 7px 18px;
-  background: rgba(239, 68, 68, 0.15);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: 8px;
-  color: #ef4444;
+  margin-top: var(--space-md);
+  padding: var(--space-xs) var(--space-lg);
+  background: var(--error-bg);
+  border: 1px solid rgba(234, 67, 53, 0.2);
+  color: var(--error);
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
   cursor: pointer;
-  font-size: 12px;
-  font-weight: 500;
-  transition: all 0.15s ease;
+  transition: background var(--transition-fast);
 }
 
 .cancel-btn:hover {
-  background: rgba(239, 68, 68, 0.25);
-  border-color: rgba(239, 68, 68, 0.5);
+  background: var(--error-bg);
 }
 
 /* Citation recommendation panel */
@@ -1146,7 +1114,7 @@ const cancelProgress = async () => {
   height: 100%;
   display: flex;
   flex-direction: column;
-  padding: 0.75rem;
+  padding: var(--space-md);
   overflow: hidden;
 }
 
@@ -1154,37 +1122,38 @@ const cancelProgress = async () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-bottom: 0.6rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  margin-bottom: 0.5rem;
+  padding-bottom: var(--space-sm);
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: var(--space-sm);
 }
 
 .citation-title {
   font-size: 0.85rem;
   font-weight: 600;
-  color: rgba(240, 240, 245, 0.85);
+  color: var(--text-primary);
 }
 
 .citation-close {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 6px;
-  color: rgba(240, 240, 245, 0.5);
+  background: transparent;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
   font-size: 0.75rem;
   cursor: pointer;
   padding: 0.2rem 0.5rem;
+  transition: all var(--transition-fast);
 }
 
 .citation-close:hover {
-  background: rgba(239, 68, 68, 0.15);
-  color: #ef4444;
+  background: var(--error-bg);
+  color: var(--error);
 }
 
 .citation-loading,
 .citation-empty {
   text-align: center;
   padding: 2rem 1rem;
-  color: rgba(240, 240, 245, 0.4);
+  color: var(--text-muted);
   font-size: 0.82rem;
 }
 
@@ -1193,39 +1162,39 @@ const cancelProgress = async () => {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--space-sm);
 }
 
 .citation-card {
-  padding: 0.6rem 0.75rem;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 10px;
-  transition: all 0.15s ease;
+  padding: var(--space-sm) var(--space-md);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-sm);
+  transition: all var(--transition-fast);
 }
 
 .citation-card:hover {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.1);
+  border-color: var(--border-medium);
+}
+
+.citation-card.selected {
+  border-color: var(--accent-border);
+  background: var(--accent-subtle);
 }
 
 .citation-card-title {
   font-size: 0.8rem;
   font-weight: 600;
-  color: rgba(240, 240, 245, 0.85);
+  color: var(--text-primary);
   line-height: 1.4;
   margin-bottom: 0.25rem;
 }
 
 .citation-card-meta {
   font-size: 0.7rem;
-  color: rgba(240, 240, 245, 0.4);
+  color: var(--text-muted);
   margin-bottom: 0.4rem;
-}
-
-.citation-card.selected {
-  border-color: rgba(0, 229, 204, 0.3);
-  background: rgba(0, 229, 204, 0.05);
 }
 
 .citation-select {
@@ -1238,7 +1207,7 @@ const cancelProgress = async () => {
 }
 
 .citation-select input[type="checkbox"] {
-  accent-color: #00e5cc;
+  accent-color: var(--accent);
   width: 14px;
   height: 14px;
   cursor: pointer;
@@ -1246,8 +1215,8 @@ const cancelProgress = async () => {
 
 .citation-index {
   font-size: 0.65rem;
-  color: rgba(240, 240, 245, 0.3);
-  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
   min-width: 14px;
   text-align: center;
 }
@@ -1259,14 +1228,14 @@ const cancelProgress = async () => {
 
 .citation-reason {
   font-size: 0.72rem;
-  color: rgba(0, 229, 204, 0.7);
+  color: var(--accent-text);
+  font-style: italic;
   margin-bottom: 0.4rem;
   line-height: 1.4;
-  font-style: italic;
 }
 
 .citation-reason.loading {
-  color: rgba(240, 240, 245, 0.3);
+  color: var(--text-muted);
   font-style: normal;
 }
 
@@ -1274,31 +1243,30 @@ const cancelProgress = async () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.6rem 0.75rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(0, 229, 204, 0.05);
-  margin-top: auto;
+  padding: var(--space-sm) var(--space-md);
+  border-top: 1px solid var(--border-subtle);
+  background: var(--accent-subtle);
 }
 
 .insert-count {
   font-size: 0.75rem;
-  color: rgba(240, 240, 245, 0.5);
+  color: var(--text-secondary);
 }
 
 .insert-btn {
-  padding: 0.4rem 0.9rem;
-  background: linear-gradient(135deg, #00e5cc 0%, #00b8a3 100%);
+  background: var(--accent);
+  color: var(--text-on-accent);
   border: none;
-  border-radius: 6px;
-  color: #06211f;
-  font-size: 0.75rem;
-  font-weight: 700;
+  border-radius: var(--radius-sm);
+  padding: var(--space-xs) var(--space-md);
+  font-size: 0.8125rem;
+  font-weight: 600;
   cursor: pointer;
-  transition: opacity 0.15s ease;
+  transition: background var(--transition-fast);
 }
 
 .insert-btn:hover {
-  opacity: 0.9;
+  background: var(--accent-hover);
 }
 
 .citation-formats {
@@ -1307,25 +1275,27 @@ const cancelProgress = async () => {
 }
 
 .format-btn {
-  padding: 0.25rem 0.5rem;
-  background: rgba(0, 229, 204, 0.1);
-  border: 1px solid rgba(0, 229, 204, 0.2);
-  border-radius: 5px;
-  color: #00e5cc;
+  padding: 2px 8px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
   font-size: 0.65rem;
-  font-weight: 600;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all var(--transition-fast);
 }
 
 .format-btn:hover {
-  background: rgba(0, 229, 204, 0.2);
+  background: var(--accent-subtle);
+  border-color: var(--accent-border);
+  color: var(--accent-text);
 }
 
 .format-btn.preferred {
-  background: rgba(0, 229, 204, 0.25);
-  border-color: rgba(0, 229, 204, 0.5);
-  box-shadow: 0 0 8px rgba(0, 229, 204, 0.15);
+  background: var(--accent-subtle);
+  border-color: var(--accent-border);
+  color: var(--accent-text);
+  box-shadow: none;
 }
 
 /* Polish / writing companion panel */
@@ -1334,44 +1304,44 @@ const cancelProgress = async () => {
   height: 100%;
   display: flex;
   flex-direction: column;
-  padding: 0.75rem;
-  overflow: hidden;
+  padding: var(--space-md);
 }
 
 .polish-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-bottom: 0.6rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  margin-bottom: 0.5rem;
+  padding-bottom: var(--space-sm);
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: var(--space-sm);
 }
 
 .polish-title {
   font-size: 0.85rem;
   font-weight: 600;
-  color: rgba(240, 240, 245, 0.85);
+  color: var(--text-primary);
 }
 
 .polish-close {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 6px;
-  color: rgba(240, 240, 245, 0.5);
+  background: transparent;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
   font-size: 0.75rem;
   cursor: pointer;
   padding: 0.2rem 0.5rem;
+  transition: all var(--transition-fast);
 }
 
 .polish-close:hover {
-  background: rgba(239, 68, 68, 0.15);
-  color: #ef4444;
+  background: var(--error-bg);
+  color: var(--error);
 }
 
 .polish-loading {
   text-align: center;
   padding: 2rem 1rem;
-  color: rgba(240, 240, 245, 0.4);
+  color: var(--text-muted);
   font-size: 0.82rem;
 }
 
@@ -1385,74 +1355,71 @@ const cancelProgress = async () => {
 .polish-diff {
   flex: 1;
   overflow-y: auto;
-  font-size: 0.8rem;
-  line-height: 1.6;
-  color: rgba(240, 240, 245, 0.85);
-  background: rgba(0, 0, 0, 0.2);
-  padding: 0.75rem;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.04);
+  background: var(--bg-surface);
+  padding: var(--space-md);
+  border-radius: var(--radius-md);
+  font-size: 0.8125rem;
+  border: 1px solid var(--border-subtle);
   white-space: pre-wrap;
   word-break: break-word;
 }
 
 .diff-add {
-  background: rgba(34, 197, 94, 0.25);
-  color: #4ade80;
+  background: var(--success-bg);
+  color: var(--success);
   border-radius: 2px;
   padding: 0 1px;
 }
 
 .diff-del {
-  background: rgba(239, 68, 68, 0.25);
-  color: #f87171;
+  background: var(--error-bg);
+  color: var(--error);
   text-decoration: line-through;
   border-radius: 2px;
   padding: 0 1px;
 }
 
 .diff-same {
-  color: rgba(240, 240, 245, 0.85);
+  color: var(--text-primary);
 }
 
 .polish-actions {
   display: flex;
-  gap: 0.5rem;
-  padding-top: 0.6rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  gap: var(--space-sm);
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--border-subtle);
   margin-top: auto;
 }
 
 .polish-btn {
   flex: 1;
-  padding: 0.5rem 0.75rem;
-  border-radius: 6px;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
   font-size: 0.75rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all var(--transition-fast);
   border: none;
 }
 
 .polish-btn.accept {
-  background: linear-gradient(135deg, #00e5cc 0%, #00b8a3 100%);
-  color: #06211f;
+  background: var(--accent);
+  color: var(--text-on-accent);
 }
 
 .polish-btn.accept:hover {
-  opacity: 0.9;
+  background: var(--accent-hover);
 }
 
 .polish-btn.reject {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: rgba(240, 240, 245, 0.6);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  color: var(--text-secondary);
 }
 
 .polish-btn.reject:hover {
-  background: rgba(239, 68, 68, 0.15);
-  color: #ef4444;
-  border-color: rgba(239, 68, 68, 0.3);
+  background: var(--bg-card-hover);
+  border-color: var(--border-medium);
 }
 
 /* Reading companion panel */
@@ -1461,44 +1428,44 @@ const cancelProgress = async () => {
   height: 100%;
   display: flex;
   flex-direction: column;
-  padding: 0.75rem;
-  overflow: hidden;
+  padding: var(--space-md);
 }
 
 .reading-note-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-bottom: 0.6rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  margin-bottom: 0.5rem;
+  padding-bottom: var(--space-sm);
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: var(--space-sm);
 }
 
 .reading-note-title {
   font-size: 0.85rem;
   font-weight: 600;
-  color: rgba(240, 240, 245, 0.85);
+  color: var(--text-primary);
 }
 
 .reading-note-close {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 6px;
-  color: rgba(240, 240, 245, 0.5);
+  background: transparent;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
   font-size: 0.75rem;
   cursor: pointer;
   padding: 0.2rem 0.5rem;
+  transition: all var(--transition-fast);
 }
 
 .reading-note-close:hover {
-  background: rgba(239, 68, 68, 0.15);
-  color: #ef4444;
+  background: var(--error-bg);
+  color: var(--error);
 }
 
 .reading-note-loading {
   text-align: center;
   padding: 2rem 1rem;
-  color: rgba(240, 240, 245, 0.4);
+  color: var(--text-muted);
   font-size: 0.82rem;
 }
 
@@ -1512,17 +1479,17 @@ const cancelProgress = async () => {
 .reading-note-body {
   flex: 1;
   overflow-y: auto;
-  background: rgba(0, 0, 0, 0.2);
-  padding: 0.75rem;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.04);
+  background: var(--bg-surface);
+  padding: var(--space-md);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
 }
 
 .reading-note-body pre {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 0.78rem;
   line-height: 1.6;
-  color: rgba(240, 240, 245, 0.85);
+  color: var(--text-primary);
   white-space: pre-wrap;
   word-break: break-word;
   margin: 0;
@@ -1530,52 +1497,52 @@ const cancelProgress = async () => {
 
 .reading-note-actions {
   display: flex;
-  gap: 0.5rem;
-  padding-top: 0.6rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  gap: var(--space-sm);
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--border-subtle);
   margin-top: auto;
 }
 
 .reading-note-btn {
   flex: 1;
-  padding: 0.5rem 0.75rem;
-  border-radius: 6px;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
   font-size: 0.75rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all var(--transition-fast);
   border: none;
 }
 
 .reading-note-btn.save {
-  background: linear-gradient(135deg, #00e5cc 0%, #00b8a3 100%);
-  color: #06211f;
+  background: var(--accent);
+  color: var(--text-on-accent);
 }
 
 .reading-note-btn.save:hover {
-  opacity: 0.9;
+  background: var(--accent-hover);
 }
 
 .reading-note-btn.copy {
-  background: rgba(61, 116, 231, 0.15);
-  border: 1px solid rgba(61, 116, 231, 0.3);
-  color: #3d74e7;
+  background: var(--accent-subtle);
+  border: 1px solid var(--accent-border);
+  color: var(--accent-text);
 }
 
 .reading-note-btn.copy:hover {
-  background: rgba(61, 116, 231, 0.25);
+  background: var(--accent);
+  color: var(--text-on-accent);
 }
 
 .reading-note-btn.reject {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: rgba(240, 240, 245, 0.6);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  color: var(--text-secondary);
 }
 
 .reading-note-btn.reject:hover {
-  background: rgba(239, 68, 68, 0.15);
-  color: #ef4444;
-  border-color: rgba(239, 68, 68, 0.3);
+  background: var(--bg-card-hover);
+  border-color: var(--border-medium);
 }
 
 /* Citation format fix panel */
@@ -1584,38 +1551,38 @@ const cancelProgress = async () => {
   height: 100%;
   display: flex;
   flex-direction: column;
-  padding: 0.75rem;
-  overflow: hidden;
+  padding: var(--space-md);
 }
 
 .citation-fix-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-bottom: 0.6rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  margin-bottom: 0.5rem;
+  padding-bottom: var(--space-sm);
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: var(--space-sm);
 }
 
 .citation-fix-title {
   font-size: 0.85rem;
   font-weight: 600;
-  color: rgba(240, 240, 245, 0.85);
+  color: var(--text-primary);
 }
 
 .citation-fix-close {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 6px;
-  color: rgba(240, 240, 245, 0.5);
+  background: transparent;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
   font-size: 0.75rem;
   cursor: pointer;
   padding: 0.2rem 0.5rem;
+  transition: all var(--transition-fast);
 }
 
 .citation-fix-close:hover {
-  background: rgba(239, 68, 68, 0.15);
-  color: #ef4444;
+  background: var(--error-bg);
+  color: var(--error);
 }
 
 .citation-fix-loading,
@@ -1631,7 +1598,7 @@ const cancelProgress = async () => {
 }
 
 .citation-fix-loading {
-  color: rgba(240, 240, 245, 0.4);
+  color: var(--text-muted);
   font-size: 0.82rem;
 }
 
@@ -1640,7 +1607,7 @@ const cancelProgress = async () => {
 }
 
 .citation-fix-error .error-text {
-  color: rgba(240, 240, 245, 0.6);
+  color: var(--text-secondary);
   font-size: 0.78rem;
   line-height: 1.5;
 }
@@ -1654,69 +1621,69 @@ const cancelProgress = async () => {
 
 .citation-fix-label {
   font-size: 0.7rem;
-  color: rgba(240, 240, 245, 0.4);
+  color: var(--text-muted);
   margin-bottom: 0.4rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
 
 .citation-fix-result {
-  background: rgba(0, 0, 0, 0.2);
-  padding: 0.75rem;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.04);
+  background: var(--bg-surface);
+  padding: var(--space-md);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
   font-size: 0.8rem;
   line-height: 1.6;
-  color: rgba(240, 240, 245, 0.85);
+  color: var(--text-primary);
   word-break: break-word;
   margin-bottom: 0.75rem;
 }
 
 .citation-fix-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--space-sm);
   margin-top: auto;
 }
 
 .citation-fix-btn {
   flex: 1;
-  padding: 0.5rem 0.75rem;
-  border-radius: 6px;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
   font-size: 0.75rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all var(--transition-fast);
   border: none;
 }
 
 .citation-fix-btn.accept {
-  background: linear-gradient(135deg, #00e5cc 0%, #00b8a3 100%);
-  color: #06211f;
+  background: var(--accent);
+  color: var(--text-on-accent);
 }
 
 .citation-fix-btn.accept:hover {
-  opacity: 0.9;
+  background: var(--accent-hover);
 }
 
 .citation-fix-btn.copy {
-  background: rgba(61, 116, 231, 0.15);
-  border: 1px solid rgba(61, 116, 231, 0.3);
-  color: #3d74e7;
+  background: var(--accent-subtle);
+  border: 1px solid var(--accent-border);
+  color: var(--accent-text);
 }
 
 .citation-fix-btn.copy:hover {
-  background: rgba(61, 116, 231, 0.25);
+  background: var(--accent);
+  color: var(--text-on-accent);
 }
 
 .citation-fix-btn.reject {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: rgba(240, 240, 245, 0.6);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  color: var(--text-secondary);
 }
 
 .citation-fix-btn.reject:hover {
-  background: rgba(239, 68, 68, 0.15);
-  color: #ef4444;
-  border-color: rgba(239, 68, 68, 0.3);
+  background: var(--bg-card-hover);
+  border-color: var(--border-medium);
 }
 </style>

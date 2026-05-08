@@ -24,10 +24,10 @@ const handleAdd = () => {
 
 const priorityColor = (priority: string): string => {
   switch (priority) {
-    case 'high': return '#ef4444';
-    case 'medium': return '#f59e0b';
-    case 'low': return '#10b981';
-    default: return '#6b7280';
+    case 'high': return 'var(--error)';
+    case 'medium': return 'var(--warning)';
+    case 'low': return 'var(--success)';
+    default: return 'var(--text-muted)';
   }
 };
 </script>
@@ -76,8 +76,8 @@ const priorityColor = (priority: string): string => {
 
 <style scoped>
 .todo-panel {
-  background: rgba(13, 13, 20, 0.98);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border-subtle);
   max-height: 320px;
   overflow-y: auto;
 }
@@ -87,8 +87,8 @@ const priorityColor = (priority: string): string => {
   justify-content: space-between;
   align-items: center;
   padding: 0.875rem 1.25rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  color: rgba(240, 240, 245, 0.5);
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-muted);
   font-size: 0.75rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -98,7 +98,7 @@ const priorityColor = (priority: string): string => {
 .close-todo {
   background: none;
   border: none;
-  color: rgba(240, 240, 245, 0.4);
+  color: var(--text-muted);
   font-size: 1.25rem;
   cursor: pointer;
   line-height: 1;
@@ -113,36 +113,36 @@ const priorityColor = (priority: string): string => {
 }
 
 .close-todo:hover {
-  background: rgba(239, 68, 68, 0.15);
-  color: #ef4444;
+  background: var(--error-bg);
+  color: var(--error);
 }
 
 .todo-input-row {
   display: flex;
   gap: 0.4rem;
   padding: 0.6rem 1.25rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .todo-input {
   flex: 1;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--bg-input);
+  border: 1px solid var(--border-light);
   border-radius: 8px;
   padding: 0.45rem 0.7rem;
-  color: #f0f0f5;
+  color: var(--text-primary);
   font-size: 0.82rem;
   outline: none;
   transition: all 0.2s ease;
 }
 
 .todo-input::placeholder {
-  color: rgba(240, 240, 245, 0.3);
+  color: var(--text-muted);
 }
 
 .todo-input:focus {
-  border-color: rgba(0, 229, 204, 0.3);
-  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--accent-border);
+  background: var(--bg-input-hover);
 }
 
 .todo-add-btn {
@@ -151,10 +151,10 @@ const priorityColor = (priority: string): string => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 229, 204, 0.12);
-  border: 1px solid rgba(0, 229, 204, 0.2);
+  background: var(--accent-subtle);
+  border: 1px solid var(--accent-border);
   border-radius: 8px;
-  color: #00e5cc;
+  color: var(--accent);
   font-size: 1.1rem;
   font-weight: 600;
   cursor: pointer;
@@ -162,7 +162,7 @@ const priorityColor = (priority: string): string => {
 }
 
 .todo-add-btn:hover {
-  background: rgba(0, 229, 204, 0.2);
+  background: var(--accent-border);
 }
 
 .todo-list {
@@ -180,34 +180,34 @@ const priorityColor = (priority: string): string => {
 }
 
 .todo-item:hover {
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--bg-card-hover);
 }
 
 .todo-item.completed .todo-content {
   text-decoration: line-through;
-  color: rgba(240, 240, 245, 0.35);
+  color: var(--text-muted);
 }
 
 .todo-check {
   width: 18px;
   height: 18px;
   border-radius: 5px;
-  border: 1.5px solid rgba(255, 255, 255, 0.2);
+  border: 1.5px solid var(--border-medium);
   background: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   flex-shrink: 0;
-  color: #00e5cc;
+  color: var(--accent);
   font-size: 0.7rem;
   padding: 0;
   transition: all 0.15s ease;
 }
 
 .todo-check.checked {
-  background: rgba(0, 229, 204, 0.15);
-  border-color: rgba(0, 229, 204, 0.4);
+  background: var(--accent-subtle);
+  border-color: var(--accent-border);
 }
 
 .todo-priority-dot {
@@ -220,7 +220,7 @@ const priorityColor = (priority: string): string => {
 .todo-content {
   flex: 1;
   font-size: 0.82rem;
-  color: rgba(240, 240, 245, 0.8);
+  color: var(--text-primary);
   line-height: 1.4;
   word-break: break-word;
 }
@@ -228,7 +228,7 @@ const priorityColor = (priority: string): string => {
 .todo-delete {
   background: none;
   border: none;
-  color: rgba(240, 240, 245, 0.25);
+  color: var(--text-dim);
   font-size: 1rem;
   cursor: pointer;
   padding: 0;
@@ -247,14 +247,14 @@ const priorityColor = (priority: string): string => {
 }
 
 .todo-delete:hover {
-  background: rgba(239, 68, 68, 0.15);
-  color: #ef4444;
+  background: var(--error-bg);
+  color: var(--error);
 }
 
 .todo-empty {
   padding: 1.5rem;
   text-align: center;
-  color: rgba(240, 240, 245, 0.3);
+  color: var(--text-dim);
   font-size: 0.8rem;
 }
 </style>

@@ -397,7 +397,7 @@ const copyCitation = async (item: ZoteroItem) => {
           <div class="modal-desc" style="text-align: center;">{{ kbStore.embedderProgress }}%</div>
         </div>
         <div v-else-if="kbStore.embedderStatus === 'error'">
-          <h3 class="modal-title" style="color: #ef4444;">Download Failed</h3>
+          <h3 class="modal-title" style="color: var(--error);">Download Failed</h3>
           <p class="modal-desc">{{ kbStore.lastError }}</p>
           <div class="modal-actions">
             <button class="modal-btn primary" @click="kbStore.downloadEmbedder">Retry</button>
@@ -558,48 +558,35 @@ const copyCitation = async (item: ZoteroItem) => {
 .knowledge-panel {
   width: 100%;
   height: 100%;
-  background: rgba(7, 7, 13, 0.96);
-  backdrop-filter: blur(20px);
+  background: var(--bg-surface);
+  border-left: 1px solid var(--border-subtle);
   display: flex;
   flex-direction: column;
   overflow: hidden;
   position: relative;
-  border-left: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.knowledge-panel::before {
-  content: '';
-  position: absolute;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background: radial-gradient(ellipse at 30% 20%, rgba(0, 229, 204, 0.03) 0%, transparent 50%);
-  pointer-events: none;
 }
 
 .drag-handle {
-  height: 32px;
-  cursor: move;
-  -webkit-app-region: drag;
-  flex-shrink: 0;
+  width: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: col-resize;
+  color: var(--text-dim);
+  font-size: 0.75rem;
 }
 
 .panel-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.875rem 1.25rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  color: rgba(240, 240, 245, 0.5);
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: 1px solid var(--border-subtle);
   font-size: 0.75rem;
-  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
-  background: rgba(13, 13, 20, 0.5);
-  cursor: move;
-  user-select: none;
-  -webkit-app-region: drag;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .header-left {
@@ -610,101 +597,101 @@ const copyCitation = async (item: ZoteroItem) => {
 }
 
 .header-title {
-  font-family: 'Syne', sans-serif;
+  font-family: var(--font-display);
   font-size: 0.9rem;
   font-weight: 600;
-  color: #f0f0f5;
+  color: var(--text-primary);
 }
 
 .back-btn {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: rgba(240, 240, 245, 0.7);
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: 1px solid var(--border-light);
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
   cursor: pointer;
-  padding: 0.4rem 0.7rem;
-  border-radius: 8px;
-  font-size: 0.78rem;
-  font-weight: 600;
-  transition: all 0.2s ease;
+  transition: all var(--transition-fast);
 }
 
 .back-btn:hover {
-  background: rgba(0, 229, 204, 0.1);
-  border-color: rgba(0, 229, 204, 0.3);
-  color: #00e5cc;
+  background: var(--bg-card-hover);
+  border-color: var(--border-medium);
+  color: var(--text-primary);
 }
 
 .close-btn {
-  background: none;
-  border: none;
-  color: rgba(240, 240, 245, 0.4);
-  font-size: 1.25rem;
-  cursor: pointer;
-  padding: 0;
   width: 28px;
   height: 28px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 6px;
-  transition: all 0.2s ease;
+  cursor: pointer;
+  transition: all var(--transition-fast);
   -webkit-app-region: no-drag;
 }
 
 .close-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(240, 240, 245, 0.8);
+  background: var(--error-bg);
+  color: var(--error);
 }
 
 /* Search */
 .search-section {
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  padding: var(--space-md) var(--space-lg);
 }
 
 .search-input-wrapper {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--space-sm);
 }
 
 .search-input {
   flex: 1;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-  padding: 0.5rem 0.75rem;
-  color: rgba(240, 240, 245, 0.85);
-  font-size: 0.82rem;
+  background: var(--bg-input);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-md);
+  color: var(--text-primary);
+  font-size: 0.8125rem;
+  font-family: var(--font-body);
   outline: none;
-  transition: all 0.2s ease;
+  transition: border-color var(--transition-base), box-shadow var(--transition-base);
 }
 
 .search-input:focus {
-  border-color: rgba(0, 229, 204, 0.4);
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--accent-subtle);
 }
 
 .search-input::placeholder {
-  color: rgba(240, 240, 245, 0.3);
+  color: var(--text-dim);
 }
 
 .search-btn {
-  background: rgba(0, 229, 204, 0.12);
-  border: 1px solid rgba(0, 229, 204, 0.2);
-  border-radius: 8px;
-  padding: 0.5rem 0.9rem;
-  color: #00e5cc;
+  background: var(--accent-subtle);
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-sm);
+  color: var(--accent-text);
+  padding: var(--space-sm) var(--space-md);
   font-size: 0.78rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--transition-fast);
   white-space: nowrap;
 }
 
 .search-btn:hover:not(:disabled) {
-  background: rgba(0, 229, 204, 0.2);
+  background: var(--accent);
+  color: var(--text-on-accent);
+  border-color: var(--accent);
 }
 
 .search-btn:disabled {
@@ -714,8 +701,8 @@ const copyCitation = async (item: ZoteroItem) => {
 
 /* Actions */
 .actions-section {
-  padding: 0.5rem 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  padding: var(--space-sm) var(--space-lg);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .add-folder-btn {
@@ -724,19 +711,21 @@ const copyCitation = async (item: ZoteroItem) => {
   align-items: center;
   justify-content: center;
   gap: 0.4rem;
-  background: rgba(61, 116, 231, 0.12);
-  border: 1px solid rgba(61, 116, 231, 0.25);
-  border-radius: 8px;
-  padding: 0.6rem;
-  color: #3d74e7;
-  font-size: 0.82rem;
+  background: var(--accent-subtle);
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm);
+  color: var(--accent-text);
+  font-size: 0.8rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--transition-fast);
 }
 
 .add-folder-btn:hover:not(:disabled) {
-  background: rgba(61, 116, 231, 0.2);
+  background: var(--accent);
+  color: var(--text-on-accent);
+  border-color: var(--accent);
 }
 
 .add-folder-btn:disabled {
@@ -751,90 +740,90 @@ const copyCitation = async (item: ZoteroItem) => {
 
 /* Progress */
 .progress-bar {
-  padding: 0.5rem 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  padding: var(--space-sm) var(--space-lg);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .progress-track {
   height: 4px;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--border-subtle);
   border-radius: 2px;
   overflow: hidden;
 }
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #00e5cc, #3d74e7);
+  background: var(--accent);
   border-radius: 2px;
   transition: width 0.3s ease;
 }
 
 .progress-text {
   font-size: 0.7rem;
-  color: rgba(240, 240, 245, 0.4);
+  color: var(--text-muted);
   margin-top: 0.35rem;
   text-align: center;
 }
 
 /* Error */
 .error-message {
-  padding: 0.6rem 1rem;
-  background: rgba(239, 68, 68, 0.08);
-  border-bottom: 1px solid rgba(239, 68, 68, 0.1);
-  color: #ef4444;
+  padding: var(--space-sm) var(--space-lg);
+  background: var(--error-bg);
+  border-bottom: 1px solid rgba(234, 67, 53, 0.1);
+  color: var(--error);
   font-size: 0.78rem;
 }
 
 /* Results */
 .results-section {
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: 1px solid var(--border-subtle);
   max-height: 200px;
   overflow-y: auto;
 }
 
 .result-item {
-  padding: 0.6rem 0.5rem;
-  border-radius: 6px;
-  margin-bottom: 0.4rem;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.04);
+  padding: var(--space-sm) var(--space-xs);
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--space-xs);
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
 }
 
 .result-meta {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-sm);
   margin-bottom: 0.3rem;
 }
 
 .result-rank {
   font-size: 0.7rem;
   font-weight: 700;
-  color: #00e5cc;
+  color: var(--accent-text);
 }
 
 .result-score {
   font-size: 0.7rem;
-  color: rgba(240, 240, 245, 0.5);
-  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
 }
 
 .result-page {
   font-size: 0.7rem;
-  color: rgba(240, 240, 245, 0.35);
+  color: var(--text-dim);
   margin-left: auto;
 }
 
 .result-content {
   font-size: 0.78rem;
-  color: rgba(240, 240, 245, 0.6);
+  color: var(--text-secondary);
   line-height: 1.5;
 }
 
 /* Documents */
 .documents-section {
-  padding: 0.75rem 1rem;
+  padding: var(--space-md) var(--space-lg);
   flex: 1;
   overflow-y: auto;
 }
@@ -842,56 +831,58 @@ const copyCitation = async (item: ZoteroItem) => {
 .section-title {
   font-size: 0.75rem;
   font-weight: 600;
-  color: rgba(240, 240, 245, 0.4);
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--space-sm);
   display: flex;
   align-items: center;
   gap: 0.4rem;
 }
 
 .doc-count {
-  color: rgba(240, 240, 245, 0.25);
+  color: var(--text-dim);
   font-size: 0.7rem;
 }
 
 .empty-state {
   padding: 1.5rem;
   text-align: center;
-  color: rgba(240, 240, 245, 0.3);
+  color: var(--text-dim);
   font-size: 0.82rem;
 }
 
 .doc-list {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: var(--space-xs);
 }
 
 .doc-item {
-  padding: 0.6rem 0.75rem;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.04);
-  transition: all 0.15s ease;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  transition: all var(--transition-fast);
+  margin: 0 var(--space-md);
+  margin-bottom: var(--space-xs);
 }
 
 .doc-item:hover {
-  background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(255, 255, 255, 0.08);
+  background: var(--bg-card-hover);
+  border-color: var(--border-light);
 }
 
 .doc-info {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-sm);
 }
 
 .doc-name {
   flex: 1;
-  font-size: 0.82rem;
-  color: rgba(240, 240, 245, 0.75);
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -900,139 +891,147 @@ const copyCitation = async (item: ZoteroItem) => {
 .doc-status {
   font-size: 0.65rem;
   font-weight: 600;
-  padding: 0.15rem 0.4rem;
-  border-radius: 4px;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
 }
 
 .status-completed {
-  background: rgba(16, 185, 129, 0.12);
-  color: #10b981;
+  background: var(--success-bg);
+  color: var(--success);
 }
 
 .status-indexing {
-  background: rgba(0, 229, 204, 0.12);
-  color: #00e5cc;
+  background: var(--accent-subtle);
+  color: var(--accent-text);
 }
 
 .status-pending {
-  background: rgba(245, 158, 11, 0.12);
-  color: #f59e0b;
+  background: var(--warning-bg);
+  color: var(--warning);
 }
 
 .status-error {
-  background: rgba(239, 68, 68, 0.12);
-  color: #ef4444;
+  background: var(--error-bg);
+  color: var(--error);
 }
 
 .doc-meta {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-top: 0.3rem;
+  gap: var(--space-sm);
+  margin-top: var(--space-xs);
   font-size: 0.72rem;
-  color: rgba(240, 240, 245, 0.35);
+  color: var(--text-muted);
 }
 
 .doc-action {
   background: none;
   border: none;
-  color: rgba(240, 240, 245, 0.35);
+  color: var(--text-muted);
   font-size: 0.7rem;
   cursor: pointer;
   padding: 0.1rem 0.3rem;
-  border-radius: 4px;
-  transition: all 0.15s ease;
+  border-radius: var(--space-xs);
+  transition: all var(--transition-fast);
 }
 
 .doc-action:hover {
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(240, 240, 245, 0.6);
+  background: var(--bg-card-hover);
+  color: var(--text-secondary);
 }
 
 .doc-action.delete:hover {
-  background: rgba(239, 68, 68, 0.12);
-  color: #ef4444;
+  background: var(--error-bg);
+  color: var(--error);
 }
 
 .doc-error {
-  margin-top: 0.3rem;
+  margin-top: var(--space-xs);
   font-size: 0.72rem;
-  color: #ef4444;
+  color: var(--error);
   line-height: 1.4;
 }
 
 .doc-abstract {
-  margin-top: 0.3rem;
+  margin-top: var(--space-xs);
   font-size: 0.72rem;
-  color: rgba(240, 240, 245, 0.4);
+  color: var(--text-muted);
   line-height: 1.4;
 }
 
 /* Tab bar */
 .tab-bar {
   display: flex;
-  gap: 0.3rem;
-  margin-bottom: 0.5rem;
+  gap: var(--space-xs);
+  padding: 0 var(--space-lg);
+  margin-bottom: var(--space-sm);
 }
 
 .review-btn {
   width: 100%;
-  padding: 0.5rem;
-  background: rgba(139, 92, 246, 0.12);
-  border: 1px solid rgba(139, 92, 246, 0.25);
-  border-radius: 8px;
-  color: #8b5cf6;
+  padding: var(--space-sm) var(--space-md);
+  margin: 0 var(--space-lg) var(--space-sm);
+  background: var(--accent-subtle);
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-sm);
+  color: var(--accent-text);
   font-size: 0.8rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
-  margin-bottom: 0.5rem;
+  transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
 }
 
 .review-btn:hover {
-  background: rgba(139, 92, 246, 0.2);
+  background: var(--accent);
+  color: var(--text-on-accent);
+  border-color: var(--accent);
 }
 
 .tab-btn {
   flex: 1;
-  padding: 0.4rem 0.6rem;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(255, 255, 255, 0.02);
-  color: rgba(240, 240, 245, 0.5);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-light);
+  background: var(--bg-card);
+  color: var(--text-muted);
   font-size: 0.78rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--transition-fast);
 }
 
 .tab-btn:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: rgba(240, 240, 245, 0.7);
+  border-color: var(--border-medium);
+  color: var(--text-secondary);
 }
 
 .tab-btn.active {
-  background: rgba(0, 229, 204, 0.12);
-  border-color: rgba(0, 229, 204, 0.25);
-  color: #00e5cc;
+  background: var(--accent-subtle);
+  border-color: var(--accent-border);
+  color: var(--accent-text);
 }
 
 .tab-actions {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: var(--space-xs);
 }
 
 .zotero-btn {
-  background: rgba(205, 90, 40, 0.12);
-  border-color: rgba(205, 90, 40, 0.25);
-  color: #cd5a28;
+  background: var(--accent-subtle);
+  border-color: var(--accent-border);
+  color: var(--accent-text);
 }
 
 .zotero-btn:hover:not(:disabled) {
-  background: rgba(205, 90, 40, 0.2);
+  background: var(--accent);
+  color: var(--text-on-accent);
+  border-color: var(--accent);
 }
 
 .sync-status {
@@ -1041,18 +1040,18 @@ const copyCitation = async (item: ZoteroItem) => {
 }
 
 .sync-ok {
-  color: #10b981;
+  color: var(--success);
 }
 
 .sync-error {
-  color: #ef4444;
+  color: var(--error);
 }
 
 /* Modal */
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.7);
+  background: var(--bg-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1061,122 +1060,125 @@ const copyCitation = async (item: ZoteroItem) => {
 }
 
 .modal-content {
-  background: rgba(18, 18, 28, 0.98);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 16px;
-  padding: 1.5rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-xl);
+  padding: var(--space-2xl);
   width: 360px;
   max-width: 90vw;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+  box-shadow: var(--shadow-xl);
 }
 
 .modal-title {
   margin: 0 0 0.6rem;
-  color: #f0f0f5;
+  color: var(--text-primary);
   font-size: 1rem;
   font-weight: 700;
 }
 
 .modal-desc {
   margin: 0 0 1.2rem;
-  color: rgba(240, 240, 245, 0.6);
+  color: var(--text-secondary);
   font-size: 0.85rem;
   line-height: 1.5;
 }
 
 .modal-actions {
   display: flex;
-  gap: 0.75rem;
+  gap: var(--space-sm);
   justify-content: flex-end;
 }
 
 .modal-btn {
-  padding: 0.55rem 1.1rem;
-  border-radius: 8px;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
   font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--transition-fast);
   border: none;
 }
 
 .modal-btn.primary {
-  background: linear-gradient(135deg, #00e5cc 0%, #00b8a3 100%);
-  color: #06211f;
+  background: var(--accent);
+  color: var(--text-on-accent);
 }
 
 .modal-btn.primary:hover {
-  opacity: 0.9;
+  background: var(--accent-hover);
 }
 
 .modal-btn.secondary {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: rgba(240, 240, 245, 0.7);
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  color: var(--text-secondary);
 }
 
 .modal-btn.secondary:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--bg-card-hover);
+  border-color: var(--border-medium);
+  color: var(--text-primary);
 }
 
 /* Collection selector */
 .zotero-action-row {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--space-sm);
 }
 
 .collection-select-btn {
   flex-shrink: 0;
-  padding: 0.6rem;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-  color: rgba(240, 240, 245, 0.6);
+  padding: var(--space-sm);
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
   font-size: 0.78rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--transition-fast);
 }
 
 .collection-select-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(240, 240, 245, 0.85);
+  background: var(--bg-card-hover);
+  border-color: var(--border-medium);
+  color: var(--text-secondary);
 }
 
 .sync-hint {
   font-size: 0.7rem;
-  color: rgba(240, 240, 245, 0.35);
+  color: var(--text-muted);
   text-align: center;
 }
 
 .collection-selector {
-  margin-top: 0.5rem;
-  background: rgba(13, 13, 20, 0.95);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 10px;
-  padding: 0.75rem;
+  margin-top: var(--space-sm);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
   max-height: 260px;
-  display: flex;
-  flex-direction: column;
+  overflow-y: auto;
+  box-shadow: var(--shadow-lg);
 }
 
 .selector-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--space-sm);
 }
 
 .selector-title {
   font-size: 0.78rem;
   font-weight: 600;
-  color: rgba(240, 240, 245, 0.6);
+  color: var(--text-muted);
 }
 
 .selector-close {
   background: none;
   border: none;
-  color: rgba(240, 240, 245, 0.4);
+  color: var(--text-muted);
   font-size: 0.85rem;
   cursor: pointer;
   padding: 0 0.3rem;
@@ -1188,38 +1190,38 @@ const copyCitation = async (item: ZoteroItem) => {
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--space-sm);
 }
 
 .collection-item {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.4rem 0.5rem;
-  border-radius: 6px;
+  gap: var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: background 0.15s ease;
+  transition: background var(--transition-fast);
 }
 
 .collection-item:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--bg-surface);
 }
 
 .collection-item input[type="checkbox"] {
-  accent-color: #00e5cc;
+  accent-color: var(--accent);
   cursor: pointer;
 }
 
 .collection-name {
   flex: 1;
   font-size: 0.78rem;
-  color: rgba(240, 240, 245, 0.7);
+  color: var(--text-secondary);
 }
 
 .collection-count {
   font-size: 0.65rem;
-  color: rgba(240, 240, 245, 0.25);
-  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
 }
 
 /* Breadcrumb navigation */
@@ -1230,27 +1232,27 @@ const copyCitation = async (item: ZoteroItem) => {
   gap: 0.25rem;
   margin-bottom: 0.4rem;
   font-size: 0.7rem;
-  color: rgba(240, 240, 245, 0.35);
+  color: var(--text-muted);
 }
 
 .breadcrumb-item {
   cursor: pointer;
-  transition: color 0.15s ease;
+  transition: color var(--transition-fast);
 }
 
 .breadcrumb-item:hover {
-  color: rgba(240, 240, 245, 0.7);
+  color: var(--text-secondary);
 }
 
 .breadcrumb-item.active {
-  color: #00e5cc;
+  color: var(--accent-text);
   font-weight: 600;
   cursor: default;
 }
 
 .breadcrumb-sep {
   margin: 0 0.2rem;
-  color: rgba(240, 240, 245, 0.2);
+  color: var(--border-light);
 }
 
 /* Go up button */
@@ -1259,62 +1261,62 @@ const copyCitation = async (item: ZoteroItem) => {
 }
 
 .go-up-btn {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--bg-card);
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   padding: 0.35rem 0.6rem;
-  color: rgba(240, 240, 245, 0.5);
+  color: var(--text-muted);
   font-size: 0.72rem;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all var(--transition-fast);
 }
 
 .go-up-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(240, 240, 245, 0.8);
+  background: var(--bg-card-hover);
+  color: var(--text-secondary);
 }
 
 /* Enter folder button */
 .enter-folder-btn {
-  background: rgba(0, 229, 204, 0.1);
+  background: var(--accent-subtle);
   border: none;
-  border-radius: 4px;
-  padding: 0.2rem 0.5rem;
-  color: #00e5cc;
+  border-radius: var(--radius-sm);
+  padding: 2px var(--space-sm);
+  color: var(--accent-text);
   font-size: 0.65rem;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background var(--transition-fast);
   flex-shrink: 0;
 }
 
 .enter-folder-btn:hover {
-  background: rgba(0, 229, 204, 0.2);
+  background: var(--accent-border);
 }
 
 .selector-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--space-sm);
   justify-content: flex-end;
 }
 
 .selector-btn {
-  padding: 0.4rem 0.8rem;
-  border-radius: 6px;
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
   font-size: 0.78rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--transition-fast);
   border: none;
 }
 
 .selector-btn.primary {
-  background: linear-gradient(135deg, #00e5cc 0%, #00b8a3 100%);
-  color: #06211f;
+  background: var(--accent);
+  color: var(--text-on-accent);
 }
 
 .selector-btn.secondary {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: rgba(240, 240, 245, 0.7);
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  color: var(--text-secondary);
 }
 </style>

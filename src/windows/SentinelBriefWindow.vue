@@ -121,11 +121,11 @@ const closeWindow = () => {
 .sentinel-brief {
   width: 100%;
   height: 100%;
-  background: rgba(7, 7, 13, 0.98);
+  background: var(--bg-base);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  color: rgba(240, 240, 245, 0.85);
+  color: var(--text-primary);
 }
 
 .brief-header {
@@ -133,8 +133,8 @@ const closeWindow = () => {
   justify-content: space-between;
   align-items: center;
   padding: 0.75rem 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(13, 13, 20, 0.5);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
   cursor: move;
   user-select: none;
   -webkit-app-region: drag;
@@ -153,8 +153,8 @@ const closeWindow = () => {
 }
 
 .header-badge {
-  background: #ef4444;
-  color: white;
+  background: var(--error);
+  color: var(--text-on-accent);
   font-size: 0.65rem;
   font-weight: 700;
   padding: 1px 6px;
@@ -166,7 +166,7 @@ const closeWindow = () => {
 .close-btn {
   background: none;
   border: none;
-  color: rgba(240, 240, 245, 0.4);
+  color: var(--text-muted);
   font-size: 1.25rem;
   cursor: pointer;
   width: 28px;
@@ -180,8 +180,8 @@ const closeWindow = () => {
 }
 
 .close-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(240, 240, 245, 0.8);
+  background: var(--bg-card-hover);
+  color: var(--text-secondary);
 }
 
 .brief-content {
@@ -194,7 +194,7 @@ const closeWindow = () => {
 .empty {
   text-align: center;
   padding: 3rem 1rem;
-  color: rgba(240, 240, 245, 0.3);
+  color: var(--text-muted);
   font-size: 0.85rem;
 }
 
@@ -202,7 +202,7 @@ const closeWindow = () => {
   display: block;
   margin-top: 0.5rem;
   font-size: 0.75rem;
-  color: rgba(240, 240, 245, 0.2);
+  color: var(--text-dim);
 }
 
 .topic-groups {
@@ -216,24 +216,24 @@ const closeWindow = () => {
   justify-content: space-between;
   align-items: center;
   padding: 0.4rem 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .group-name {
   font-size: 0.82rem;
   font-weight: 600;
-  color: #00e5cc;
+  color: var(--accent);
 }
 
 .group-count {
   font-size: 0.7rem;
-  color: rgba(240, 240, 245, 0.35);
+  color: var(--text-muted);
   font-family: 'JetBrains Mono', monospace;
 }
 
 .paper-card {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
   border-radius: 10px;
   padding: 0.75rem;
   margin-bottom: 0.5rem;
@@ -241,27 +241,27 @@ const closeWindow = () => {
 }
 
 .paper-card:hover {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.1);
+  background: var(--bg-card-hover);
+  border-color: var(--border-light);
 }
 
 .paper-title {
   font-size: 0.8rem;
   font-weight: 600;
-  color: rgba(240, 240, 245, 0.85);
+  color: var(--text-primary);
   line-height: 1.4;
   margin-bottom: 0.3rem;
 }
 
 .paper-authors {
   font-size: 0.72rem;
-  color: rgba(240, 240, 245, 0.45);
+  color: var(--text-secondary);
   margin-bottom: 0.4rem;
 }
 
 .paper-abstract {
   font-size: 0.72rem;
-  color: rgba(240, 240, 245, 0.5);
+  color: var(--text-secondary);
   line-height: 1.4;
   margin-bottom: 0.4rem;
 }
@@ -274,13 +274,13 @@ const closeWindow = () => {
 
 .paper-date {
   font-size: 0.65rem;
-  color: rgba(240, 240, 245, 0.3);
+  color: var(--text-muted);
   font-family: 'JetBrains Mono', monospace;
 }
 
 .paper-source {
   font-size: 0.65rem;
-  color: rgba(61, 116, 231, 0.6);
+  color: var(--accent);
   text-transform: uppercase;
 }
 
@@ -299,29 +299,29 @@ const closeWindow = () => {
 }
 
 .action-btn.view {
-  background: rgba(0, 229, 204, 0.1);
-  color: #00e5cc;
+  background: var(--accent-subtle);
+  color: var(--accent);
 }
 
 .action-btn.view:hover {
-  background: rgba(0, 229, 204, 0.2);
+  background: var(--accent-border);
 }
 
 .action-btn.read {
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(240, 240, 245, 0.6);
+  background: var(--bg-card-hover);
+  color: var(--text-secondary);
 }
 
 .action-btn.read:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--border-light);
 }
 
 .action-btn.ignore {
   background: transparent;
-  color: rgba(240, 240, 245, 0.3);
+  color: var(--text-muted);
 }
 
 .action-btn.ignore:hover {
-  color: #ef4444;
+  color: var(--error);
 }
 </style>

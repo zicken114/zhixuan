@@ -42,8 +42,8 @@ const handleDelete = (id: string, event: Event) => {
 
 <style scoped>
 .history-panel {
-  background: rgba(13, 13, 20, 0.98);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border-subtle);
   max-height: 280px;
   overflow-y: auto;
 }
@@ -53,8 +53,8 @@ const handleDelete = (id: string, event: Event) => {
   justify-content: space-between;
   align-items: center;
   padding: 0.875rem 1.25rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  color: rgba(240, 240, 245, 0.5);
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-muted);
   font-size: 0.75rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -64,7 +64,7 @@ const handleDelete = (id: string, event: Event) => {
 .close-history {
   background: none;
   border: none;
-  color: rgba(240, 240, 245, 0.4);
+  color: var(--text-muted);
   font-size: 1.25rem;
   cursor: pointer;
   padding: 0;
@@ -78,8 +78,8 @@ const handleDelete = (id: string, event: Event) => {
 }
 
 .close-history:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(240, 240, 245, 0.8);
+  background: var(--bg-card-hover);
+  color: var(--text-secondary);
 }
 
 .history-list {
@@ -98,12 +98,12 @@ const handleDelete = (id: string, event: Event) => {
 }
 
 .history-item:hover {
-  background: rgba(0, 229, 204, 0.06);
-  border-color: rgba(0, 229, 204, 0.1);
+  background: var(--accent-subtle);
+  border-color: var(--accent-border);
 }
 
 .history-title {
-  color: rgba(240, 240, 245, 0.8);
+  color: var(--text-primary);
   font-size: 0.875rem;
   white-space: nowrap;
   overflow: hidden;
@@ -114,7 +114,7 @@ const handleDelete = (id: string, event: Event) => {
 .delete-btn {
   background: none;
   border: none;
-  color: rgba(240, 240, 245, 0.3);
+  color: var(--text-muted);
   font-size: 1rem;
   cursor: pointer;
   padding: 0.25rem;
@@ -133,14 +133,14 @@ const handleDelete = (id: string, event: Event) => {
 }
 
 .delete-btn:hover {
-  background: rgba(239, 68, 68, 0.2);
-  color: #ef4444;
+  background: rgba(234, 67, 53, 0.2);
+  color: var(--error);
 }
 
 .history-empty {
   padding: 2rem;
   text-align: center;
-  color: rgba(240, 240, 245, 0.3);
+  color: var(--text-muted);
   font-size: 0.875rem;
 }
 </style>

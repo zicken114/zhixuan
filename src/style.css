@@ -7,69 +7,88 @@
 @tailwind utilities;
 
 /* ───────────────────────────────────────────────
-   Theme Variables
-   Extracting hard-coded colours into a single
-   source of truth makes future theming (light/dark
-   mode, accent colour switch, etc.) trivial.
+   Theme Variables — Light Theme (NEW)
+   White minimalist theme for research assistant
    ─────────────────────────────────────────────── */
 :root {
-  /* Accent (teal/cyan) */
-  --accent: #00e5cc;
-  --accent-dim: #00b8a3;
-  --accent-glow: rgba(0, 229, 204, 0.3);
-  --accent-glow-strong: rgba(0, 229, 204, 0.5);
+  /* Accent — 主色调：学术蓝 */
+  --accent: #1a73e8;
+  --accent-hover: #1557b0;
+  --accent-subtle: #e8f0fe;
+  --accent-border: #aecbfa;
+  --accent-text: #1a73e8;
 
-  /* Background layers */
-  --bg-base: #07070d;
-  --bg-panel: rgba(13, 13, 20, 0.95);
-  --bg-card: rgba(13, 13, 20, 0.98);
-  --bg-input: rgba(255, 255, 255, 0.04);
-  --bg-overlay: rgba(7, 7, 13, 0.7);
+  /* Background — 背景体系 */
+  --bg-base: #ffffff;
+  --bg-surface: #f8f9fb;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f4f6f9;
+  --bg-input: #ffffff;
+  --bg-input-hover: #f8f9fb;
+  --bg-elevated: #ffffff;
+  --bg-overlay: rgba(0, 0, 0, 0.25);
 
-  /* Text */
-  --text-primary: #f0f0f5;
-  --text-secondary: rgba(240, 240, 245, 0.8);
-  --text-muted: rgba(240, 240, 245, 0.5);
-  --text-dim: rgba(240, 240, 245, 0.4);
+  /* Semantic — 语义色彩 */
+  --success: #34a853;
+  --success-bg: #e6f4ea;
+  --warning: #fbbc04;
+  --warning-bg: #fef7e0;
+  --error: #ea4335;
+  --error-bg: #fce8e6;
+  --info: #5f6368;
+  --info-bg: #e8eaed;
 
-  /* Borders */
-  --border-subtle: rgba(255, 255, 255, 0.06);
-  --border-light: rgba(255, 255, 255, 0.08);
-  --border-focus: rgba(0, 229, 204, 0.5);
+  /* Text — 文字色彩 */
+  --text-primary: #1a1a2e;
+  --text-secondary: #5f6368;
+  --text-muted: #9aa0a6;
+  --text-dim: #dadce0;
+  --text-on-accent: #ffffff;
+  --text-inverse: #ffffff;
 
-  /* Status */
-  --error: #ef4444;
-  --error-bg: rgba(239, 68, 68, 0.15);
-  --error-border: rgba(239, 68, 68, 0.3);
+  /* Border — 边框色彩 */
+  --border-subtle: #f0f2f5;
+  --border-light: #e8ecf0;
+  --border-medium: #dde2e8;
+  --border-focus: #1a73e8;
 
-  /* Spacing scale */
-  --space-xs: 0.25rem;
-  --space-sm: 0.5rem;
-  --space-md: 0.75rem;
-  --space-lg: 1rem;
-  --space-xl: 1.25rem;
-  --space-2xl: 1.5rem;
+  /* Shadow — 阴影 */
+  --shadow-xs: 0 0 0 1px rgba(0, 0, 0, 0.04);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04), 0 0 0 1px rgba(0, 0, 0, 0.02);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06), 0 0 0 1px rgba(0, 0, 0, 0.02);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.02);
+  --shadow-xl: 0 8px 32px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.02);
+  --shadow-widget: var(--shadow-md);
+  --shadow-accent: none;
 
-  /* Radius scale */
+  /* Spacing */
+  --space-2xs: 2px;
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 20px;
+  --space-2xl: 24px;
+
+  /* Radius */
   --radius-sm: 6px;
   --radius-md: 8px;
-  --radius-lg: 10px;
-  --radius-xl: 12px;
-  --radius-2xl: 14px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 16px;
   --radius-full: 999px;
 
   /* Transition */
-  --transition-fast: 0.15s ease;
-  --transition-base: 0.2s ease;
+  --transition-fast: 0.12s ease;
+  --transition-base: 0.18s ease;
   --transition-slow: 0.24s ease;
-  --transition-widget: 0.28s ease;
+  --transition-widget: 0.2s ease;
+  --transition-transform: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 
-  /* Shadows */
-  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.2);
-  --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.3);
-  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5);
-  --shadow-widget: 0 10px 28px rgba(0, 0, 0, 0.28);
-  --shadow-accent: 0 2px 10px rgba(0, 229, 204, 0.2);
+  /* Font stacks */
+  --font-display: 'Syne', 'DM Sans', sans-serif;
+  --font-body: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
 }
 
 html, body {
@@ -79,7 +98,7 @@ html, body {
   height: 100%;
   overflow: hidden;
   background: transparent;
-  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   color: var(--text-primary);
@@ -90,27 +109,27 @@ html, body {
   height: 100%;
 }
 
-/* Custom scrollbar for neural theme */
+/* Custom scrollbar for light theme */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.02);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--accent-glow);
+  background: #dadce0;
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--accent-glow-strong);
+  background: #bdc1c6;
 }
 
 /* Selection styling */
 ::selection {
-  background: var(--accent-glow);
-  color: var(--text-primary);
+  background: var(--accent-subtle);
+  color: var(--accent-text);
 }

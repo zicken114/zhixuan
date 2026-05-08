@@ -946,7 +946,7 @@ const saveToObsidian = async () => {
         <div class="project-selector" @click="showProjectDropdown = !showProjectDropdown">
           <span
             class="project-dot"
-            :style="{ background: projectStore.currentProject()?.color || '#6b7280' }"
+            :style="{ background: projectStore.currentProject()?.color || 'var(--text-muted)' }"
           />
           <span class="project-name">
             {{ projectStore.currentProject()?.name || 'General Chat' }}
@@ -977,7 +977,7 @@ const saveToObsidian = async () => {
             :class="{ active: !projectStore.currentProjectId }"
             @click="selectProject(null)"
           >
-            <span class="project-dot" style="background: #6b7280" />
+            <span class="project-dot" style="background: var(--text-muted)" />
             <span>General Chat</span>
           </div>
           <div
@@ -1300,25 +1300,13 @@ const saveToObsidian = async () => {
 .main-window {
   width: 100%;
   height: 100%;
-  background: rgba(7, 7, 13, 0.96);
-  backdrop-filter: blur(20px);
+  background: var(--bg-base);
   display: flex;
   flex-direction: column;
-  border-left: 1px solid rgba(255, 255, 255, 0.06);
+  border-left: 1px solid var(--border-subtle);
   position: relative;
   overflow: hidden;
-}
-
-/* Subtle radial gradient for depth */
-.main-window::before {
-  content: '';
-  position: absolute;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background: radial-gradient(ellipse at 30% 20%, rgba(0, 229, 204, 0.03) 0%, transparent 50%);
-  pointer-events: none;
+  color: var(--text-primary);
 }
 
 .chat-view {
@@ -1333,24 +1321,24 @@ const saveToObsidian = async () => {
 /* Project bar */
 .project-bar {
   position: relative;
-  padding: 0.5rem 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(255, 255, 255, 0.02);
+  padding: var(--space-sm) var(--space-lg);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
 }
 
 .project-selector {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-sm);
   cursor: pointer;
-  padding: 0.35rem 0.75rem;
-  border-radius: 8px;
-  transition: background 0.2s ease;
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-md);
+  transition: background var(--transition-base);
   width: fit-content;
 }
 
 .project-selector:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--bg-card-hover);
 }
 
 .project-dot {
@@ -1361,15 +1349,15 @@ const saveToObsidian = async () => {
 }
 
 .project-name {
-  color: rgba(240, 240, 245, 0.85);
+  color: var(--text-secondary);
   font-size: 0.82rem;
   font-weight: 600;
 }
 
 .project-arrow {
-  color: rgba(240, 240, 245, 0.4);
+  color: var(--text-dim);
   font-size: 0.65rem;
-  margin-left: 0.25rem;
+  margin-left: var(--space-xs);
 }
 
 /* Project stats bar */
@@ -1377,28 +1365,28 @@ const saveToObsidian = async () => {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  margin-top: 0.25rem;
-  padding-left: 0.75rem;
+  margin-top: var(--space-xs);
+  padding-left: var(--space-sm);
   font-size: 0.7rem;
-  color: rgba(240, 240, 245, 0.35);
+  color: var(--text-muted);
 }
 
 .stat-item {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
 }
 
 .stat-sep {
-  color: rgba(240, 240, 245, 0.15);
+  color: var(--border-light);
 }
 
 .sentinel-badge {
-  color: #ef4444;
+  color: var(--error);
   cursor: pointer;
-  transition: color 0.2s ease;
+  transition: color var(--transition-fast);
 }
 
 .sentinel-badge:hover {
-  color: #f87171;
+  color: var(--error);
 }
 
 /* Dropdown */
@@ -1407,11 +1395,11 @@ const saveToObsidian = async () => {
   top: calc(100% + 4px);
   left: 1rem;
   min-width: 220px;
-  background: rgba(18, 18, 28, 0.98);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
-  padding: 0.5rem;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  padding: var(--space-sm);
+  box-shadow: var(--shadow-xl);
   z-index: 100;
 }
 
@@ -1420,24 +1408,24 @@ const saveToObsidian = async () => {
   align-items: center;
   gap: 0.6rem;
   padding: 0.55rem 0.75rem;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   cursor: pointer;
-  color: rgba(240, 240, 245, 0.75);
+  color: var(--text-secondary);
   font-size: 0.82rem;
-  transition: all 0.15s ease;
+  transition: all var(--transition-fast);
 }
 
 .project-option:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--bg-card-hover);
 }
 
 .project-option.active {
-  background: rgba(0, 229, 204, 0.12);
-  color: #00e5cc;
+  background: var(--accent-subtle);
+  color: var(--accent-text);
 }
 
 .project-option.create {
-  color: #3d74e7;
+  color: var(--accent-text);
   font-weight: 600;
 }
 
@@ -1451,13 +1439,13 @@ const saveToObsidian = async () => {
 .project-edit-btn {
   background: none;
   border: none;
-  color: rgba(240, 240, 245, 0.3);
+  color: var(--text-dim);
   font-size: 0.75rem;
   cursor: pointer;
   padding: 0.2rem 0.4rem;
-  border-radius: 4px;
+  border-radius: var(--space-xs);
   opacity: 0;
-  transition: all 0.15s ease;
+  transition: all var(--transition-fast);
 }
 
 .project-option:hover .project-edit-btn {
@@ -1465,13 +1453,13 @@ const saveToObsidian = async () => {
 }
 
 .project-edit-btn:hover {
-  color: #00e5cc;
-  background: rgba(0, 229, 204, 0.1);
+  color: var(--accent);
+  background: var(--accent-subtle);
 }
 
 .project-divider {
   height: 1px;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--border-subtle);
   margin: 0.35rem 0;
 }
 
@@ -1479,7 +1467,7 @@ const saveToObsidian = async () => {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: var(--bg-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1487,35 +1475,38 @@ const saveToObsidian = async () => {
 }
 
 .modal-content {
-  background: rgba(18, 18, 28, 0.98);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 16px;
-  padding: 1.5rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-xl);
+  padding: var(--space-2xl);
   width: 340px;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-xl);
 }
 
 .modal-content h3 {
   margin: 0 0 1rem;
-  color: #f0f0f5;
+  color: var(--text-primary);
   font-size: 1rem;
   font-weight: 700;
 }
 
 .modal-content .input {
   width: 100%;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
   padding: 0.7rem 0.9rem;
-  color: #f0f0f5;
+  color: var(--text-primary);
   font-size: 0.88rem;
   outline: none;
   margin-bottom: 1rem;
+  font-family: var(--font-body);
+  transition: border-color var(--transition-base), box-shadow var(--transition-base);
 }
 
 .modal-content .input:focus {
-  border-color: #00d1bb;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--accent-subtle);
 }
 
 .modal-content .select-input {
@@ -1524,8 +1515,8 @@ const saveToObsidian = async () => {
 }
 
 .modal-content .select-input option {
-  background: #1a1a2e;
-  color: #f0f0f5;
+  background: var(--bg-surface);
+  color: var(--text-primary);
 }
 
 .project-modal {
@@ -1540,7 +1531,7 @@ const saveToObsidian = async () => {
 
 .project-modal .label {
   display: block;
-  color: rgba(240, 240, 245, 0.6);
+  color: var(--text-muted);
   font-size: 0.75rem;
   font-weight: 600;
   margin-bottom: 0.35rem;
@@ -1582,7 +1573,7 @@ const saveToObsidian = async () => {
 }
 
 .color-swatch.active {
-  border-color: #ffffff;
+  border-color: var(--text-primary);
   transform: scale(1.15);
 }
 
@@ -1594,51 +1585,53 @@ const saveToObsidian = async () => {
 
 .btn-secondary {
   padding: 0.55rem 1rem;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  color: rgba(240, 240, 245, 0.7);
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
   font-size: 0.82rem;
   cursor: pointer;
-  transition: background 0.2s ease;
+  transition: all var(--transition-fast);
 }
 
 .btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--bg-card-hover);
+  border-color: var(--border-medium);
+  color: var(--text-primary);
 }
 
 .btn-primary {
   padding: 0.55rem 1rem;
-  background: linear-gradient(135deg, #00e5cc 0%, #00b8a3 100%);
+  background: var(--accent);
   border: none;
-  border-radius: 8px;
-  color: #06211f;
+  border-radius: var(--radius-md);
+  color: var(--text-on-accent);
   font-size: 0.82rem;
   font-weight: 700;
   cursor: pointer;
-  transition: opacity 0.2s ease;
+  transition: background var(--transition-fast);
 }
 
 .btn-primary:hover {
-  opacity: 0.9;
+  background: var(--accent-hover);
 }
 
 /* Usage bar and panel */
 .usage-bar {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-sm);
   padding: 0.4rem 1rem;
-  background: rgba(255, 255, 255, 0.02);
-  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border-subtle);
   cursor: pointer;
   font-size: 0.75rem;
-  color: rgba(240, 240, 245, 0.4);
-  transition: background 0.2s ease;
+  color: var(--text-muted);
+  transition: background var(--transition-base);
 }
 
 .usage-bar:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--bg-card-hover);
 }
 
 .usage-label {
@@ -1647,7 +1640,7 @@ const saveToObsidian = async () => {
 
 .usage-mini {
   margin-left: auto;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
 }
 
 .usage-toggle {
@@ -1659,13 +1652,13 @@ const saveToObsidian = async () => {
   bottom: 0;
   left: 0;
   right: 0;
-  background: rgba(13, 13, 20, 0.98);
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 1rem;
+  background: var(--bg-elevated);
+  border-top: 1px solid var(--border-light);
+  padding: var(--space-lg);
   z-index: 50;
   max-height: 300px;
   overflow-y: auto;
-  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow-xl);
 }
 
 .usage-header {
@@ -1675,30 +1668,31 @@ const saveToObsidian = async () => {
   margin-bottom: 0.75rem;
   font-size: 0.85rem;
   font-weight: 700;
-  color: #f0f0f5;
+  color: var(--text-primary);
 }
 
 .usage-close {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--bg-card);
   border: none;
-  border-radius: 6px;
-  color: rgba(240, 240, 245, 0.6);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
   width: 24px;
   height: 24px;
   cursor: pointer;
   font-size: 0.8rem;
+  transition: all var(--transition-fast);
 }
 
 .usage-close:hover {
-  background: rgba(239, 68, 68, 0.15);
-  color: #ef4444;
+  background: var(--error-bg);
+  color: var(--error);
 }
 
 .usage-loading,
 .usage-empty {
   text-align: center;
   padding: 1rem;
-  color: rgba(240, 240, 245, 0.4);
+  color: var(--text-muted);
   font-size: 0.82rem;
 }
 
@@ -1712,20 +1706,20 @@ const saveToObsidian = async () => {
 .usage-metric {
   text-align: center;
   padding: 0.6rem;
-  background: rgba(255, 255, 255, 0.03);
-  border-radius: 8px;
+  background: var(--bg-surface);
+  border-radius: var(--radius-md);
 }
 
 .metric-value {
   font-size: 1rem;
   font-weight: 700;
-  color: #00e5cc;
-  font-family: 'JetBrains Mono', monospace;
+  color: var(--accent);
+  font-family: var(--font-mono);
 }
 
 .metric-label {
   font-size: 0.7rem;
-  color: rgba(240, 240, 245, 0.4);
+  color: var(--text-muted);
   margin-top: 0.2rem;
 }
 
@@ -1736,7 +1730,7 @@ const saveToObsidian = async () => {
 .breakdown-title {
   font-size: 0.75rem;
   font-weight: 700;
-  color: rgba(240, 240, 245, 0.6);
+  color: var(--text-secondary);
   margin-bottom: 0.4rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -1748,8 +1742,8 @@ const saveToObsidian = async () => {
   align-items: center;
   padding: 0.35rem 0;
   font-size: 0.78rem;
-  color: rgba(240, 240, 245, 0.7);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .breakdown-row span:first-child {
@@ -1757,21 +1751,21 @@ const saveToObsidian = async () => {
 }
 
 .breakdown-row span:nth-child(2) {
-  color: rgba(240, 240, 245, 0.4);
+  color: var(--text-muted);
   margin-right: 1rem;
 }
 
 .breakdown-row span:last-child {
-  font-family: 'JetBrains Mono', monospace;
-  color: rgba(240, 240, 245, 0.4);
+  font-family: var(--font-mono);
+  color: var(--text-muted);
 }
 
 /* Obsidian modal */
 .obsidian-result {
   padding: 0.6rem;
-  border-radius: 8px;
-  background: rgba(0, 229, 204, 0.08);
-  color: #00e5cc;
+  border-radius: var(--radius-md);
+  background: var(--accent-subtle);
+  color: var(--accent-text);
   font-size: 0.82rem;
   margin-bottom: 1rem;
 }
@@ -1782,7 +1776,7 @@ const saveToObsidian = async () => {
 
 .label {
   display: block;
-  color: rgba(240, 240, 245, 0.6);
+  color: var(--text-muted);
   font-weight: 600;
   margin-bottom: 0.45rem;
   font-size: 0.8rem;
@@ -1790,17 +1784,24 @@ const saveToObsidian = async () => {
 
 .select-input {
   width: 100%;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
   padding: 0.6rem 0.8rem;
-  color: #f0f0f5;
+  color: var(--text-primary);
   font-size: 0.85rem;
   outline: none;
+  font-family: var(--font-body);
+  transition: border-color var(--transition-base), box-shadow var(--transition-base);
+}
+
+.select-input:focus {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--accent-subtle);
 }
 
 .select-input option {
-  background: #1a1a2e;
-  color: #f0f0f5;
+  background: var(--bg-surface);
+  color: var(--text-primary);
 }
 </style>

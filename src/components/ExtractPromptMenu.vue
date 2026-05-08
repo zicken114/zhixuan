@@ -39,18 +39,18 @@ const emit = defineEmits<{
 <style scoped>
 .prompt-menu {
   position: absolute;
-  background: rgba(13, 13, 20, 0.95);
+  background: var(--bg-elevated);
   backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-light);
   border-radius: 14px;
   padding: 10px;
   z-index: 30;
   min-width: 220px;
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(0, 229, 204, 0.1);
+  box-shadow: var(--shadow-lg);
 }
 
 .prompt-menu-title {
-  color: rgba(240, 240, 245, 0.4);
+  color: var(--text-muted);
   font-size: 10px;
   padding: 6px 10px 10px;
   text-transform: uppercase;
@@ -67,15 +67,15 @@ const emit = defineEmits<{
   background: transparent;
   border: none;
   border-radius: 10px;
-  color: rgba(240, 240, 245, 0.8);
+  color: var(--text-primary);
   cursor: pointer;
   transition: all 0.15s ease;
   font-size: 14px;
 }
 
 .prompt-item:hover {
-  background: rgba(0, 229, 204, 0.12);
-  color: #f0f0f5;
+  background: var(--accent-subtle);
+  color: var(--text-primary);
 }
 
 .prompt-item:hover .prompt-icon {
@@ -98,17 +98,17 @@ const emit = defineEmits<{
   padding: 10px;
   margin-top: 6px;
   background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-light);
   border-radius: 8px;
-  color: rgba(240, 240, 245, 0.5);
+  color: var(--text-muted);
   cursor: pointer;
   font-size: 13px;
   transition: all 0.15s ease;
 }
 
 .prompt-cancel:hover {
-  background: rgba(239, 68, 68, 0.1);
-  border-color: rgba(239, 68, 68, 0.3);
-  color: #ef4444;
+  background: rgba(234, 67, 53, 0.1);
+  border-color: rgba(234, 67, 53, 0.3);
+  color: var(--error);
 }
 </style>

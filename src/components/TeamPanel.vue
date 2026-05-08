@@ -308,8 +308,8 @@ onMounted(loadTeams);
   left: 0;
   width: 420px;
   height: 100vh;
-  background: #0d0d14;
-  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--bg-base);
+  border-right: 1px solid var(--border-subtle);
   display: flex;
   flex-direction: column;
   z-index: 100;
@@ -320,21 +320,21 @@ onMounted(loadTeams);
   justify-content: space-between;
   align-items: center;
   padding: 1rem 1.25rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .panel-header h3 {
   font-family: 'Syne', sans-serif;
   font-size: 1rem;
   font-weight: 600;
-  color: #f0f0f5;
+  color: var(--text-primary);
   margin: 0;
 }
 
 .close-btn {
   background: none;
   border: none;
-  color: rgba(240, 240, 245, 0.5);
+  color: var(--text-secondary);
   font-size: 1.5rem;
   cursor: pointer;
   padding: 0;
@@ -348,8 +348,8 @@ onMounted(loadTeams);
 }
 
 .close-btn:hover {
-  background: rgba(239, 68, 68, 0.15);
-  color: #ef4444;
+  background: rgba(234, 67, 53, 0.15);
+  color: var(--error);
 }
 
 .no-team-view {
@@ -360,7 +360,7 @@ onMounted(loadTeams);
   justify-content: center;
   padding: 2rem;
   text-align: center;
-  color: rgba(240, 240, 245, 0.5);
+  color: var(--text-secondary);
 }
 
 .empty-illustration {
@@ -369,7 +369,7 @@ onMounted(loadTeams);
 }
 
 .no-team-view h4 {
-  color: #f0f0f5;
+  color: var(--text-primary);
   margin: 0 0 0.5rem 0;
 }
 
@@ -385,9 +385,9 @@ onMounted(loadTeams);
 }
 
 .primary-btn {
-  background: rgba(0, 229, 204, 0.15);
-  border: 1px solid rgba(0, 229, 204, 0.3);
-  color: #00e5cc;
+  background: var(--accent-subtle);
+  border: 1px solid var(--accent-border);
+  color: var(--accent);
   padding: 0.6rem 1.25rem;
   border-radius: 8px;
   cursor: pointer;
@@ -396,13 +396,13 @@ onMounted(loadTeams);
 }
 
 .primary-btn:hover {
-  background: rgba(0, 229, 204, 0.25);
+  background: var(--accent-border);
 }
 
 .secondary-btn {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: rgba(240, 240, 245, 0.7);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  color: var(--text-secondary);
   padding: 0.6rem 1.25rem;
   border-radius: 8px;
   cursor: pointer;
@@ -411,7 +411,7 @@ onMounted(loadTeams);
 }
 
 .secondary-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--bg-card-hover);
 }
 
 .team-view {
@@ -422,7 +422,7 @@ onMounted(loadTeams);
 
 .team-sidebar {
   width: 140px;
-  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  border-right: 1px solid var(--border-subtle);
   display: flex;
   flex-direction: column;
   padding: 0.75rem;
@@ -440,13 +440,13 @@ onMounted(loadTeams);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: rgba(240, 240, 245, 0.4);
+  color: var(--text-muted);
 }
 
 .icon-btn-small {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--bg-surface);
   border: none;
-  color: rgba(240, 240, 245, 0.6);
+  color: var(--text-secondary);
   width: 24px;
   height: 24px;
   border-radius: 6px;
@@ -474,24 +474,24 @@ onMounted(loadTeams);
 }
 
 .team-item:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--bg-surface);
 }
 
 .team-item.active {
-  background: rgba(0, 229, 204, 0.1);
+  background: var(--accent-subtle);
 }
 
 .team-avatar {
   width: 32px;
   height: 32px;
   border-radius: 8px;
-  background: linear-gradient(135deg, #3d74e7, #00e5cc);
+  background: var(--accent);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 0.85rem;
   font-weight: 600;
-  color: white;
+  color: var(--text-on-accent);
   flex-shrink: 0;
 }
 
@@ -503,7 +503,7 @@ onMounted(loadTeams);
 
 .team-name {
   font-size: 0.85rem;
-  color: #f0f0f5;
+  color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -511,7 +511,7 @@ onMounted(loadTeams);
 
 .team-mode {
   font-size: 0.7rem;
-  color: rgba(240, 240, 245, 0.4);
+  color: var(--text-muted);
 }
 
 .team-content {
@@ -526,13 +526,13 @@ onMounted(loadTeams);
   justify-content: space-between;
   align-items: center;
   padding: 0.75rem 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .team-content-header h4 {
   margin: 0;
   font-size: 0.95rem;
-  color: #f0f0f5;
+  color: var(--text-primary);
 }
 
 .header-actions {
@@ -543,7 +543,7 @@ onMounted(loadTeams);
 .text-btn {
   background: none;
   border: none;
-  color: #00e5cc;
+  color: var(--accent);
   font-size: 0.8rem;
   cursor: pointer;
   padding: 0.25rem 0.5rem;
@@ -551,15 +551,15 @@ onMounted(loadTeams);
 }
 
 .text-btn:hover {
-  background: rgba(0, 229, 204, 0.1);
+  background: var(--accent-subtle);
 }
 
 .text-btn.danger {
-  color: #ef4444;
+  color: var(--error);
 }
 
 .text-btn.danger:hover {
-  background: rgba(239, 68, 68, 0.1);
+  background: rgba(234, 67, 53, 0.1);
 }
 
 .team-tabs {
@@ -577,7 +577,7 @@ onMounted(loadTeams);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: rgba(240, 240, 245, 0.4);
+  color: var(--text-muted);
   margin: 0 0 0.75rem 0;
 }
 
@@ -592,7 +592,7 @@ onMounted(loadTeams);
   align-items: center;
   gap: 0.6rem;
   padding: 0.5rem;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--bg-surface);
   border-radius: 8px;
 }
 
@@ -600,13 +600,13 @@ onMounted(loadTeams);
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #8b5cf6, #3d74e7);
+  background: var(--accent);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 0.75rem;
   font-weight: 600;
-  color: white;
+  color: var(--text-on-accent);
   flex-shrink: 0;
 }
 
@@ -618,12 +618,12 @@ onMounted(loadTeams);
 
 .member-name {
   font-size: 0.85rem;
-  color: #f0f0f5;
+  color: var(--text-primary);
 }
 
 .member-role {
   font-size: 0.75rem;
-  color: rgba(240, 240, 245, 0.4);
+  color: var(--text-muted);
   text-transform: capitalize;
 }
 
@@ -632,21 +632,21 @@ onMounted(loadTeams);
 }
 
 .status.online {
-  color: #22c55e;
+  color: var(--success);
 }
 
 .status.offline {
-  color: rgba(240, 240, 245, 0.2);
+  color: var(--text-dim);
 }
 
 .loading {
-  color: rgba(240, 240, 245, 0.4);
+  color: var(--text-muted);
   font-size: 0.85rem;
   padding: 1rem 0;
 }
 
 .empty-feed {
-  color: rgba(240, 240, 245, 0.4);
+  color: var(--text-muted);
   font-size: 0.85rem;
   padding: 1rem 0;
   text-align: center;
@@ -662,7 +662,7 @@ onMounted(loadTeams);
   display: flex;
   gap: 0.6rem;
   padding: 0.6rem;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--bg-surface);
   border-radius: 8px;
 }
 
@@ -678,20 +678,20 @@ onMounted(loadTeams);
 
 .activity-title {
   font-size: 0.85rem;
-  color: #f0f0f5;
+  color: var(--text-primary);
   margin-bottom: 0.2rem;
 }
 
 .activity-content {
   font-size: 0.8rem;
-  color: rgba(240, 240, 245, 0.5);
+  color: var(--text-secondary);
   margin-bottom: 0.3rem;
   line-height: 1.4;
 }
 
 .activity-meta {
   font-size: 0.75rem;
-  color: rgba(240, 240, 245, 0.3);
+  color: var(--text-dim);
   display: flex;
   gap: 0.4rem;
 }
@@ -699,7 +699,7 @@ onMounted(loadTeams);
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: var(--bg-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -707,8 +707,8 @@ onMounted(loadTeams);
 }
 
 .modal {
-  background: #1a1a2e;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
   border-radius: 12px;
   padding: 1.5rem;
   width: 320px;
@@ -717,16 +717,16 @@ onMounted(loadTeams);
 
 .modal h4 {
   margin: 0 0 1rem 0;
-  color: #f0f0f5;
+  color: var(--text-primary);
   font-size: 1rem;
 }
 
 .modal-input,
 .modal-select {
   width: 100%;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #f0f0f5;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  color: var(--text-primary);
   padding: 0.6rem 0.75rem;
   border-radius: 8px;
   font-size: 0.9rem;
@@ -736,7 +736,7 @@ onMounted(loadTeams);
 
 .modal-input:focus,
 .modal-select:focus {
-  border-color: rgba(0, 229, 204, 0.4);
+  border-color: var(--border-focus);
 }
 
 .modal-field {
@@ -746,7 +746,7 @@ onMounted(loadTeams);
 .modal-field label {
   display: block;
   font-size: 0.8rem;
-  color: rgba(240, 240, 245, 0.5);
+  color: var(--text-secondary);
   margin-bottom: 0.3rem;
 }
 

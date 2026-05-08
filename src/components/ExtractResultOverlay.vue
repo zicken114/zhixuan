@@ -41,20 +41,20 @@ const emit = defineEmits<{
   align-items: center;
   justify-content: center;
   z-index: 50;
-  background: rgba(7, 7, 13, 0.75);
+  background: var(--bg-overlay);
   backdrop-filter: blur(6px);
 }
 
 .result-box {
-  background: rgba(13, 13, 20, 0.98);
+  background: var(--bg-elevated);
   backdrop-filter: blur(20px);
-  border: 1px solid rgba(0, 229, 204, 0.2);
+  border: 1px solid var(--accent-border);
   border-radius: 18px;
   max-width: 720px;
   width: 88%;
   max-height: 82vh;
   overflow: hidden;
-  box-shadow: 0 12px 50px rgba(0, 0, 0, 0.5), 0 0 40px rgba(0, 229, 204, 0.08);
+  box-shadow: var(--shadow-xl);
 }
 
 .result-header {
@@ -62,20 +62,20 @@ const emit = defineEmits<{
   align-items: center;
   gap: 10px;
   padding: 18px 22px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  color: rgba(240, 240, 245, 0.9);
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-primary);
   font-size: 14px;
   font-weight: 500;
-  background: rgba(0, 229, 204, 0.03);
+  background: var(--accent-subtle);
 }
 
 .result-close {
   margin-left: auto;
   padding: 6px 14px;
-  background: rgba(0, 229, 204, 0.15);
-  border: 1px solid rgba(0, 229, 204, 0.25);
+  background: var(--accent-subtle);
+  border: 1px solid var(--accent-border);
   border-radius: 8px;
-  color: #00e5cc;
+  color: var(--accent);
   cursor: pointer;
   font-size: 12px;
   font-weight: 500;
@@ -83,8 +83,8 @@ const emit = defineEmits<{
 }
 
 .result-close:hover {
-  background: rgba(0, 229, 204, 0.25);
-  border-color: rgba(0, 229, 204, 0.4);
+  background: var(--accent-border);
+  border-color: var(--accent);
 }
 
 .result-content {
@@ -96,24 +96,24 @@ const emit = defineEmits<{
 .result-content pre {
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   font-size: 13px;
-  color: #e2e8f0;
+  color: var(--text-primary);
   white-space: pre-wrap;
   word-break: break-all;
   line-height: 1.65;
   margin: 0;
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--bg-surface);
   padding: 16px;
   border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle);
 }
 
 .result-footer {
   padding: 14px 22px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  color: rgba(240, 240, 245, 0.45);
+  border-top: 1px solid var(--border-subtle);
+  color: var(--text-muted);
   font-size: 12px;
   text-align: center;
-  background: rgba(0, 229, 204, 0.05);
+  background: var(--accent-subtle);
   letter-spacing: 0.02em;
 }
 </style>

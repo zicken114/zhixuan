@@ -172,11 +172,10 @@ const saveToReadingNotes = async () => {
 .result-window {
   width: 100%;
   height: 100%;
-  background: rgba(13, 13, 20, 0.98);
-  backdrop-filter: blur(20px);
+  background: var(--bg-base);
   display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
+  color: var(--text-primary);
 }
 
 .processing-state {
@@ -191,72 +190,71 @@ const saveToReadingNotes = async () => {
   width: 80%;
   max-width: 320px;
   text-align: center;
+  margin: auto;
 }
 
 .progress-icon {
   font-size: 2.5rem;
-  margin-bottom: 16px;
+  margin-bottom: var(--space-md);
+  color: var(--accent);
 }
 
 .progress-label {
-  color: rgba(240, 240, 245, 0.7);
-  font-size: 14px;
-  margin-bottom: 14px;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin-bottom: var(--space-md);
 }
 
 .progress-bar-track {
   width: 100%;
-  height: 6px;
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 3px;
+  height: 4px;
+  background: var(--border-subtle);
+  border-radius: 2px;
   overflow: hidden;
-  margin-bottom: 10px;
 }
 
 .progress-bar-fill {
   height: 100%;
-  background: linear-gradient(90deg, #00e5cc 0%, #00b8a3 100%);
-  border-radius: 3px;
-  transition: width 0.15s ease;
-  box-shadow: 0 0 10px rgba(0, 229, 204, 0.4);
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.3s ease;
 }
 
 .progress-percent {
-  color: #00e5cc;
-  font-size: 12px;
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
   font-weight: 600;
-  font-family: 'JetBrains Mono', monospace;
-  margin-bottom: 14px;
+  margin-top: var(--space-sm);
 }
 
 .cancel-btn {
-  margin-top: 12px;
-  padding: 7px 18px;
-  background: rgba(239, 68, 68, 0.15);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: 8px;
-  color: #ef4444;
+  margin-top: var(--space-lg);
+  padding: var(--space-xs) var(--space-lg);
+  background: var(--error-bg);
+  border: 1px solid rgba(234, 67, 53, 0.2);
+  color: var(--error);
+  border-radius: var(--radius-sm);
+  font-size: 0.8125rem;
   cursor: pointer;
-  font-size: 12px;
-  font-weight: 500;
-  transition: all 0.15s ease;
+  transition: all var(--transition-fast);
 }
 
 .cancel-btn:hover {
-  background: rgba(239, 68, 68, 0.25);
-  border-color: rgba(239, 68, 68, 0.5);
+  background: var(--error-bg);
 }
 
 .streaming-preview {
-  margin-top: 16px;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 12px;
-  color: rgba(240, 240, 245, 0.5);
-  background: rgba(0, 0, 0, 0.2);
-  padding: 10px;
-  border-radius: 8px;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  background: var(--bg-surface);
+  padding: var(--space-sm);
+  border-radius: var(--radius-sm);
   max-height: 60px;
   overflow: hidden;
+  margin-top: var(--space-md);
+  border: 1px solid var(--border-subtle);
   text-align: left;
   white-space: pre-wrap;
   word-break: break-all;
@@ -271,89 +269,89 @@ const saveToReadingNotes = async () => {
 
 .result-header {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 16px 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(0, 229, 204, 0.03);
-  color: rgba(240, 240, 245, 0.9);
-  font-size: 14px;
-  font-weight: 500;
+  gap: var(--space-sm);
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--accent-subtle);
+  color: var(--accent-text);
+  font-weight: 600;
+  font-size: 0.875rem;
 }
 
 .result-icon { font-size: 18px; }
 
 .result-content {
   flex: 1;
-  padding: 16px 20px;
+  padding: var(--space-md) var(--space-lg);
   overflow-y: auto;
 }
 
 .result-content pre {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 13px;
-  color: #e2e8f0;
+  color: var(--text-primary);
+  background: var(--bg-surface);
+  padding: var(--space-md);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  overflow: auto;
   white-space: pre-wrap;
   word-break: break-all;
   line-height: 1.6;
   margin: 0;
-  background: rgba(0, 0, 0, 0.2);
-  padding: 14px;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.04);
 }
 
 .result-footer {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  padding: 12px 20px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  color: rgba(240, 240, 245, 0.45);
-  font-size: 12px;
-  background: rgba(0, 229, 204, 0.05);
-}
-
-.close-btn {
-  padding: 5px 14px;
-  background: rgba(0, 229, 204, 0.15);
-  border: 1px solid rgba(0, 229, 204, 0.25);
-  border-radius: 8px;
-  color: #00e5cc;
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.close-btn:hover {
-  background: rgba(0, 229, 204, 0.25);
+  align-items: center;
+  padding: var(--space-sm) var(--space-lg);
+  border-top: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  background: var(--bg-surface);
 }
 
 .result-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
 }
 
 .note-btn {
-  padding: 5px 14px;
-  background: rgba(61, 116, 231, 0.15);
-  border: 1px solid rgba(61, 116, 231, 0.25);
-  border-radius: 8px;
-  color: #3d74e7;
+  background: var(--info-bg);
+  border: 1px solid rgba(95, 99, 104, 0.15);
+  color: var(--info);
+  border-radius: var(--radius-sm);
+  padding: var(--space-xs) var(--space-sm);
+  font-size: 0.75rem;
   cursor: pointer;
-  font-size: 12px;
-  font-weight: 500;
-  transition: all 0.15s ease;
+  transition: all var(--transition-fast);
 }
 
 .note-btn:hover {
-  background: rgba(61, 116, 231, 0.25);
+  background: var(--info-bg);
 }
 
 .note-btn.saved {
-  background: rgba(34, 197, 94, 0.15);
-  border-color: rgba(34, 197, 94, 0.3);
-  color: #22c55e;
+  background: var(--success-bg);
+  border-color: rgba(52, 168, 83, 0.2);
+  color: var(--success);
+}
+
+.close-btn {
+  background: transparent;
+  border: 1px solid var(--border-light);
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  padding: var(--space-xs) var(--space-sm);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.close-btn:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-secondary);
 }
 </style>

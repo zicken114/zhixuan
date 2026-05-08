@@ -472,11 +472,11 @@ const maxActivityCount = computed(() => {
 .dashboard-panel {
   width: 100%;
   height: 100%;
-  background: rgba(7, 7, 13, 0.96);
+  background: var(--bg-base);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border-left: 1px solid rgba(255, 255, 255, 0.06);
+  border-left: 1px solid var(--border-subtle);
 }
 
 .sidebar-header {
@@ -484,8 +484,8 @@ const maxActivityCount = computed(() => {
   align-items: center;
   justify-content: space-between;
   padding: 0.875rem 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(13, 13, 20, 0.5);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
   flex-shrink: 0;
 }
 
@@ -493,13 +493,13 @@ const maxActivityCount = computed(() => {
   font-family: 'Syne', sans-serif;
   font-size: 0.9rem;
   font-weight: 600;
-  color: #f0f0f5;
+  color: var(--text-primary);
 }
 
 .close-btn {
   background: none;
   border: none;
-  color: rgba(240, 240, 245, 0.4);
+  color: var(--text-muted);
   font-size: 1.25rem;
   cursor: pointer;
   padding: 0;
@@ -513,37 +513,37 @@ const maxActivityCount = computed(() => {
 }
 
 .close-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(240, 240, 245, 0.8);
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
 }
 
 .time-range-bar {
   display: flex;
   gap: 0.25rem;
   padding: 0.5rem 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
 }
 
 .range-btn {
   padding: 0.3rem 0.75rem;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
   border-radius: 6px;
-  color: rgba(240, 240, 245, 0.5);
+  color: var(--text-secondary);
   font-size: 0.75rem;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .range-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--bg-card-hover);
 }
 
 .range-btn.active {
-  background: rgba(0, 229, 204, 0.15);
-  border-color: rgba(0, 229, 204, 0.3);
-  color: #00e5cc;
+  background: var(--accent-subtle);
+  border-color: var(--accent-border);
+  color: var(--accent);
 }
 
 .project-filter-bar {
@@ -551,41 +551,41 @@ const maxActivityCount = computed(() => {
   align-items: center;
   gap: 0.4rem;
   padding: 0.4rem 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
 }
 
 .project-filter-bar label {
   font-size: 0.75rem;
-  color: rgba(240, 240, 245, 0.5);
+  color: var(--text-secondary);
 }
 
 .project-select {
   flex: 1;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
   border-radius: 6px;
   padding: 0.3rem 0.5rem;
-  color: rgba(240, 240, 245, 0.7);
+  color: var(--text-secondary);
   font-size: 0.75rem;
   cursor: pointer;
   outline: none;
 }
 
 .project-select:focus {
-  border-color: rgba(0, 229, 204, 0.3);
+  border-color: var(--accent-border);
 }
 
 .loading-state,
 .error-state {
   text-align: center;
   padding: 3rem 1rem;
-  color: rgba(240, 240, 245, 0.4);
+  color: var(--text-muted);
   font-size: 0.85rem;
 }
 
 .error-state {
-  color: #ef4444;
+  color: var(--error);
 }
 
 .dashboard-content {
@@ -603,8 +603,8 @@ const maxActivityCount = computed(() => {
 }
 
 .summary-card {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
   border-radius: 10px;
   padding: 0.75rem;
   text-align: center;
@@ -618,20 +618,20 @@ const maxActivityCount = computed(() => {
 .card-value {
   font-size: 1.1rem;
   font-weight: 700;
-  color: #f0f0f5;
+  color: var(--text-primary);
   font-family: 'JetBrains Mono', monospace;
 }
 
 .card-label {
   font-size: 0.7rem;
-  color: rgba(240, 240, 245, 0.4);
+  color: var(--text-muted);
   margin-top: 0.15rem;
 }
 
 /* Chart Sections */
 .chart-section {
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.04);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
   border-radius: 10px;
   padding: 0.75rem;
   margin-bottom: 0.75rem;
@@ -646,13 +646,13 @@ const maxActivityCount = computed(() => {
   margin: 0 0 0.5rem;
   font-size: 0.78rem;
   font-weight: 600;
-  color: rgba(240, 240, 245, 0.7);
+  color: var(--text-secondary);
 }
 
 .empty-chart {
   text-align: center;
   padding: 1.5rem;
-  color: rgba(240, 240, 245, 0.25);
+  color: var(--text-dim);
   font-size: 0.75rem;
 }
 
@@ -678,7 +678,7 @@ const maxActivityCount = computed(() => {
 
 .trend-bar {
   width: 100%;
-  background: linear-gradient(to top, rgba(0, 229, 204, 0.4), rgba(0, 229, 204, 0.15));
+  background: linear-gradient(to top, var(--accent-border), var(--accent-subtle));
   border-radius: 2px 2px 0 0;
   min-height: 2px;
   transition: height 0.3s ease;
@@ -688,7 +688,7 @@ const maxActivityCount = computed(() => {
   position: absolute;
   bottom: -1.1rem;
   font-size: 0.55rem;
-  color: rgba(240, 240, 245, 0.3);
+  color: var(--text-muted);
   white-space: nowrap;
   transform: rotate(-30deg);
   transform-origin: top left;
@@ -704,7 +704,7 @@ const maxActivityCount = computed(() => {
 .heatmap-cell {
   aspect-ratio: 1;
   border-radius: 2px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--bg-surface);
   transition: transform 0.15s ease;
 }
 
@@ -712,10 +712,10 @@ const maxActivityCount = computed(() => {
   transform: scale(1.2);
 }
 
-.intensity-1 { background: rgba(0, 229, 204, 0.2); }
-.intensity-2 { background: rgba(0, 229, 204, 0.4); }
-.intensity-3 { background: rgba(0, 229, 204, 0.6); }
-.intensity-4 { background: rgba(0, 229, 204, 0.85); }
+.intensity-1 { background: var(--accent-border); }
+.intensity-2 { background: rgba(26, 115, 232, 0.4); }
+.intensity-3 { background: rgba(26, 115, 232, 0.6); }
+.intensity-4 { background: rgba(26, 115, 232, 0.85); }
 
 .heatmap-legend {
   display: flex;
@@ -723,7 +723,7 @@ const maxActivityCount = computed(() => {
   gap: 0.3rem;
   margin-top: 0.5rem;
   font-size: 0.65rem;
-  color: rgba(240, 240, 245, 0.35);
+  color: var(--text-dim);
 }
 
 .legend-cell {
@@ -779,7 +779,7 @@ const maxActivityCount = computed(() => {
 }
 
 .legend-name {
-  color: rgba(240, 240, 245, 0.6);
+  color: var(--text-secondary);
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -787,7 +787,7 @@ const maxActivityCount = computed(() => {
 }
 
 .legend-pct {
-  color: rgba(240, 240, 245, 0.35);
+  color: var(--text-dim);
   font-family: 'JetBrains Mono', monospace;
 }
 
@@ -806,7 +806,7 @@ const maxActivityCount = computed(() => {
 
 .bar-label {
   font-size: 0.7rem;
-  color: rgba(240, 240, 245, 0.55);
+  color: var(--text-secondary);
   width: 70px;
   flex-shrink: 0;
   overflow: hidden;
@@ -817,21 +817,21 @@ const maxActivityCount = computed(() => {
 .bar-track {
   flex: 1;
   height: 6px;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--bg-surface);
   border-radius: 3px;
   overflow: hidden;
 }
 
 .bar-fill {
   height: 100%;
-  background: linear-gradient(90deg, rgba(61, 116, 231, 0.6), rgba(61, 116, 231, 0.9));
+  background: linear-gradient(90deg, rgba(26, 115, 232, 0.6), rgba(26, 115, 232, 0.9));
   border-radius: 3px;
   transition: width 0.5s ease;
 }
 
 .bar-value {
   font-size: 0.7rem;
-  color: rgba(240, 240, 245, 0.4);
+  color: var(--text-muted);
   width: 24px;
   text-align: right;
   font-family: 'JetBrains Mono', monospace;
@@ -852,7 +852,7 @@ const maxActivityCount = computed(() => {
 
 .model-name {
   font-size: 0.72rem;
-  color: rgba(240, 240, 245, 0.6);
+  color: var(--text-secondary);
   width: 90px;
   flex-shrink: 0;
   overflow: hidden;
@@ -863,14 +863,14 @@ const maxActivityCount = computed(() => {
 .model-bar-track {
   flex: 1;
   height: 6px;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--bg-surface);
   border-radius: 3px;
   overflow: hidden;
 }
 
 .model-bar-fill {
   height: 100%;
-  background: linear-gradient(90deg, rgba(0, 229, 204, 0.5), rgba(0, 229, 204, 0.8));
+  background: linear-gradient(90deg, rgba(26, 115, 232, 0.5), rgba(26, 115, 232, 0.8));
   border-radius: 3px;
   transition: width 0.5s ease;
 }
@@ -879,13 +879,13 @@ const maxActivityCount = computed(() => {
   display: flex;
   gap: 0.4rem;
   font-size: 0.65rem;
-  color: rgba(240, 240, 245, 0.35);
+  color: var(--text-dim);
   width: 70px;
   justify-content: flex-end;
 }
 
 .model-cost {
-  color: rgba(0, 229, 204, 0.6);
+  color: var(--accent-text);
   font-family: 'JetBrains Mono', monospace;
 }
 
@@ -901,18 +901,18 @@ const maxActivityCount = computed(() => {
   align-items: center;
   gap: 0.3rem;
   padding: 0.3rem 0.6rem;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
   border-radius: 6px;
   font-size: 0.72rem;
 }
 
 .task-name {
-  color: rgba(240, 240, 245, 0.7);
+  color: var(--text-secondary);
 }
 
 .task-count {
-  color: rgba(240, 240, 245, 0.4);
+  color: var(--text-muted);
   font-family: 'JetBrains Mono', monospace;
 }
 
@@ -926,20 +926,20 @@ const maxActivityCount = computed(() => {
 .proj-stat {
   text-align: center;
   padding: 0.5rem;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--bg-surface);
   border-radius: 8px;
 }
 
 .proj-stat-value {
   font-size: 0.95rem;
   font-weight: 700;
-  color: #f0f0f5;
+  color: var(--text-primary);
   font-family: 'JetBrains Mono', monospace;
 }
 
 .proj-stat-label {
   font-size: 0.65rem;
-  color: rgba(240, 240, 245, 0.4);
+  color: var(--text-muted);
   margin-top: 0.1rem;
 }
 </style>

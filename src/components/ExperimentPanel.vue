@@ -176,11 +176,11 @@ const formatDate = (timestamp?: number): string => {
 .experiment-panel {
   width: 100%;
   height: 100%;
-  background: rgba(7, 7, 13, 0.96);
+  background: var(--bg-base);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border-left: 1px solid rgba(255, 255, 255, 0.06);
+  border-left: 1px solid var(--border-subtle);
 }
 
 .sidebar-header {
@@ -188,21 +188,21 @@ const formatDate = (timestamp?: number): string => {
   align-items: center;
   justify-content: space-between;
   padding: 0.875rem 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(13, 13, 20, 0.5);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
 }
 
 .sidebar-title {
   font-family: 'Syne', sans-serif;
   font-size: 0.9rem;
   font-weight: 600;
-  color: #f0f0f5;
+  color: var(--text-primary);
 }
 
 .close-btn {
   background: none;
   border: none;
-  color: rgba(240, 240, 245, 0.4);
+  color: var(--text-muted);
   font-size: 1.25rem;
   cursor: pointer;
   width: 28px;
@@ -215,38 +215,38 @@ const formatDate = (timestamp?: number): string => {
 }
 
 .close-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(240, 240, 245, 0.8);
+  background: var(--bg-card-hover);
+  color: var(--text-secondary);
 }
 
 .search-bar {
   display: flex;
   gap: 0.4rem;
   padding: 0.6rem 0.75rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .search-bar input {
   flex: 1;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--bg-input);
+  border: 1px solid var(--border-light);
   border-radius: 8px;
   padding: 0.45rem 0.65rem;
-  color: #f0f0f5;
+  color: var(--text-primary);
   font-size: 0.8rem;
   outline: none;
 }
 
 .search-bar input:focus {
-  border-color: #00d1bb;
+  border-color: var(--accent);
 }
 
 .quick-record-btn {
   padding: 0.4rem 0.7rem;
-  background: rgba(0, 229, 204, 0.12);
-  border: 1px solid rgba(0, 229, 204, 0.25);
+  background: var(--accent-subtle);
+  border: 1px solid var(--accent-border);
   border-radius: 8px;
-  color: #00e5cc;
+  color: var(--accent);
   font-size: 0.75rem;
   font-weight: 600;
   cursor: pointer;
@@ -255,13 +255,13 @@ const formatDate = (timestamp?: number): string => {
 }
 
 .quick-record-btn:hover {
-  background: rgba(0, 229, 204, 0.2);
+  background: var(--accent-border);
 }
 
 .empty-state {
   text-align: center;
   padding: 2.5rem 1rem;
-  color: rgba(240, 240, 245, 0.3);
+  color: var(--text-muted);
   font-size: 0.82rem;
 }
 
@@ -269,7 +269,7 @@ const formatDate = (timestamp?: number): string => {
   display: block;
   margin-top: 0.5rem;
   font-size: 0.75rem;
-  color: rgba(240, 240, 245, 0.2);
+  color: var(--text-dim);
 }
 
 .snapshot-list {
@@ -279,8 +279,8 @@ const formatDate = (timestamp?: number): string => {
 }
 
 .snapshot-card {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
   border-radius: 10px;
   padding: 0.65rem;
   margin-bottom: 0.4rem;
@@ -289,12 +289,12 @@ const formatDate = (timestamp?: number): string => {
 }
 
 .snapshot-card:hover {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.1);
+  background: var(--bg-card-hover);
+  border-color: var(--border-light);
 }
 
 .snapshot-card.expanded {
-  border-color: rgba(0, 229, 204, 0.2);
+  border-color: var(--accent-border);
 }
 
 .snapshot-header-row {
@@ -316,7 +316,7 @@ const formatDate = (timestamp?: number): string => {
 .snapshot-title {
   font-size: 0.82rem;
   font-weight: 600;
-  color: rgba(240, 240, 245, 0.8);
+  color: var(--text-primary);
   line-height: 1.3;
   margin-bottom: 0.15rem;
   overflow: hidden;
@@ -328,11 +328,11 @@ const formatDate = (timestamp?: number): string => {
   display: flex;
   gap: 0.4rem;
   font-size: 0.68rem;
-  color: rgba(240, 240, 245, 0.35);
+  color: var(--text-muted);
 }
 
 .snapshot-type-label {
-  color: rgba(0, 229, 204, 0.5);
+  color: var(--accent);
 }
 
 .delete-btn {
@@ -356,7 +356,7 @@ const formatDate = (timestamp?: number): string => {
 .snapshot-detail {
   margin-top: 0.6rem;
   padding-top: 0.6rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  border-top: 1px solid var(--border-subtle);
 }
 
 .detail-section {
@@ -365,14 +365,14 @@ const formatDate = (timestamp?: number): string => {
 
 .detail-label {
   font-size: 0.68rem;
-  color: rgba(240, 240, 245, 0.4);
+  color: var(--text-muted);
   font-weight: 600;
   margin-bottom: 0.25rem;
 }
 
 .detail-text {
   font-size: 0.78rem;
-  color: rgba(240, 240, 245, 0.6);
+  color: var(--text-secondary);
   line-height: 1.4;
 }
 
@@ -383,7 +383,7 @@ const formatDate = (timestamp?: number): string => {
 }
 
 .param-item {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--bg-surface);
   border-radius: 5px;
   padding: 0.3rem 0.5rem;
   display: flex;
@@ -393,20 +393,20 @@ const formatDate = (timestamp?: number): string => {
 
 .param-key {
   font-size: 0.65rem;
-  color: rgba(240, 240, 245, 0.35);
+  color: var(--text-muted);
 }
 
 .param-val {
   font-size: 0.75rem;
-  color: rgba(240, 240, 245, 0.7);
+  color: var(--text-secondary);
   font-family: 'JetBrains Mono', monospace;
 }
 
 .screenshot-placeholder {
   font-size: 0.75rem;
-  color: rgba(240, 240, 245, 0.35);
+  color: var(--text-muted);
   padding: 0.5rem;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--bg-surface);
   border-radius: 6px;
 }
 </style>

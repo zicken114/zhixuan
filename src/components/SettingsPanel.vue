@@ -646,9 +646,7 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate' | 'pri
 .settings-panel {
   width: 100%;
   height: 100%;
-  background:
-    radial-gradient(circle at top right, rgba(0, 229, 204, 0.08), transparent 32%),
-    linear-gradient(180deg, #fbfcfe 0%, #f4f7fb 100%);
+  background: var(--bg-base);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -664,26 +662,26 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate' | 'pri
 
 .header {
   padding: 1.25rem 1.5rem;
-  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  border-bottom: 1px solid var(--border-light);
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   gap: 1rem;
-  background: rgba(255, 255, 255, 0.85);
+  background: var(--bg-card);
   backdrop-filter: blur(10px);
 }
 
 .header h2 {
   font-size: 1.15rem;
   font-weight: 700;
-  color: #111827;
+  color: var(--text-primary);
   margin: 0;
   font-family: 'Syne', sans-serif;
 }
 
 .header-subtitle {
   margin: 0.35rem 0 0;
-  color: #6b7280;
+  color: var(--text-secondary);
   font-size: 0.82rem;
   line-height: 1.5;
 }
@@ -692,7 +690,7 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate' | 'pri
   flex-shrink: 0;
   background: none;
   border: none;
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 1.2rem;
   cursor: pointer;
   width: 34px;
@@ -702,8 +700,8 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate' | 'pri
 }
 
 .close-btn:hover {
-  background: rgba(239, 68, 68, 0.08);
-  color: #ef4444;
+  background: rgba(234, 67, 53, 0.08);
+  color: var(--error);
 }
 
 .content {
@@ -714,10 +712,10 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate' | 'pri
 
 .card {
   margin-bottom: 1rem;
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid rgba(15, 23, 42, 0.06);
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
   border-radius: 18px;
-  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.05);
+  box-shadow: var(--shadow-md);
   overflow: hidden;
 }
 
@@ -738,7 +736,7 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate' | 'pri
   margin: 0;
   font-size: 0.8rem;
   font-weight: 700;
-  color: #00a896;
+  color: var(--accent);
   text-transform: uppercase;
   letter-spacing: 0.12em;
   font-family: 'Syne', sans-serif;
@@ -746,14 +744,14 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate' | 'pri
 
 .card-subtitle {
   margin: 0.35rem 0 0;
-  color: #6b7280;
+  color: var(--text-secondary);
   font-size: 0.82rem;
   line-height: 1.5;
 }
 
 .card-toggle {
   flex-shrink: 0;
-  color: #3d74e7;
+  color: var(--accent);
   font-size: 0.8rem;
   font-weight: 700;
 }
@@ -767,7 +765,7 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate' | 'pri
 }
 
 .provider-label {
-  color: #374151;
+  color: var(--text-secondary);
   font-weight: 600;
   margin-bottom: 0.6rem;
   font-size: 0.8rem;
@@ -784,8 +782,8 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate' | 'pri
   border: none;
   border-radius: 999px;
   padding: 0.75rem 0.95rem;
-  background: #eef2f7;
-  color: #6b7280;
+  background: var(--bg-surface);
+  color: var(--text-muted);
   cursor: pointer;
   font-weight: 700;
   font-size: 0.88rem;
@@ -797,14 +795,14 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate' | 'pri
 
 .provider-chip:hover {
   transform: translateY(-1px);
-  background: #e6ebf3;
-  color: #374151;
+  background: var(--bg-card-hover);
+  color: var(--text-secondary);
 }
 
 .provider-chip.active {
-  background: linear-gradient(135deg, #4f8cff 0%, #3d74e7 100%);
-  color: #ffffff;
-  box-shadow: 0 10px 22px rgba(61, 116, 231, 0.22);
+  background: var(--accent);
+  color: var(--text-on-accent);
+  box-shadow: 0 10px 22px rgba(26, 115, 232, 0.22);
 }
 
 .form-group {
@@ -813,7 +811,7 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate' | 'pri
 
 .label {
   display: block;
-  color: #374151;
+  color: var(--text-secondary);
   font-weight: 600;
   margin-bottom: 0.45rem;
   font-size: 0.8rem;
@@ -823,11 +821,11 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate' | 'pri
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
-  background: #ffffff;
-  border: 1px solid rgba(15, 23, 42, 0.1);
+  background: var(--bg-input);
+  border: 1px solid var(--border-medium);
   border-radius: 12px;
   padding: 0.82rem 1rem;
-  color: #111827;
+  color: var(--text-primary);
   font-size: 0.9rem;
   outline: none;
   transition: all 0.2s ease;
@@ -835,20 +833,20 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate' | 'pri
 }
 
 .input:focus {
-  border-color: #00d1bb;
-  box-shadow: 0 0 0 4px rgba(0, 209, 187, 0.12);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px rgba(26, 115, 232, 0.12);
 }
 
 .shortcut-input {
-  background: #f3f4f6;
+  background: var(--bg-surface);
   cursor: not-allowed;
-  color: #6b7280;
+  color: var(--text-muted);
 }
 
 .hint {
   margin-top: 0.4rem;
   font-size: 0.75rem;
-  color: #8a94a6;
+  color: var(--text-muted);
   line-height: 1.5;
 }
 
@@ -865,29 +863,29 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate' | 'pri
   right: 0.6rem;
   top: 50%;
   transform: translateY(-50%);
-  background: rgba(15, 23, 42, 0.06);
+  background: var(--bg-surface);
   border: none;
   border-radius: 999px;
   cursor: pointer;
   font-size: 0.72rem;
   font-weight: 700;
-  color: #4b5563;
+  color: var(--text-secondary);
   padding: 0.42rem 0.72rem;
 }
 
 .save-btn {
   width: 100%;
-  background: linear-gradient(135deg, #00e5cc 0%, #00b8a3 100%);
+  background: var(--accent);
   border: none;
   border-radius: 12px;
   padding: 0.95rem;
-  color: #06211f;
+  color: var(--text-on-accent);
   font-weight: 700;
   cursor: pointer;
   transition: all 0.2s ease;
   font-size: 0.9rem;
   font-family: 'Syne', sans-serif;
-  box-shadow: 0 8px 20px rgba(0, 184, 163, 0.22);
+  box-shadow: 0 8px 20px rgba(26, 115, 232, 0.22);
 }
 
 .save-btn:hover:not(:disabled) {
@@ -901,17 +899,17 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate' | 'pri
 }
 
 .save-btn.saved {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  background: var(--success);
 }
 
 .reset-btn {
   width: 100%;
   margin-top: 0.7rem;
   background: transparent;
-  border: 1px solid rgba(15, 23, 42, 0.12);
+  border: 1px solid var(--border-medium);
   border-radius: 12px;
   padding: 0.9rem;
-  color: #6b7280;
+  color: var(--text-muted);
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -920,8 +918,8 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate' | 'pri
 }
 
 .reset-btn:hover {
-  background: rgba(15, 23, 42, 0.03);
-  color: #374151;
+  background: var(--bg-card-hover);
+  color: var(--text-secondary);
 }
 
 .select-input {
@@ -945,7 +943,7 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate' | 'pri
   width: 48px;
   height: 26px;
   border-radius: 999px;
-  background: #d1d5db;
+  background: var(--border-medium);
   border: none;
   cursor: pointer;
   position: relative;
@@ -955,7 +953,7 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate' | 'pri
 }
 
 .toggle-switch.active {
-  background: linear-gradient(135deg, #00e5cc 0%, #00b8a3 100%);
+  background: var(--accent);
 }
 
 .toggle-knob {
@@ -963,7 +961,7 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate' | 'pri
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: #ffffff;
+  background: var(--bg-base);
   position: absolute;
   top: 3px;
   left: 3px;
@@ -981,7 +979,7 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate' | 'pri
 }
 
 .routing-label {
-  color: #374151;
+  color: var(--text-secondary);
   font-weight: 600;
   margin-bottom: 0.6rem;
   font-size: 0.8rem;
@@ -994,8 +992,8 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate' | 'pri
 }
 
 .profile-item {
-  background: rgba(15, 23, 42, 0.03);
-  border: 1px solid rgba(15, 23, 42, 0.06);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
   border-radius: 10px;
   padding: 0.7rem 0.85rem;
 }
@@ -1010,13 +1008,13 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate' | 'pri
 .profile-name {
   font-weight: 700;
   font-size: 0.85rem;
-  color: #111827;
+  color: var(--text-primary);
 }
 
 .profile-provider {
   font-size: 0.75rem;
-  color: #6b7280;
-  background: rgba(15, 23, 42, 0.06);
+  color: var(--text-muted);
+  background: var(--bg-card-hover);
   padding: 0.1rem 0.4rem;
   border-radius: 4px;
 }
@@ -1024,12 +1022,12 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate' | 'pri
 .profile-status {
   font-size: 0.7rem;
   font-weight: 600;
-  color: #10b981;
+  color: var(--success);
   margin-left: auto;
 }
 
 .profile-status.disabled {
-  color: #9ca3af;
+  color: var(--text-muted);
 }
 
 .profile-meta {
@@ -1040,8 +1038,8 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate' | 'pri
 
 .meta-tag {
   font-size: 0.72rem;
-  color: #6b7280;
-  background: rgba(15, 23, 42, 0.04);
+  color: var(--text-muted);
+  background: var(--bg-card-hover);
   padding: 0.15rem 0.45rem;
   border-radius: 4px;
   font-family: 'JetBrains Mono', monospace;
@@ -1060,34 +1058,34 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate' | 'pri
   font-size: 0.82rem;
   padding: 0.4rem 0.5rem;
   border-radius: 6px;
-  background: rgba(15, 23, 42, 0.02);
+  background: var(--bg-surface);
 }
 
 .rule-task {
   font-weight: 600;
-  color: #374151;
+  color: var(--text-secondary);
   min-width: 100px;
   text-transform: capitalize;
 }
 
 .rule-arrow {
-  color: #9ca3af;
+  color: var(--text-muted);
 }
 
 .rule-model {
-  color: #3d74e7;
+  color: var(--accent);
   font-weight: 600;
 }
 
 .rule-fallback {
   font-size: 0.75rem;
-  color: #9ca3af;
+  color: var(--text-muted);
 }
 
 .rule-timeout {
   margin-left: auto;
   font-size: 0.72rem;
-  color: #9ca3af;
+  color: var(--text-muted);
   font-family: 'JetBrains Mono', monospace;
 }
 
@@ -1098,17 +1096,17 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate' | 'pri
   height: 8px;
   border-radius: 50%;
   margin-right: 6px;
-  background: #9ca3af;
+  background: var(--text-muted);
 }
 
 .status-dot.connected {
-  background: #10b981;
-  box-shadow: 0 0 6px rgba(16, 185, 129, 0.4);
+  background: var(--success);
+  box-shadow: 0 0 6px rgba(52, 168, 83, 0.4);
 }
 
 .status-dot.disconnected {
-  background: #ef4444;
-  box-shadow: 0 0 6px rgba(239, 68, 68, 0.3);
+  background: var(--error);
+  box-shadow: 0 0 6px rgba(234, 67, 53, 0.3);
 }
 
 .test-btn {

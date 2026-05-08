@@ -266,8 +266,8 @@ onMounted(() => {
   left: 0;
   width: 320px;
   height: 100vh;
-  background: #0d0d14;
-  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--bg-base);
+  border-right: 1px solid var(--border-subtle);
   display: flex;
   flex-direction: column;
   z-index: 100;
@@ -278,21 +278,21 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 1rem 1.25rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .panel-header h3 {
   font-family: 'Syne', sans-serif;
   font-size: 1rem;
   font-weight: 600;
-  color: #f0f0f5;
+  color: var(--text-primary);
   margin: 0;
 }
 
 .close-btn {
   background: none;
   border: none;
-  color: rgba(240, 240, 245, 0.5);
+  color: var(--text-secondary);
   font-size: 1.5rem;
   cursor: pointer;
   padding: 0;
@@ -306,22 +306,22 @@ onMounted(() => {
 }
 
 .close-btn:hover {
-  background: rgba(239, 68, 68, 0.15);
-  color: #ef4444;
+  background: rgba(234, 67, 53, 0.15);
+  color: var(--error);
 }
 
 .tab-bar {
   display: flex;
   gap: 0.25rem;
   padding: 0.75rem 1.25rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .tab-btn {
   flex: 1;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: rgba(240, 240, 245, 0.6);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  color: var(--text-secondary);
   padding: 0.5rem 0.75rem;
   border-radius: 6px;
   cursor: pointer;
@@ -330,9 +330,9 @@ onMounted(() => {
 }
 
 .tab-btn.active {
-  background: rgba(0, 229, 204, 0.1);
-  border-color: rgba(0, 229, 204, 0.3);
-  color: #00e5cc;
+  background: var(--accent-subtle);
+  border-color: var(--accent-border);
+  color: var(--accent);
 }
 
 .tab-content {
@@ -344,7 +344,7 @@ onMounted(() => {
 .empty-state {
   text-align: center;
   padding: 3rem 1rem;
-  color: rgba(240, 240, 245, 0.4);
+  color: var(--text-muted);
 }
 
 .empty-state p {
@@ -354,7 +354,7 @@ onMounted(() => {
 .action-link {
   background: none;
   border: none;
-  color: #00e5cc;
+  color: var(--accent);
   cursor: pointer;
   font-size: 0.9rem;
   text-decoration: underline;
@@ -367,8 +367,8 @@ onMounted(() => {
 }
 
 .plugin-card {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
   border-radius: 10px;
   padding: 1rem;
   transition: all 0.2s ease;
@@ -388,18 +388,18 @@ onMounted(() => {
 .plugin-info h4 {
   font-size: 0.95rem;
   font-weight: 600;
-  color: #f0f0f5;
+  color: var(--text-primary);
   margin: 0 0 0.25rem 0;
 }
 
 .version {
   font-size: 0.75rem;
-  color: rgba(240, 240, 245, 0.4);
+  color: var(--text-muted);
 }
 
 .plugin-desc {
   font-size: 0.85rem;
-  color: rgba(240, 240, 245, 0.6);
+  color: var(--text-secondary);
   margin: 0 0 0.75rem 0;
   line-height: 1.5;
 }
@@ -415,13 +415,13 @@ onMounted(() => {
 
 .author {
   font-size: 0.8rem;
-  color: rgba(240, 240, 245, 0.4);
+  color: var(--text-muted);
 }
 
 .category-badge {
   font-size: 0.75rem;
-  background: rgba(0, 229, 204, 0.1);
-  color: #00e5cc;
+  background: var(--accent-subtle);
+  color: var(--accent);
   padding: 0.2rem 0.5rem;
   border-radius: 4px;
 }
@@ -435,8 +435,8 @@ onMounted(() => {
 
 .perm-tag {
   font-size: 0.75rem;
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(240, 240, 245, 0.5);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
   padding: 0.2rem 0.5rem;
   border-radius: 4px;
 }
@@ -457,7 +457,7 @@ onMounted(() => {
 .slider {
   position: absolute;
   inset: 0;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--border-light);
   border-radius: 22px;
   transition: 0.2s;
 }
@@ -469,18 +469,18 @@ onMounted(() => {
   width: 16px;
   left: 3px;
   bottom: 3px;
-  background: rgba(240, 240, 245, 0.7);
+  background: var(--text-secondary);
   border-radius: 50%;
   transition: 0.2s;
 }
 
 .toggle-switch input:checked + .slider {
-  background: rgba(0, 229, 204, 0.3);
+  background: var(--accent-border);
 }
 
 .toggle-switch input:checked + .slider::before {
   transform: translateX(18px);
-  background: #00e5cc;
+  background: var(--accent);
 }
 
 .install-btn,
@@ -495,13 +495,13 @@ onMounted(() => {
 }
 
 .install-btn {
-  background: rgba(0, 229, 204, 0.1);
-  border-color: rgba(0, 229, 204, 0.3);
-  color: #00e5cc;
+  background: var(--accent-subtle);
+  border-color: var(--accent-border);
+  color: var(--accent);
 }
 
 .install-btn:hover:not(:disabled) {
-  background: rgba(0, 229, 204, 0.2);
+  background: var(--accent-border);
 }
 
 .install-btn:disabled {
@@ -510,13 +510,13 @@ onMounted(() => {
 }
 
 .uninstall-btn {
-  background: rgba(239, 68, 68, 0.1);
-  border-color: rgba(239, 68, 68, 0.2);
-  color: #ef4444;
+  background: rgba(234, 67, 53, 0.1);
+  border-color: rgba(234, 67, 53, 0.2);
+  color: var(--error);
 }
 
 .uninstall-btn:hover {
-  background: rgba(239, 68, 68, 0.2);
+  background: rgba(234, 67, 53, 0.2);
 }
 
 .rating {
@@ -527,11 +527,11 @@ onMounted(() => {
 }
 
 .stars {
-  color: #fbbf24;
+  color: var(--warning);
 }
 
 .count {
-  color: rgba(240, 240, 245, 0.4);
+  color: var(--text-muted);
 }
 
 .category-filter {
@@ -542,9 +542,9 @@ onMounted(() => {
 }
 
 .category-chip {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: rgba(240, 240, 245, 0.6);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  color: var(--text-secondary);
   padding: 0.3rem 0.75rem;
   border-radius: 20px;
   font-size: 0.8rem;
@@ -553,14 +553,14 @@ onMounted(() => {
 }
 
 .category-chip.active {
-  background: rgba(0, 229, 204, 0.1);
-  border-color: rgba(0, 229, 204, 0.3);
-  color: #00e5cc;
+  background: var(--accent-subtle);
+  border-color: var(--accent-border);
+  color: var(--accent);
 }
 
 .loading {
   text-align: center;
   padding: 2rem;
-  color: rgba(240, 240, 245, 0.4);
+  color: var(--text-muted);
 }
 </style>

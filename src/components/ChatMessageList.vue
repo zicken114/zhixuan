@@ -198,17 +198,17 @@ const handleDismissTodos = (msgIdx: number) => {
 }
 
 .user-message {
-  background: linear-gradient(135deg, rgba(0, 229, 204, 0.15) 0%, rgba(0, 229, 204, 0.08) 100%);
-  border: 1px solid rgba(0, 229, 204, 0.2);
+  background: var(--accent-subtle);
+  border: 1px solid var(--accent-border);
   margin-left: auto;
-  color: #f0f0f5;
+  color: var(--text-primary);
   border-bottom-right-radius: 4px;
 }
 
 .ai-message {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  color: #f0f0f5;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
   margin-right: auto;
   border-bottom-left-radius: 4px;
 }
@@ -221,7 +221,7 @@ const handleDismissTodos = (msgIdx: number) => {
   display: inline;
   animation: blink 0.8s ease-in-out infinite;
   margin-left: 2px;
-  color: #00e5cc;
+  color: var(--accent);
 }
 
 @keyframes blink {
@@ -242,27 +242,27 @@ const handleDismissTodos = (msgIdx: number) => {
   gap: 0.35rem;
   margin-top: 0.5rem;
   padding-top: 0.4rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  border-top: 1px solid var(--border-subtle);
   font-size: 0.65rem;
-  color: rgba(240, 240, 245, 0.35);
+  color: var(--text-muted);
   font-family: 'JetBrains Mono', monospace;
 }
 
 .badge-model {
-  color: rgba(240, 240, 245, 0.45);
+  color: var(--text-secondary);
 }
 
 .badge-sep {
-  color: rgba(240, 240, 245, 0.2);
+  color: var(--text-dim);
 }
 
 .badge-latency {
-  color: rgba(0, 229, 204, 0.5);
+  color: var(--accent);
 }
 
 .badge-fallback {
-  background: rgba(239, 68, 68, 0.12);
-  color: rgba(239, 68, 68, 0.7);
+  background: rgba(234, 67, 53, 0.12);
+  color: var(--error);
   padding: 0.05rem 0.3rem;
   border-radius: 4px;
   font-size: 0.6rem;
@@ -298,7 +298,7 @@ const handleDismissTodos = (msgIdx: number) => {
 }
 
 .empty-text {
-  color: #f0f0f5;
+  color: var(--text-primary);
   font-size: 1.1rem;
   font-weight: 500;
   margin-bottom: 0.5rem;
@@ -306,7 +306,7 @@ const handleDismissTodos = (msgIdx: number) => {
 }
 
 .empty-hint {
-  color: rgba(240, 240, 245, 0.4);
+  color: var(--text-muted);
   font-size: 0.8rem;
   letter-spacing: 0.02em;
 }
@@ -327,11 +327,11 @@ const handleDismissTodos = (msgIdx: number) => {
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
   border-radius: 4px;
   padding: 0.2rem 0.45rem;
-  color: rgba(240, 240, 245, 0.4);
+  color: var(--text-muted);
   font-size: 0.68rem;
   font-weight: 600;
   cursor: pointer;
@@ -339,17 +339,17 @@ const handleDismissTodos = (msgIdx: number) => {
 }
 
 .action-btn:hover {
-  background: rgba(0, 229, 204, 0.1);
-  border-color: rgba(0, 229, 204, 0.2);
-  color: #00e5cc;
+  background: var(--accent-subtle);
+  border-color: var(--accent-border);
+  color: var(--accent);
 }
 
 /* Todo suggestion cards */
 .todo-suggestions {
   margin-top: 0.75rem;
   padding: 0.75rem;
-  background: rgba(0, 229, 204, 0.05);
-  border: 1px solid rgba(0, 229, 204, 0.15);
+  background: var(--accent-subtle);
+  border: 1px solid var(--accent-border);
   border-radius: 10px;
 }
 
@@ -359,7 +359,7 @@ const handleDismissTodos = (msgIdx: number) => {
   gap: 0.4rem;
   margin-bottom: 0.5rem;
   font-size: 0.75rem;
-  color: rgba(0, 229, 204, 0.7);
+  color: var(--accent);
   font-weight: 600;
 }
 
@@ -373,8 +373,8 @@ const handleDismissTodos = (msgIdx: number) => {
   justify-content: space-between;
   gap: 0.5rem;
   padding: 0.5rem 0.6rem;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
   border-radius: 8px;
   margin-bottom: 0.4rem;
 }
@@ -385,7 +385,7 @@ const handleDismissTodos = (msgIdx: number) => {
 
 .todo-text {
   font-size: 0.82rem;
-  color: rgba(240, 240, 245, 0.8);
+  color: var(--text-primary);
   flex: 1;
   line-height: 1.4;
 }
@@ -407,30 +407,30 @@ const handleDismissTodos = (msgIdx: number) => {
 }
 
 .todo-btn.add {
-  background: rgba(0, 229, 204, 0.15);
-  color: #00e5cc;
+  background: var(--accent-subtle);
+  color: var(--accent);
 }
 
 .todo-btn.add:hover {
-  background: rgba(0, 229, 204, 0.25);
+  background: var(--accent-border);
 }
 
 .todo-btn.dismiss {
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(240, 240, 245, 0.4);
+  background: var(--bg-surface);
+  color: var(--text-muted);
 }
 
 .todo-btn.dismiss:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(240, 240, 245, 0.6);
+  background: var(--bg-card-hover);
+  color: var(--text-secondary);
 }
 
 /* KB citation panel */
 .kb-citations {
   margin-top: 0.6rem;
   padding: 0.5rem 0.6rem;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
   border-radius: 8px;
 }
 
@@ -443,7 +443,7 @@ const handleDismissTodos = (msgIdx: number) => {
   align-items: center;
   gap: 0.4rem;
   font-size: 0.75rem;
-  color: rgba(240, 240, 245, 0.5);
+  color: var(--text-secondary);
   font-weight: 500;
   list-style: none;
 }
@@ -457,7 +457,7 @@ const handleDismissTodos = (msgIdx: number) => {
 }
 
 .citations-count {
-  color: rgba(0, 229, 204, 0.6);
+  color: var(--accent);
   font-size: 0.7rem;
 }
 
@@ -473,13 +473,13 @@ const handleDismissTodos = (msgIdx: number) => {
   align-items: center;
   gap: 0.4rem;
   padding: 0.3rem 0.4rem;
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--bg-surface);
   border-radius: 6px;
   font-size: 0.72rem;
 }
 
 .citation-doc {
-  color: rgba(240, 240, 245, 0.7);
+  color: var(--text-primary);
   flex: 1;
   white-space: nowrap;
   overflow: hidden;
@@ -487,13 +487,13 @@ const handleDismissTodos = (msgIdx: number) => {
 }
 
 .citation-page {
-  color: rgba(0, 229, 204, 0.6);
+  color: var(--accent);
   font-size: 0.68rem;
   flex-shrink: 0;
 }
 
 .citation-score {
-  color: rgba(240, 240, 245, 0.3);
+  color: var(--text-muted);
   font-size: 0.65rem;
   flex-shrink: 0;
   font-family: 'JetBrains Mono', monospace;

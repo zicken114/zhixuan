@@ -128,11 +128,11 @@ const statusClass = (status: string) => {
 .literature-sidebar {
   width: 100%;
   height: 100%;
-  background: rgba(7, 7, 13, 0.96);
+  background: var(--bg-base);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border-left: 1px solid rgba(255, 255, 255, 0.06);
+  border-left: 1px solid var(--border-subtle);
 }
 
 .sidebar-header {
@@ -140,15 +140,15 @@ const statusClass = (status: string) => {
   align-items: center;
   justify-content: space-between;
   padding: 0.875rem 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(13, 13, 20, 0.5);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
 }
 
 .sidebar-title {
   font-family: 'Syne', sans-serif;
   font-size: 0.9rem;
   font-weight: 600;
-  color: #f0f0f5;
+  color: var(--text-primary);
 }
 
 .open-kb-btn {
@@ -156,22 +156,22 @@ const statusClass = (status: string) => {
   align-items: center;
   gap: 0.35rem;
   padding: 0.4rem 0.7rem;
-  background: rgba(0, 229, 204, 0.1);
-  border: 1px solid rgba(0, 229, 204, 0.2);
+  background: var(--accent-subtle);
+  border: 1px solid var(--accent-border);
   border-radius: 6px;
-  color: #00e5cc;
+  color: var(--accent);
   font-size: 0.75rem;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .open-kb-btn:hover {
-  background: rgba(0, 229, 204, 0.2);
+  background: var(--accent-border);
 }
 
 .section {
   padding: 0.75rem 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .section-header {
@@ -184,20 +184,20 @@ const statusClass = (status: string) => {
 .section-title {
   font-size: 0.75rem;
   font-weight: 600;
-  color: rgba(240, 240, 245, 0.5);
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
 
 .section-count {
   font-size: 0.7rem;
-  color: rgba(240, 240, 245, 0.3);
+  color: var(--text-muted);
   font-family: 'JetBrains Mono', monospace;
 }
 
 .empty-state {
   font-size: 0.78rem;
-  color: rgba(240, 240, 245, 0.25);
+  color: var(--text-dim);
   padding: 0.5rem 0;
   text-align: center;
 }
@@ -215,12 +215,12 @@ const statusClass = (status: string) => {
   padding: 0.4rem 0.5rem;
   border-radius: 6px;
   font-size: 0.78rem;
-  color: rgba(240, 240, 245, 0.7);
+  color: var(--text-secondary);
   transition: background 0.15s ease;
 }
 
 .doc-row:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--bg-card-hover);
 }
 
 .status-dot {
@@ -231,19 +231,19 @@ const statusClass = (status: string) => {
 }
 
 .status-completed {
-  color: #00e5cc;
+  color: var(--accent);
 }
 
 .status-indexing {
-  color: #f59e0b;
+  color: var(--warning);
 }
 
 .status-error {
-  color: #ef4444;
+  color: var(--error);
 }
 
 .status-pending {
-  color: rgba(240, 240, 245, 0.25);
+  color: var(--text-dim);
 }
 
 .doc-name {
@@ -255,14 +255,14 @@ const statusClass = (status: string) => {
 
 .doc-meta {
   font-size: 0.7rem;
-  color: rgba(240, 240, 245, 0.3);
+  color: var(--text-muted);
   flex-shrink: 0;
   font-family: 'JetBrains Mono', monospace;
 }
 
 .more-hint {
   font-size: 0.7rem;
-  color: rgba(240, 240, 245, 0.25);
+  color: var(--text-dim);
   text-align: center;
   padding: 0.25rem 0;
 }

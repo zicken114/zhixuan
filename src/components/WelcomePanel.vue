@@ -56,11 +56,8 @@ const emit = defineEmits<{
   padding: 1.5rem;
   box-sizing: border-box;
   position: relative;
-  background:
-    radial-gradient(circle at top right, rgba(0, 229, 204, 0.14), transparent 28%),
-    radial-gradient(circle at bottom left, rgba(79, 140, 255, 0.16), transparent 30%),
-    linear-gradient(180deg, rgba(10, 12, 18, 0.98) 0%, rgba(7, 7, 13, 0.98) 100%);
-  color: #f5f7fb;
+  background: var(--bg-base);
+  color: var(--text-primary);
   overflow-y: auto;
 }
 
@@ -72,16 +69,16 @@ const emit = defineEmits<{
   height: 36px;
   border: none;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(245, 247, 251, 0.82);
+  background: var(--bg-card-hover);
+  color: var(--text-secondary);
   cursor: pointer;
   font-size: 1rem;
   transition: all 0.2s ease;
 }
 
 .close-btn:hover {
-  background: rgba(239, 68, 68, 0.16);
-  color: #ffffff;
+  background: var(--error-bg);
+  color: var(--error);
 }
 
 .hero {
@@ -92,8 +89,8 @@ const emit = defineEmits<{
   display: inline-flex;
   padding: 0.35rem 0.7rem;
   border-radius: 999px;
-  background: rgba(0, 229, 204, 0.14);
-  color: #7ef5e6;
+  background: var(--accent-subtle);
+  color: var(--accent);
   font-size: 0.78rem;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -110,7 +107,7 @@ const emit = defineEmits<{
 
 .intro {
   margin: 0;
-  color: rgba(240, 240, 245, 0.72);
+  color: var(--text-secondary);
   font-size: 0.95rem;
   line-height: 1.7;
   max-width: 34rem;
@@ -123,24 +120,24 @@ const emit = defineEmits<{
 }
 
 .card {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
   border-radius: 18px;
   padding: 1.05rem;
-  box-shadow: 0 18px 38px rgba(0, 0, 0, 0.18);
+  box-shadow: var(--shadow-lg);
 }
 
 .card h3 {
   margin: 0 0 0.75rem 0;
   font-size: 0.88rem;
-  color: #ffffff;
+  color: var(--text-primary);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 .card p {
   margin: 0 0 0.6rem 0;
-  color: rgba(240, 240, 245, 0.72);
+  color: var(--text-secondary);
   line-height: 1.65;
   font-size: 0.9rem;
 }
@@ -159,13 +156,13 @@ const emit = defineEmits<{
   border: none;
   border-radius: 14px;
   padding: 0.95rem 1.1rem;
-  background: linear-gradient(135deg, #00e5cc 0%, #00b8a3 100%);
-  color: #05211d;
+  background: var(--accent);
+  color: var(--text-on-accent);
   font-size: 0.95rem;
   font-weight: 800;
   cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
-  box-shadow: 0 12px 24px rgba(0, 184, 163, 0.25);
+  box-shadow: 0 12px 24px rgba(26, 115, 232, 0.25);
 }
 
 .primary-btn:hover {
@@ -175,11 +172,11 @@ const emit = defineEmits<{
 .secondary-btn {
   width: 100%;
   margin-top: 0.7rem;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--border-light);
   border-radius: 14px;
   padding: 0.85rem 1.1rem;
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(240, 240, 245, 0.85);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
   font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
@@ -187,13 +184,13 @@ const emit = defineEmits<{
 }
 
 .secondary-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.2);
+  background: var(--bg-card-hover);
+  border-color: var(--border-medium);
 }
 
 .footer-note {
   margin: 0.8rem 0 0;
-  color: rgba(240, 240, 245, 0.48);
+  color: var(--text-muted);
   text-align: center;
   font-size: 0.8rem;
 }

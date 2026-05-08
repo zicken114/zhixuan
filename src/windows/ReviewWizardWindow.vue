@@ -505,10 +505,10 @@ const copyToClipboard = async () => {
 .review-wizard {
   width: 100%;
   height: 100%;
-  background: rgba(7, 7, 13, 0.98);
+  background: var(--bg-base);
   display: flex;
   flex-direction: column;
-  color: rgba(240, 240, 245, 0.85);
+  color: var(--text-primary);
   overflow: hidden;
 }
 
@@ -517,8 +517,8 @@ const copyToClipboard = async () => {
   justify-content: space-between;
   align-items: center;
   padding: 0.75rem 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(13, 13, 20, 0.5);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
   cursor: move;
   user-select: none;
   -webkit-app-region: drag;
@@ -532,7 +532,7 @@ const copyToClipboard = async () => {
 .close-btn {
   background: none;
   border: none;
-  color: rgba(240, 240, 245, 0.4);
+  color: var(--text-muted);
   font-size: 1.25rem;
   cursor: pointer;
   width: 28px;
@@ -546,8 +546,8 @@ const copyToClipboard = async () => {
 }
 
 .close-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(240, 240, 245, 0.8);
+  background: var(--bg-card-hover);
+  color: var(--text-secondary);
 }
 
 .step-indicator {
@@ -555,7 +555,7 @@ const copyToClipboard = async () => {
   justify-content: center;
   gap: 0.5rem;
   padding: 0.6rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .step-dot {
@@ -567,19 +567,19 @@ const copyToClipboard = async () => {
   justify-content: center;
   font-size: 0.72rem;
   font-weight: 700;
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(240, 240, 245, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--bg-surface);
+  color: var(--text-muted);
+  border: 1px solid var(--border-light);
 }
 
 .step-dot.active {
-  background: rgba(0, 229, 204, 0.15);
-  border-color: rgba(0, 229, 204, 0.3);
-  color: #00e5cc;
+  background: var(--accent-subtle);
+  border-color: var(--accent-border);
+  color: var(--accent);
 }
 
 .step-dot.current {
-  box-shadow: 0 0 8px rgba(0, 229, 204, 0.2);
+  box-shadow: 0 0 8px rgba(26, 115, 232, 0.2);
 }
 
 .wizard-content {
@@ -592,7 +592,7 @@ const copyToClipboard = async () => {
   margin: 0 0 0.75rem;
   font-size: 0.9rem;
   font-weight: 600;
-  color: #f0f0f5;
+  color: var(--text-primary);
 }
 
 .source-options,
@@ -608,24 +608,24 @@ const copyToClipboard = async () => {
   align-items: center;
   gap: 0.6rem;
   padding: 0.75rem;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
   border-radius: 10px;
   cursor: pointer;
-  color: rgba(240, 240, 245, 0.7);
+  color: var(--text-secondary);
   transition: all 0.15s ease;
   text-align: left;
 }
 
 .source-card:hover,
 .style-card:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--bg-card-hover);
 }
 
 .source-card.active,
 .style-card.active {
-  background: rgba(0, 229, 204, 0.1);
-  border-color: rgba(0, 229, 204, 0.25);
+  background: var(--accent-subtle);
+  border-color: var(--accent-border);
 }
 
 .source-icon {
@@ -644,7 +644,7 @@ const copyToClipboard = async () => {
 
 .style-desc {
   font-size: 0.72rem;
-  color: rgba(240, 240, 245, 0.4);
+  color: var(--text-muted);
 }
 
 .paper-list {
@@ -660,23 +660,23 @@ const copyToClipboard = async () => {
   align-items: center;
   gap: 0.5rem;
   padding: 0.5rem 0.6rem;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .paper-select-item:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--bg-card-hover);
 }
 
 .paper-select-item.selected {
-  border-color: rgba(0, 229, 204, 0.3);
+  border-color: var(--accent-border);
 }
 
 .paper-select-item input[type="checkbox"] {
-  accent-color: #00e5cc;
+  accent-color: var(--accent);
 }
 
 .paper-info {
@@ -687,7 +687,7 @@ const copyToClipboard = async () => {
 .paper-title {
   font-size: 0.78rem;
   font-weight: 600;
-  color: rgba(240, 240, 245, 0.8);
+  color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -695,23 +695,23 @@ const copyToClipboard = async () => {
 
 .paper-meta {
   font-size: 0.68rem;
-  color: rgba(240, 240, 245, 0.35);
+  color: var(--text-muted);
 }
 
 .selection-count {
   margin-top: 0.5rem;
   font-size: 0.78rem;
-  color: rgba(0, 229, 204, 0.6);
+  color: var(--accent);
   text-align: center;
 }
 
 .doi-input textarea {
   width: 100%;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
   border-radius: 8px;
   padding: 0.6rem;
-  color: #f0f0f5;
+  color: var(--text-primary);
   font-size: 0.82rem;
   resize: none;
   font-family: 'JetBrains Mono', monospace;
@@ -724,18 +724,18 @@ const copyToClipboard = async () => {
 .form-group label {
   display: block;
   font-size: 0.75rem;
-  color: rgba(240, 240, 245, 0.5);
+  color: var(--text-secondary);
   font-weight: 600;
   margin-bottom: 0.3rem;
 }
 
 .form-group input {
   width: 100%;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
   border-radius: 8px;
   padding: 0.5rem 0.6rem;
-  color: #f0f0f5;
+  color: var(--text-primary);
   font-size: 0.82rem;
   outline: none;
 }
@@ -749,8 +749,8 @@ const copyToClipboard = async () => {
 }
 
 .confirm-info {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
   border-radius: 10px;
   padding: 1rem;
   width: 100%;
@@ -764,15 +764,15 @@ const copyToClipboard = async () => {
 }
 
 .info-label {
-  color: rgba(240, 240, 245, 0.5);
+  color: var(--text-secondary);
 }
 
 .generate-btn {
   padding: 0.6rem 2rem;
-  background: linear-gradient(135deg, #00e5cc 0%, #00b8a3 100%);
+  background: var(--accent);
   border: none;
   border-radius: 10px;
-  color: #06211f;
+  color: var(--text-on-accent);
   font-size: 0.9rem;
   font-weight: 700;
   cursor: pointer;
@@ -789,26 +789,26 @@ const copyToClipboard = async () => {
 .progress-bar {
   width: 80%;
   height: 4px;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--bg-surface);
   border-radius: 2px;
   overflow: hidden;
 }
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #00e5cc, #3d74e7);
+  background: var(--accent);
   border-radius: 2px;
   transition: width 0.3s ease;
 }
 
 .progress-stage {
   font-size: 0.85rem;
-  color: rgba(240, 240, 245, 0.7);
+  color: var(--text-secondary);
 }
 
 .progress-detail {
   font-size: 0.72rem;
-  color: rgba(240, 240, 245, 0.35);
+  color: var(--text-muted);
   font-family: 'JetBrains Mono', monospace;
 }
 
@@ -829,10 +829,10 @@ const copyToClipboard = async () => {
 
 .copy-btn {
   padding: 0.35rem 0.7rem;
-  background: rgba(0, 229, 204, 0.1);
-  border: 1px solid rgba(0, 229, 204, 0.2);
+  background: var(--accent-subtle);
+  border: 1px solid var(--accent-border);
   border-radius: 6px;
-  color: #00e5cc;
+  color: var(--accent);
   font-size: 0.75rem;
   cursor: pointer;
 }
@@ -846,13 +846,13 @@ const copyToClipboard = async () => {
 .section h4 {
   margin: 0 0 0.4rem;
   font-size: 0.85rem;
-  color: #00e5cc;
+  color: var(--accent);
 }
 
 .section-content {
   font-size: 0.82rem;
   line-height: 1.6;
-  color: rgba(240, 240, 245, 0.7);
+  color: var(--text-secondary);
   white-space: pre-wrap;
 }
 
@@ -860,15 +860,15 @@ const copyToClipboard = async () => {
   display: flex;
   justify-content: space-between;
   padding: 0.6rem 1rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid var(--border-subtle);
 }
 
 .footer-btn {
   padding: 0.4rem 1rem;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
   border-radius: 8px;
-  color: rgba(240, 240, 245, 0.7);
+  color: var(--text-secondary);
   font-size: 0.8rem;
   cursor: pointer;
 }
@@ -879,19 +879,19 @@ const copyToClipboard = async () => {
 }
 
 .footer-btn.primary {
-  background: linear-gradient(135deg, #00e5cc 0%, #00b8a3 100%);
+  background: var(--accent);
   border: none;
-  color: #06211f;
+  color: var(--text-on-accent);
   font-weight: 700;
 }
 
 .loading {
   text-align: center;
   padding: 2rem;
-  color: rgba(240, 240, 245, 0.3);
+  color: var(--text-muted);
 }
 
 .loading.error {
-  color: #ff6b6b;
+  color: var(--error);
 }
 </style>

@@ -112,8 +112,8 @@ const eventDetail = (ev: WritingEvent): string => {
 
 <style scoped>
 .writing-history-panel {
-  background: rgba(13, 13, 20, 0.98);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border-subtle);
   max-height: 320px;
   overflow-y: auto;
 }
@@ -123,8 +123,8 @@ const eventDetail = (ev: WritingEvent): string => {
   justify-content: space-between;
   align-items: center;
   padding: 0.875rem 1.25rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  color: rgba(240, 240, 245, 0.5);
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-muted);
   font-size: 0.75rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -134,7 +134,7 @@ const eventDetail = (ev: WritingEvent): string => {
 .close-btn {
   background: none;
   border: none;
-  color: rgba(240, 240, 245, 0.4);
+  color: var(--text-muted);
   font-size: 1.25rem;
   cursor: pointer;
   padding: 0;
@@ -148,8 +148,8 @@ const eventDetail = (ev: WritingEvent): string => {
 }
 
 .close-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(240, 240, 245, 0.8);
+  background: var(--bg-card-hover);
+  color: var(--text-secondary);
 }
 
 .history-list {
@@ -168,8 +168,8 @@ const eventDetail = (ev: WritingEvent): string => {
 }
 
 .history-item:hover {
-  background: rgba(0, 229, 204, 0.04);
-  border-color: rgba(0, 229, 204, 0.08);
+  background: var(--accent-subtle);
+  border-color: var(--accent-border);
 }
 
 .event-icon {
@@ -191,20 +191,20 @@ const eventDetail = (ev: WritingEvent): string => {
 }
 
 .event-label {
-  color: rgba(240, 240, 245, 0.8);
+  color: var(--text-primary);
   font-size: 0.82rem;
   font-weight: 500;
 }
 
 .event-time {
-  color: rgba(240, 240, 245, 0.35);
+  color: var(--text-muted);
   font-size: 0.7rem;
   font-family: 'JetBrains Mono', monospace;
   flex-shrink: 0;
 }
 
 .event-detail {
-  color: rgba(240, 240, 245, 0.45);
+  color: var(--text-secondary);
   font-size: 0.75rem;
   margin-top: 0.15rem;
   white-space: nowrap;
@@ -213,7 +213,7 @@ const eventDetail = (ev: WritingEvent): string => {
 }
 
 .event-meta {
-  color: rgba(0, 229, 204, 0.5);
+  color: var(--accent);
   font-size: 0.7rem;
   margin-top: 0.15rem;
   font-family: 'JetBrains Mono', monospace;
@@ -222,7 +222,7 @@ const eventDetail = (ev: WritingEvent): string => {
 .history-empty {
   padding: 2rem;
   text-align: center;
-  color: rgba(240, 240, 245, 0.3);
+  color: var(--text-muted);
   font-size: 0.875rem;
 }
 </style>

@@ -333,42 +333,33 @@ const cancelSelection = async () => {
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(7, 7, 13, 0.4);
+  background: var(--bg-overlay);
   z-index: 1;
 }
 
 .selection-box {
   position: absolute;
-  border: 2px solid #00e5cc;
-  background: rgba(0, 229, 204, 0.1);
+  border: 2px solid var(--accent);
+  background: rgba(26, 115, 232, 0.08);
   z-index: 10;
-  box-shadow: 0 0 0 9999px rgba(7, 7, 13, 0.5);
-  transition: border-color 0.15s ease;
-}
-
-.selection-box::before {
-  content: '';
-  position: absolute;
-  inset: -4px;
-  border: 1px solid rgba(0, 229, 204, 0.3);
-  border-radius: 4px;
-  pointer-events: none;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.2);
+  transition: border-color var(--transition-fast);
 }
 
 .selection-info {
   position: absolute;
-  bottom: -28px;
+  bottom: -32px;
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(13, 13, 20, 0.95);
-  color: #00e5cc;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
   font-size: 11px;
   padding: 4px 10px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   white-space: nowrap;
-  font-family: 'JetBrains Mono', monospace;
-  border: 1px solid rgba(0, 229, 204, 0.2);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  font-family: var(--font-mono);
+  border: 1px solid var(--border-light);
+  box-shadow: var(--shadow-md);
 }
 
 .instructions {
@@ -376,19 +367,18 @@ const cancelSelection = async () => {
   top: 24px;
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(13, 13, 20, 0.9);
-  backdrop-filter: blur(12px);
-  padding: 12px 24px;
-  border-radius: 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm) var(--space-lg);
+  box-shadow: var(--shadow-lg);
   z-index: 20;
   pointer-events: none;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
 }
 
 .instructions p {
   font-size: 0.8rem;
-  color: rgba(240, 240, 245, 0.6);
+  color: var(--text-secondary);
   letter-spacing: 0.03em;
 }
 </style>

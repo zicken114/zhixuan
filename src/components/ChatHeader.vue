@@ -100,23 +100,22 @@ const handleMouseDown = async (e: MouseEvent) => {
 <style scoped>
 .header {
   padding: 1rem 1.25rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--border-subtle);
   display: flex;
   justify-content: space-between;
   align-items: center;
   cursor: move;
   user-select: none;
   -webkit-app-region: drag;
-  background: rgba(13, 13, 20, 0.5);
+  background: var(--bg-surface);
 }
 
 .header-title {
   font-family: 'Syne', sans-serif;
   font-size: 1rem;
   font-weight: 600;
-  color: #f0f0f5;
+  color: var(--text-primary);
   letter-spacing: -0.01em;
-  text-shadow: 0 0 20px rgba(0, 229, 204, 0.2);
 }
 
 .header-left {
@@ -127,9 +126,9 @@ const handleMouseDown = async (e: MouseEvent) => {
 }
 
 .action-btn {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: rgba(240, 240, 245, 0.7);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  color: var(--text-secondary);
   cursor: pointer;
   padding: 0.5rem;
   width: 34px;
@@ -142,9 +141,9 @@ const handleMouseDown = async (e: MouseEvent) => {
 }
 
 .action-btn:hover {
-  background: rgba(0, 229, 204, 0.1);
-  border-color: rgba(0, 229, 204, 0.3);
-  color: #00e5cc;
+  background: var(--accent-subtle);
+  border-color: var(--accent-border);
+  color: var(--accent);
 }
 
 .header-actions {
@@ -157,7 +156,7 @@ const handleMouseDown = async (e: MouseEvent) => {
 .icon-btn {
   background: none;
   border: none;
-  color: rgba(240, 240, 245, 0.5);
+  color: var(--text-muted);
   font-size: 1.25rem;
   cursor: pointer;
   padding: 0.25rem;
@@ -171,14 +170,14 @@ const handleMouseDown = async (e: MouseEvent) => {
 }
 
 .icon-btn:hover {
-  background: rgba(0, 229, 204, 0.1);
-  color: #00e5cc;
+  background: var(--accent-subtle);
+  color: var(--accent);
 }
 
 .close-btn {
   background: none;
   border: none;
-  color: rgba(240, 240, 245, 0.5);
+  color: var(--text-muted);
   font-size: 1.5rem;
   cursor: pointer;
   padding: 0;
@@ -192,7 +191,7 @@ const handleMouseDown = async (e: MouseEvent) => {
 }
 
 .close-btn:hover {
-  background: rgba(239, 68, 68, 0.15);
-  color: #ef4444;
+  background: var(--error-bg);
+  color: var(--error);
 }
 </style>

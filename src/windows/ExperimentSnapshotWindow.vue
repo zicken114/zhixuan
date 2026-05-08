@@ -138,10 +138,10 @@ const saveSnapshot = async () => {
 .experiment-snapshot-window {
   width: 100%;
   height: 100%;
-  background: rgba(7, 7, 13, 0.98);
+  background: var(--bg-base);
   display: flex;
   flex-direction: column;
-  color: rgba(240, 240, 245, 0.85);
+  color: var(--text-primary);
   overflow: hidden;
 }
 
@@ -150,8 +150,8 @@ const saveSnapshot = async () => {
   justify-content: space-between;
   align-items: center;
   padding: 0.6rem 0.75rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(13, 13, 20, 0.5);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
   cursor: move;
   user-select: none;
   -webkit-app-region: drag;
@@ -165,7 +165,7 @@ const saveSnapshot = async () => {
 .close-btn {
   background: none;
   border: none;
-  color: rgba(240, 240, 245, 0.4);
+  color: var(--text-muted);
   font-size: 1.1rem;
   cursor: pointer;
   width: 24px;
@@ -179,8 +179,8 @@ const saveSnapshot = async () => {
 }
 
 .close-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(240, 240, 245, 0.8);
+  background: var(--bg-card-hover);
+  color: var(--text-secondary);
 }
 
 .snapshot-content {
@@ -204,22 +204,22 @@ const saveSnapshot = async () => {
   align-items: center;
   gap: 0.2rem;
   padding: 0.5rem 0.25rem;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
   border-radius: 8px;
   cursor: pointer;
-  color: rgba(240, 240, 245, 0.6);
+  color: var(--text-muted);
   transition: all 0.15s ease;
 }
 
 .type-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--bg-card-hover);
 }
 
 .type-btn.active {
-  background: rgba(0, 229, 204, 0.12);
-  border-color: rgba(0, 229, 204, 0.25);
-  color: #00e5cc;
+  background: var(--accent-subtle);
+  border-color: var(--accent-border);
+  color: var(--accent);
 }
 
 .type-icon {
@@ -238,17 +238,17 @@ const saveSnapshot = async () => {
 
 .form-group label {
   font-size: 0.7rem;
-  color: rgba(240, 240, 245, 0.5);
+  color: var(--text-secondary);
   font-weight: 600;
 }
 
 .form-group input,
 .form-group textarea {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
   border-radius: 8px;
   padding: 0.5rem 0.6rem;
-  color: #f0f0f5;
+  color: var(--text-primary);
   font-size: 0.8rem;
   outline: none;
   resize: none;
@@ -257,16 +257,16 @@ const saveSnapshot = async () => {
 
 .form-group input:focus,
 .form-group textarea:focus {
-  border-color: #00d1bb;
+  border-color: var(--accent);
 }
 
 .save-btn {
   margin-top: auto;
   padding: 0.55rem;
-  background: linear-gradient(135deg, #00e5cc 0%, #00b8a3 100%);
+  background: var(--accent);
   border: none;
   border-radius: 8px;
-  color: #06211f;
+  color: var(--text-on-accent);
   font-size: 0.82rem;
   font-weight: 700;
   cursor: pointer;
@@ -287,10 +287,10 @@ const saveSnapshot = async () => {
   bottom: 1rem;
   right: 1rem;
   padding: 0.5rem 0.9rem;
-  background: rgba(0, 229, 204, 0.15);
-  border: 1px solid rgba(0, 229, 204, 0.3);
+  background: var(--accent-subtle);
+  border: 1px solid var(--accent-border);
   border-radius: 8px;
-  color: #00e5cc;
+  color: var(--accent);
   font-size: 0.8rem;
   font-weight: 600;
   animation: toast-in 0.3s ease;

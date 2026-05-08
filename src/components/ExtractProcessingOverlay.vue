@@ -31,30 +31,30 @@ defineProps<Props>();
   align-items: center;
   justify-content: center;
   z-index: 40;
-  background: rgba(7, 7, 13, 0.7);
+  background: var(--bg-overlay);
   backdrop-filter: blur(4px);
 }
 
 .processing-box {
-  background: rgba(13, 13, 20, 0.95);
+  background: var(--bg-elevated);
   backdrop-filter: blur(20px);
-  border: 1px solid rgba(0, 229, 204, 0.15);
+  border: 1px solid var(--accent-border);
   border-radius: 16px;
   padding: 28px 36px;
   max-width: 620px;
   width: 80%;
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.4), 0 0 30px rgba(0, 229, 204, 0.1);
+  box-shadow: var(--shadow-xl);
 }
 
 .spinner {
   width: 28px;
   height: 28px;
-  border: 3px solid rgba(0, 229, 204, 0.15);
-  border-top-color: #00e5cc;
+  border: 3px solid var(--accent-border);
+  border-top-color: var(--accent);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
   margin: 0 auto 18px;
-  box-shadow: 0 0 15px rgba(0, 229, 204, 0.3);
+  box-shadow: 0 0 15px rgba(26, 115, 232, 0.3);
 }
 
 @keyframes spin {
@@ -62,7 +62,7 @@ defineProps<Props>();
 }
 
 .processing-text {
-  color: white;
+  color: var(--text-primary);
   font-size: 14px;
   text-align: center;
 }
@@ -70,7 +70,7 @@ defineProps<Props>();
 .processing-text span:first-child {
   display: block;
   margin-bottom: 14px;
-  color: rgba(240, 240, 245, 0.6);
+  color: var(--text-secondary);
   font-size: 13px;
   letter-spacing: 0.02em;
 }
@@ -79,8 +79,8 @@ defineProps<Props>();
   display: block;
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   font-size: 13px;
-  color: #e2e8f0;
-  background: rgba(0, 0, 0, 0.3);
+  color: var(--text-primary);
+  background: var(--bg-surface);
   padding: 18px;
   border-radius: 10px;
   min-height: 90px;
@@ -89,7 +89,7 @@ defineProps<Props>();
   word-break: break-all;
   max-height: 320px;
   overflow-y: auto;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-subtle);
   line-height: 1.6;
 }
 
@@ -98,7 +98,7 @@ defineProps<Props>();
 }
 
 .processing-stream::-webkit-scrollbar-thumb {
-  background: rgba(0, 229, 204, 0.3);
+  background: var(--accent-border);
   border-radius: 2px;
 }
 </style>

@@ -484,11 +484,11 @@ const formatDate = (timestamp?: number | null): string => {
 .sentinel-panel {
   width: 100%;
   height: 100%;
-  background: rgba(7, 7, 13, 0.96);
+  background: var(--bg-base);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border-left: 1px solid rgba(255, 255, 255, 0.06);
+  border-left: 1px solid var(--border-subtle);
 }
 
 .sidebar-header {
@@ -496,21 +496,21 @@ const formatDate = (timestamp?: number | null): string => {
   align-items: center;
   justify-content: space-between;
   padding: 0.875rem 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(13, 13, 20, 0.5);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
 }
 
 .sidebar-title {
   font-family: 'Syne', sans-serif;
   font-size: 0.9rem;
   font-weight: 600;
-  color: #f0f0f5;
+  color: var(--text-primary);
 }
 
 .close-btn {
   background: none;
   border: none;
-  color: rgba(240, 240, 245, 0.4);
+  color: var(--text-muted);
   font-size: 1.25rem;
   cursor: pointer;
   padding: 0;
@@ -524,40 +524,40 @@ const formatDate = (timestamp?: number | null): string => {
 }
 
 .close-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(240, 240, 245, 0.8);
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
 }
 
 .toolbar {
   display: flex;
   gap: 0.5rem;
   padding: 0.75rem 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .tool-btn {
   padding: 0.4rem 0.75rem;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
   border-radius: 6px;
-  color: rgba(240, 240, 245, 0.7);
+  color: var(--text-secondary);
   font-size: 0.78rem;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .tool-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--bg-card-hover);
 }
 
 .tool-btn.primary {
-  background: rgba(0, 229, 204, 0.12);
-  border-color: rgba(0, 229, 204, 0.25);
-  color: #00e5cc;
+  background: var(--accent-subtle);
+  border-color: var(--accent-border);
+  color: var(--accent);
 }
 
 .tool-btn.primary:hover {
-  background: rgba(0, 229, 204, 0.2);
+  background: var(--accent-border);
 }
 
 .tool-btn:disabled {
@@ -568,13 +568,13 @@ const formatDate = (timestamp?: number | null): string => {
 .empty-state {
   text-align: center;
   padding: 2rem 1rem;
-  color: rgba(240, 240, 245, 0.3);
+  color: var(--text-muted);
   font-size: 0.82rem;
 }
 
 .empty-hint {
   font-size: 0.75rem;
-  color: rgba(240, 240, 245, 0.2);
+  color: var(--text-dim);
   margin-top: 0.5rem;
   display: block;
 }
@@ -586,8 +586,8 @@ const formatDate = (timestamp?: number | null): string => {
 }
 
 .topic-card {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
   border-radius: 10px;
   padding: 0.75rem;
   margin-bottom: 0.5rem;
@@ -596,8 +596,8 @@ const formatDate = (timestamp?: number | null): string => {
 }
 
 .topic-card:hover {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.1);
+  background: var(--bg-card-hover);
+  border-color: var(--border-light);
 }
 
 .topic-card.inactive {
@@ -605,7 +605,7 @@ const formatDate = (timestamp?: number | null): string => {
 }
 
 .topic-card.expanded {
-  border-color: rgba(0, 229, 204, 0.2);
+  border-color: var(--accent-border);
 }
 
 .topic-header {
@@ -623,12 +623,12 @@ const formatDate = (timestamp?: number | null): string => {
 .topic-name {
   font-size: 0.85rem;
   font-weight: 600;
-  color: rgba(240, 240, 245, 0.85);
+  color: var(--text-primary);
 }
 
 .unread-badge {
-  background: #ef4444;
-  color: white;
+  background: var(--error);
+  color: var(--text-on-accent);
   font-size: 0.65rem;
   font-weight: 700;
   padding: 1px 6px;
@@ -641,7 +641,7 @@ const formatDate = (timestamp?: number | null): string => {
   display: flex;
   gap: 0.5rem;
   font-size: 0.7rem;
-  color: rgba(240, 240, 245, 0.35);
+  color: var(--text-dim);
 }
 
 .topic-freq {
@@ -649,7 +649,7 @@ const formatDate = (timestamp?: number | null): string => {
 }
 
 .topic-sources {
-  color: rgba(0, 229, 204, 0.5);
+  color: var(--accent-text);
 }
 
 .topic-keywords {
@@ -662,10 +662,10 @@ const formatDate = (timestamp?: number | null): string => {
 .keyword-tag {
   font-size: 0.7rem;
   padding: 2px 8px;
-  background: rgba(61, 116, 231, 0.15);
-  border: 1px solid rgba(61, 116, 231, 0.2);
+  background: rgba(26, 115, 232, 0.15);
+  border: 1px solid rgba(26, 115, 232, 0.2);
   border-radius: 4px;
-  color: #3d74e7;
+  color: var(--accent);
 }
 
 .topic-actions {
@@ -677,7 +677,7 @@ const formatDate = (timestamp?: number | null): string => {
 .action-link {
   background: none;
   border: none;
-  color: rgba(240, 240, 245, 0.45);
+  color: var(--text-muted);
   font-size: 0.72rem;
   cursor: pointer;
   padding: 0;
@@ -685,22 +685,22 @@ const formatDate = (timestamp?: number | null): string => {
 }
 
 .action-link:hover {
-  color: #00e5cc;
+  color: var(--accent);
 }
 
 .action-link.danger:hover {
-  color: #ef4444;
+  color: var(--error);
 }
 
 .paper-list {
   margin-top: 0.75rem;
   padding-top: 0.75rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  border-top: 1px solid var(--border-subtle);
 }
 
 .paper-item {
   padding: 0.6rem;
-  background: rgba(0, 0, 0, 0.15);
+  background: var(--bg-surface);
   border-radius: 6px;
   margin-bottom: 0.4rem;
 }
@@ -715,14 +715,14 @@ const formatDate = (timestamp?: number | null): string => {
 
 .paper-title {
   font-size: 0.78rem;
-  color: rgba(240, 240, 245, 0.75);
+  color: var(--text-primary);
   line-height: 1.4;
   margin-bottom: 0.2rem;
 }
 
 .paper-authors {
   font-size: 0.7rem;
-  color: rgba(240, 240, 245, 0.4);
+  color: var(--text-muted);
   margin-bottom: 0.3rem;
 }
 
@@ -742,35 +742,35 @@ const formatDate = (timestamp?: number | null): string => {
 }
 
 .paper-link {
-  background: rgba(0, 229, 204, 0.1);
-  border: 1px solid rgba(0, 229, 204, 0.2);
-  color: #00e5cc;
+  background: var(--accent-subtle);
+  border: 1px solid var(--accent-border);
+  color: var(--accent);
 }
 
 .paper-link:hover {
-  background: rgba(0, 229, 204, 0.2);
+  background: var(--accent-border);
 }
 
 .paper-action {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: rgba(240, 240, 245, 0.6);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  color: var(--text-secondary);
   border: none;
 }
 
 .paper-action:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--bg-card-hover);
 }
 
 .paper-action.ignore:hover {
-  background: rgba(239, 68, 68, 0.15);
-  color: #ef4444;
+  background: rgba(234, 67, 53, 0.15);
+  color: var(--error);
 }
 
 .paper-empty {
   text-align: center;
   padding: 1rem;
-  color: rgba(240, 240, 245, 0.25);
+  color: var(--text-dim);
   font-size: 0.75rem;
 }
 
@@ -778,7 +778,7 @@ const formatDate = (timestamp?: number | null): string => {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: var(--bg-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -786,17 +786,17 @@ const formatDate = (timestamp?: number | null): string => {
 }
 
 .modal-content {
-  background: rgba(18, 18, 28, 0.98);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-light);
   border-radius: 16px;
   padding: 1.25rem;
   width: 320px;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-xl);
 }
 
 .modal-content h3 {
   margin: 0 0 1rem;
-  color: #f0f0f5;
+  color: var(--text-primary);
   font-size: 0.95rem;
   font-weight: 700;
 }
@@ -807,7 +807,7 @@ const formatDate = (timestamp?: number | null): string => {
 
 .form-group label {
   display: block;
-  color: rgba(240, 240, 245, 0.6);
+  color: var(--text-secondary);
   font-size: 0.75rem;
   font-weight: 600;
   margin-bottom: 0.3rem;
@@ -816,18 +816,18 @@ const formatDate = (timestamp?: number | null): string => {
 .form-group input,
 .form-group select {
   width: 100%;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
   border-radius: 8px;
   padding: 0.55rem 0.75rem;
-  color: #f0f0f5;
+  color: var(--text-primary);
   font-size: 0.82rem;
   outline: none;
 }
 
 .form-group input:focus,
 .form-group select:focus {
-  border-color: #00d1bb;
+  border-color: var(--border-focus);
 }
 
 .modal-actions {
@@ -839,25 +839,25 @@ const formatDate = (timestamp?: number | null): string => {
 
 .btn-secondary {
   padding: 0.5rem 1rem;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
   border-radius: 8px;
-  color: rgba(240, 240, 245, 0.7);
+  color: var(--text-secondary);
   font-size: 0.82rem;
   cursor: pointer;
   transition: background 0.2s ease;
 }
 
 .btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--bg-card-hover);
 }
 
 .btn-primary {
   padding: 0.5rem 1rem;
-  background: linear-gradient(135deg, #00e5cc 0%, #00b8a3 100%);
+  background: var(--accent);
   border: none;
   border-radius: 8px;
-  color: #06211f;
+  color: var(--text-on-accent);
   font-size: 0.82rem;
   font-weight: 700;
   cursor: pointer;
