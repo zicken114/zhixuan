@@ -1,13 +1,16 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue';
+import { ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue';
 import { listen } from '@tauri-apps/api/event';
+import { invoke } from '@tauri-apps/api/core';
 import { aiClient } from '../utils/aiClient';
 import { marked } from 'marked';
-import { useSettingsStore, supportedLanguages } from '../stores/settings';
+import { useSettingsStore, supportedLanguages, type TaskType } from '../stores/settings';
 import { useProjectStore } from '../stores/projects';
+import { usePopupHistoryStore, type PopupActionType } from '../stores/popupHistory';
 import { useProgress } from '../composables/useProgress';
 import { useClipboard } from '../composables/useClipboard';
 import { useWindow } from '../composables/useWindow';
+import { useI18n } from '../composables/useI18n';
 import { replaceSelectedText } from '../composables/useTextInjection';
 import { recordEvent } from '../composables/useEvents';
 import { searchZoteroCache, formatCitation } from '../utils/zoteroBridge';
@@ -16,13 +19,19 @@ import type { ZoteroItem } from '../composables/useDatabase';
 
 const settingsStore = useSettingsStore();
 const projectStore = useProjectStore();
+const popupHistoryStore = usePopupHistoryStore();
 const { progress, label: progressLabel, start: startProgress, complete: completeProgress, stop: stopProgress } = useProgress();
 const { writeText, writeHtml } = useClipboard();
-const { hideCurrent, showSettings: openSettingsWindow, quitApp, resize: resizeWindow } = useWindow();
+const { hideCurrent, show: showWindow, showSettings: openSettingsWindow, quitApp, resize: resizeWindow } = useWindow();
+const { t } = useI18n();
 
 const clipboardText = ref('');
 const isProcessing = ref(false);
 const currentAppType = ref<string>('unknown');
+const processingActionLabel = ref('');
+const processingInput = ref('');
+const processingOutput = ref('');
+const menuContentRef = ref<HTMLElement | null>(null);
 
 // Citation recommendation state
 const showCitations = ref(false);
@@ -61,9 +70,11 @@ interface WindowInfoPayload {
 }
 
 const baseMenuItems = [
+  { icon: '💬', label: 'Chat', action: 'chat' },
   { icon: '🌍', label: 'Translate', action: 'translate' },
   { icon: '🧹', label: 'Clean to Word', action: 'clean' },
   { icon: '📚', label: 'Format Citation', action: 'citation' },
+  { icon: '📜', label: 'History', action: 'history' },
 ];
 
 // Citation format correction state
@@ -89,16 +100,51 @@ const menuItems = computed(() => {
     items.push({ icon: '📝', label: 'Save to Obsidian', action: 'save_to_obsidian' });
   }
   items.push(
+    { icon: '📸', label: 'Screenshot', action: 'screenshot' },
     { icon: '⚙️', label: 'Settings', action: 'settings' },
     { icon: '⏻', label: 'Exit', action: 'exit' }
   );
   return items;
 });
 
+const menuLabelKeyMap: Record<string, string> = {
+  chat: 'common.chat',
+  translate: 'popup.translate',
+  clean: 'popup.clean',
+  citation: 'popup.formatCitation',
+  history: 'popup.history',
+  polish: 'popup.polish',
+  recommend_citation: 'popup.recommendCitation',
+  fix_citation: 'popup.fixCitationFormat',
+  reading_note: 'popup.generateNote',
+  save_to_obsidian: 'popup.saveToObsidian',
+  screenshot: 'common.screenshot',
+  settings: 'common.settings',
+  exit: 'common.exit'
+};
+
+const getMenuItemLabel = (action: string, fallback: string) =>
+  t(menuLabelKeyMap[action] || '', undefined) || fallback;
+
+const isDetailPanelVisible = computed(() =>
+  showPolish.value
+  || showReadingNote.value
+  || showCitations.value
+  || showCitationFix.value
+);
+
+const POPUP_MENU_WIDTH = 260;
+const POPUP_PANEL_WIDTH = 520;
+const POPUP_PANEL_HEIGHT = 420;
+const POPUP_MENU_MIN_HEIGHT = 96;
+const POPUP_MENU_MAX_HEIGHT = 520;
+const POPUP_MENU_VERTICAL_PADDING = 10;
+
 let blurTimeout: number | null = null;
 let unlistenClipboard: (() => void) | null = null;
 let unlistenWindowActivity: (() => void) | null = null;
 let unlistenAutoAction: (() => void) | null = null;
+const blurCloseDelayMs = 120;
 
 const handleBlur = () => {
   // Don't auto-cancel when losing focus - let the AI request complete
@@ -108,7 +154,7 @@ const handleBlur = () => {
     if (!isProcessing.value) {
       await closeWindow();
     }
-  }, 2000); // Wait 2 seconds before closing if not processing
+  }, blurCloseDelayMs);
 };
 
 const handleFocus = () => {
@@ -117,6 +163,22 @@ const handleFocus = () => {
     clearTimeout(blurTimeout);
     blurTimeout = null;
   }
+};
+
+const syncPopupMenuSize = async () => {
+  if (isDetailPanelVisible.value || isProcessing.value) return;
+
+  await nextTick();
+
+  if (!menuContentRef.value) return;
+
+  const contentHeight = Math.ceil(menuContentRef.value.scrollHeight);
+  const targetHeight = Math.min(
+    Math.max(contentHeight + POPUP_MENU_VERTICAL_PADDING, POPUP_MENU_MIN_HEIGHT),
+    POPUP_MENU_MAX_HEIGHT
+  );
+
+  await resizeWindow('popup', POPUP_MENU_WIDTH, targetHeight).catch(() => {});
 };
 
 onMounted(async () => {
@@ -143,6 +205,8 @@ onMounted(async () => {
   // Add blur/focus listeners for auto-hide
   window.addEventListener('blur', handleBlur);
   window.addEventListener('focus', handleFocus);
+
+  await syncPopupMenuSize();
 });
 
 onUnmounted(() => {
@@ -162,9 +226,40 @@ onUnmounted(() => {
   }
 });
 
+watch(menuItems, () => {
+  void syncPopupMenuSize();
+}, { deep: true });
+
+watch(isDetailPanelVisible, async (visible) => {
+  if (visible) {
+    await resizeWindow('popup', POPUP_PANEL_WIDTH, POPUP_PANEL_HEIGHT).catch(() => {});
+    return;
+  }
+
+  await syncPopupMenuSize();
+});
+
 const handleAction = async (action: string) => {
+  if (action === 'chat') {
+    await showWindow('main');
+    await hideCurrent();
+    return;
+  }
+
+  if (action === 'screenshot') {
+    await hideCurrent();
+    await invoke('trigger_capture');
+    return;
+  }
+
   if (action === 'settings') {
     await openSettingsWindow();
+    await hideCurrent();
+    return;
+  }
+
+  if (action === 'history') {
+    await showWindow('history');
     await hideCurrent();
     return;
   }
@@ -184,23 +279,30 @@ const handleAction = async (action: string) => {
 
   isProcessing.value = true;
   startProgress();
+  const currentItem = menuItems.value.find(item => item.action === action);
+  processingActionLabel.value = currentItem
+    ? getMenuItemLabel(currentItem.action, currentItem.label)
+    : action;
+  processingInput.value = clipboardText.value;
+  processingOutput.value = '';
 
   const startTime = performance.now();
   let eventType = '';
 
   try {
+    let outputTextForHistory = '';
     switch (action) {
       case 'translate':
         eventType = 'clipboard_translate';
-        await handleTranslate();
+        outputTextForHistory = await handleTranslate();
         break;
       case 'clean':
         eventType = 'clipboard_purify';
-        await handleCleanToWord();
+        outputTextForHistory = await handleCleanToWord();
         break;
       case 'citation':
         eventType = 'clipboard_format';
-        await handleFormatCitation();
+        outputTextForHistory = await handleFormatCitation();
         break;
       case 'polish':
         eventType = 'clipboard_polish';
@@ -224,6 +326,17 @@ const handleAction = async (action: string) => {
         break;
     }
 
+    if (outputTextForHistory) {
+      const actionType = action as PopupActionType;
+      popupHistoryStore.addItem({
+        actionType,
+        actionLabel: processingActionLabel.value,
+        inputText: clipboardText.value,
+        outputText: outputTextForHistory
+      });
+      await invoke('notify_history_changed');
+    }
+
     if (eventType) {
       recordEvent({
         event_type: eventType,
@@ -245,8 +358,37 @@ const handleAction = async (action: string) => {
   } finally {
     stopProgress();
     isProcessing.value = false;
+    processingActionLabel.value = '';
+    processingInput.value = '';
+    processingOutput.value = '';
   }
   await hideCurrent();
+};
+
+const streamTextResponse = async (messages: Array<{ role: 'system' | 'user'; content: string }>, taskType: TaskType) => {
+  let fullText = '';
+  let streamError: Error | null = null;
+  await aiClient.chatStream(messages, {
+    onStart: () => {
+      fullText = '';
+      processingOutput.value = '';
+    },
+    onToken: (token) => {
+      fullText += token;
+      processingOutput.value = fullText;
+    },
+    onComplete: (text) => {
+      fullText = (text || '').trim();
+      processingOutput.value = fullText;
+    },
+    onError: (error) => {
+      streamError = error;
+    }
+  }, false, taskType);
+  if (streamError) {
+    throw streamError;
+  }
+  return fullText.trim();
 };
 
 const handleTranslate = async () => {
@@ -263,10 +405,10 @@ const handleTranslate = async () => {
     { role: 'user' as const, content: clipboardText.value }
   ];
 
-  const { text } = await aiClient.chatOnce(messages, false, 'translation');
-
+  const text = await streamTextResponse(messages, 'translation');
   await writeText(text);
   await completeProgress();
+  return text;
 };
 
 const handleCleanToWord = async () => {
@@ -275,7 +417,9 @@ const handleCleanToWord = async () => {
   if (hasMarkdown) {
     const html = await marked(clipboardText.value);
     await writeHtml(html, clipboardText.value);
+    processingOutput.value = clipboardText.value;
     await completeProgress();
+    return clipboardText.value;
   } else {
     const messages = [
       {
@@ -285,9 +429,10 @@ const handleCleanToWord = async () => {
       { role: 'user' as const, content: clipboardText.value }
     ];
 
-    const { text } = await aiClient.chatOnce(messages, false, 'text_cleanup');
+    const text = await streamTextResponse(messages, 'text_cleanup');
     await writeText(text);
     await completeProgress();
+    return text;
   }
 };
 
@@ -300,14 +445,15 @@ const handleFormatCitation = async () => {
     { role: 'user' as const, content: clipboardText.value }
   ];
 
-  const { text } = await aiClient.chatOnce(messages, false, 'citation_format');
+  const text = await streamTextResponse(messages, 'citation_format');
   await writeText(text);
   await completeProgress();
+  return text;
 };
 
 const handlePolish = async () => {
   if (!clipboardText.value.trim()) {
-    progressLabel.value = 'Please select some text first';
+    progressLabel.value = t('popup.pleaseSelectText');
     return;
   }
 
@@ -317,8 +463,6 @@ const handlePolish = async () => {
   polishResult.value = '';
   polishDiff.value = [];
   startProgress();
-  // Expand popup to accommodate the diff panel
-  resizeWindow('popup', 520, 420).catch(() => {});
 
   const startTime = performance.now();
 
@@ -343,7 +487,7 @@ const handlePolish = async () => {
     });
   } catch (e: any) {
     console.error('[Polish] Failed:', e);
-    progressLabel.value = 'Polish failed: ' + (e?.message || 'Unknown error');
+    progressLabel.value = `${t('popup.polishFailed')}: ${e?.message || t('common.unknownError')}`;
   } finally {
     polishLoading.value = false;
     stopProgress();
@@ -405,8 +549,6 @@ const closePolish = async () => {
   polishOriginal.value = '';
   polishResult.value = '';
   polishDiff.value = [];
-  // Restore popup to default size
-  await resizeWindow('popup', 200, 280).catch(() => {});
 };
 
 const acceptPolish = async () => {
@@ -424,7 +566,7 @@ const acceptPolish = async () => {
 
 const handleReadingNote = async () => {
   if (!clipboardText.value.trim()) {
-    progressLabel.value = 'Please select some text from the PDF first';
+    progressLabel.value = t('popup.pleaseSelectPdfText');
     return;
   }
 
@@ -432,8 +574,6 @@ const handleReadingNote = async () => {
   showReadingNote.value = true;
   readingNoteResult.value = '';
   startProgress();
-  // Expand popup to accommodate the reading note panel
-  resizeWindow('popup', 520, 420).catch(() => {});
 
   try {
     const docName = currentWindowTitle.value || 'Unknown Document';
@@ -453,7 +593,7 @@ const handleReadingNote = async () => {
     completeProgress();
   } catch (e: any) {
     console.error('[Reading Note] Failed:', e);
-    progressLabel.value = 'Note generation failed: ' + (e?.message || 'Unknown error');
+    progressLabel.value = `${t('popup.noteGenerationFailed')}: ${e?.message || t('common.unknownError')}`;
   } finally {
     readingNoteLoading.value = false;
     stopProgress();
@@ -463,8 +603,6 @@ const handleReadingNote = async () => {
 const closeReadingNote = async () => {
   showReadingNote.value = false;
   readingNoteResult.value = '';
-  // Restore popup to default size
-  await resizeWindow('popup', 200, 280).catch(() => {});
 };
 
 const saveReadingNote = async () => {
@@ -474,21 +612,21 @@ const saveReadingNote = async () => {
   const folder = settingsStore.config.externalTools.obsidianDefaultFolder;
 
   if (!vaultPath) {
-    progressLabel.value = 'Please configure Obsidian Vault path in Settings';
+    progressLabel.value = t('popup.pleaseConfigureObsidian');
     await new Promise(resolve => setTimeout(resolve, 1500));
     return;
   }
 
   const now = new Date();
   const dateStr = now.toISOString().split('T')[0];
-  const docName = currentWindowTitle.value || 'Unknown Document';
+  const docName = currentWindowTitle.value || t('popup.unknownDocument');
   const safeName = docName.replace(/[\\/:*?"<>|]/g, '_').slice(0, 60);
 
   const result = await saveNoteToObsidian(
     vaultPath,
     folder,
     {
-      title: `Reading Note: ${safeName}`,
+      title: `${t('popup.readingNoteTitle')}: ${safeName}`,
       date: dateStr,
       tags: ['reading-note', 'ai-research', 'pdf'],
       source: docName,
@@ -498,9 +636,9 @@ const saveReadingNote = async () => {
   );
 
   if (result.success) {
-    progressLabel.value = 'Saved to Obsidian!';
+    progressLabel.value = t('popup.savedToObsidian');
   } else {
-    progressLabel.value = result.error || 'Save failed';
+    progressLabel.value = result.error || t('popup.saveFailed');
   }
   await completeProgress();
   await closeReadingNote();
@@ -509,7 +647,7 @@ const saveReadingNote = async () => {
 
 const handleRecommendCitation = async () => {
   if (!clipboardText.value.trim()) {
-    progressLabel.value = 'Please select some text first';
+    progressLabel.value = t('popup.pleaseSelectText');
     return;
   }
 
@@ -538,7 +676,7 @@ const handleRecommendCitation = async () => {
     generateReasonsForResults(clipboardText.value);
   } catch (e: any) {
     console.error('[Citation Recommend] Failed:', e);
-    progressLabel.value = 'Failed to search Zotero: ' + (e?.message || 'Unknown error');
+    progressLabel.value = `${t('popup.failedToSearchZotero')}: ${e?.message || t('common.unknownError')}`;
   } finally {
     citationLoading.value = false;
     stopProgress();
@@ -550,32 +688,32 @@ const handleSaveToObsidian = async () => {
   const folder = settingsStore.config.externalTools.obsidianDefaultFolder;
 
   if (!vaultPath) {
-    progressLabel.value = 'Please configure Obsidian Vault path in Settings';
+    progressLabel.value = t('popup.pleaseConfigureObsidian');
     await new Promise(resolve => setTimeout(resolve, 1500));
     return;
   }
 
   const now = new Date();
   const dateStr = now.toISOString().split('T')[0];
-  const title = clipboardText.value.slice(0, 40).trim() || 'Quick Note';
+  const title = clipboardText.value.slice(0, 40).trim() || t('popup.quickNote');
 
   const result = await saveNoteToObsidian(
     vaultPath,
     folder,
     {
-      title: `Quick Note: ${title}`,
+      title: `${t('popup.quickNote')}: ${title}`,
       date: dateStr,
       tags: ['quick-note', 'ai-research'],
-      source: 'Clipboard via Popup',
+      source: t('popup.clipboardSource'),
       content: clipboardText.value
     },
     'full'
   );
 
   if (result.success) {
-    progressLabel.value = 'Saved to Obsidian!';
+    progressLabel.value = t('popup.savedToObsidian');
   } else {
-    progressLabel.value = result.error || 'Save failed';
+    progressLabel.value = result.error || t('popup.saveFailed');
   }
   await completeProgress();
 };
@@ -742,7 +880,7 @@ const findCitationMatches = async (parsed: ParsedCitation): Promise<ZoteroItem[]
 
 const handleFixCitation = async () => {
   if (!clipboardText.value.trim()) {
-    progressLabel.value = 'Please select a citation first';
+    progressLabel.value = t('popup.pleaseSelectCitation');
     return;
   }
 
@@ -757,7 +895,7 @@ const handleFixCitation = async () => {
   try {
     const parsed = parseInformalCitation(clipboardText.value);
     if (!parsed) {
-      citationFixError.value = 'Could not parse citation format. Supported: [Author, 2023], (Author, 2023), or Author (2023)';
+      citationFixError.value = t('popup.couldNotParseCitation');
       citationFixLoading.value = false;
       stopProgress();
       return;
@@ -765,7 +903,7 @@ const handleFixCitation = async () => {
 
     const matches = await findCitationMatches(parsed);
     if (matches.length === 0) {
-      citationFixError.value = `No matching paper found in Zotero for "${parsed.rawAuthors}, ${parsed.year}". Please import it first.`;
+      citationFixError.value = t('popup.noMatchingPaper', { authors: parsed.rawAuthors, year: parsed.year });
       citationFixLoading.value = false;
       stopProgress();
       return;
@@ -785,7 +923,7 @@ const handleFixCitation = async () => {
     });
   } catch (e: any) {
     console.error('[CitationFix] Failed:', e);
-    citationFixError.value = 'Failed to fix citation: ' + (e?.message || 'Unknown error');
+    citationFixError.value = `${t('popup.failedToFixCitation')}: ${e?.message || t('common.unknownError')}`;
   } finally {
     citationFixLoading.value = false;
     stopProgress();
@@ -833,10 +971,10 @@ const cancelProgress = async () => {
     <!-- Polish / writing companion panel -->
     <div v-if="showPolish" class="polish-panel">
       <div class="polish-header">
-        <span class="polish-title">✨ Polish Result</span>
+        <span class="polish-title">✨ {{ t('popup.polishResult') }}</span>
         <button class="polish-close" @click="closePolish">✕</button>
       </div>
-      <div v-if="polishLoading" class="polish-loading">Polishing your text...</div>
+      <div v-if="polishLoading" class="polish-loading">{{ t('popup.polishingText') }}</div>
       <div v-else class="polish-content">
         <div class="polish-diff">
           <span
@@ -846,8 +984,8 @@ const cancelProgress = async () => {
           >{{ segment.text }}</span>
         </div>
         <div class="polish-actions">
-          <button class="polish-btn accept" @click="acceptPolish">Accept & Replace</button>
-          <button class="polish-btn reject" @click="closePolish">Reject</button>
+          <button class="polish-btn accept" @click="acceptPolish">{{ t('popup.acceptReplace') }}</button>
+          <button class="polish-btn reject" @click="closePolish">{{ t('popup.reject') }}</button>
         </div>
       </div>
     </div>
@@ -855,18 +993,18 @@ const cancelProgress = async () => {
     <!-- Reading companion panel -->
     <div v-if="showReadingNote" class="reading-note-panel">
       <div class="reading-note-header">
-        <span class="reading-note-title">📄 Reading Note</span>
+        <span class="reading-note-title">📄 {{ t('popup.readingNote') }}</span>
         <button class="reading-note-close" @click="closeReadingNote">✕</button>
       </div>
-      <div v-if="readingNoteLoading" class="reading-note-loading">Generating reading note...</div>
+      <div v-if="readingNoteLoading" class="reading-note-loading">{{ t('popup.generatingReadingNote') }}</div>
       <div v-else class="reading-note-content">
         <div class="reading-note-body">
           <pre>{{ readingNoteResult }}</pre>
         </div>
         <div class="reading-note-actions">
-          <button class="reading-note-btn save" @click="saveReadingNote">Save to Obsidian</button>
-          <button class="reading-note-btn copy" @click="writeText(readingNoteResult); closeReadingNote(); hideCurrent();">Copy & Close</button>
-          <button class="reading-note-btn reject" @click="closeReadingNote">Close</button>
+          <button class="reading-note-btn save" @click="saveReadingNote">{{ t('popup.saveToObsidian') }}</button>
+          <button class="reading-note-btn copy" @click="writeText(readingNoteResult); closeReadingNote(); hideCurrent();">{{ t('popup.copyAndClose') }}</button>
+          <button class="reading-note-btn reject" @click="closeReadingNote">{{ t('common.close') }}</button>
         </div>
       </div>
     </div>
@@ -874,12 +1012,12 @@ const cancelProgress = async () => {
     <!-- Citation recommendation panel -->
     <div v-if="showCitations" class="citation-panel">
       <div class="citation-header">
-        <span class="citation-title">📖 Recommended Citations</span>
+        <span class="citation-title">📖 {{ t('popup.recommendedCitations') }}</span>
         <button class="citation-close" @click="closeCitations">✕</button>
       </div>
-      <div v-if="citationLoading" class="citation-loading">Searching your Zotero library...</div>
+      <div v-if="citationLoading" class="citation-loading">{{ t('popup.searchingZotero') }}</div>
       <div v-else-if="citationResults.length === 0" class="citation-empty">
-        No matching papers found in your Zotero library.
+        {{ t('popup.noCitationMatches') }}
       </div>
       <div v-else class="citation-list">
         <div
@@ -897,13 +1035,13 @@ const cancelProgress = async () => {
             <span class="citation-index">{{ idx + 1 }}</span>
           </label>
           <div class="citation-card-body">
-            <div class="citation-card-title">{{ item.title || 'Untitled' }}</div>
+            <div class="citation-card-title">{{ item.title || t('popup.untitled') }}</div>
             <div class="citation-card-meta">
               <span v-if="item.creators">{{ item.creators }}</span>
               <span v-if="item.date">({{ item.date.split('-')[0] }})</span>
             </div>
             <div v-if="item.key && citationReasonsLoading.has(item.key)" class="citation-reason loading">
-              Generating reason...
+              {{ t('popup.generatingReason') }}
             </div>
             <div v-else-if="item.key && citationReasons.has(item.key)" class="citation-reason">
               {{ citationReasons.get(item.key) }}
@@ -936,9 +1074,9 @@ const cancelProgress = async () => {
       </div>
       <!-- Multi-select insert bar -->
       <div v-if="selectedCitations.size > 0" class="citation-insert-bar">
-        <span class="insert-count">{{ selectedCitations.size }} selected</span>
+        <span class="insert-count">{{ t('popup.selectedCount', { count: selectedCitations.size }) }}</span>
         <button class="insert-btn" @click="insertSelectedCitations">
-          Insert Citation
+          {{ t('popup.insertCitation') }}
         </button>
       </div>
     </div>
@@ -946,41 +1084,52 @@ const cancelProgress = async () => {
     <!-- Citation format fix panel -->
     <div v-if="showCitationFix" class="citation-fix-panel">
       <div class="citation-fix-header">
-        <span class="citation-fix-title">🔧 Fix Citation Format</span>
+        <span class="citation-fix-title">🔧 {{ t('popup.fixCitationFormat') }}</span>
         <button class="citation-fix-close" @click="closeCitationFix">✕</button>
       </div>
-      <div v-if="citationFixLoading" class="citation-fix-loading">Analyzing citation...</div>
+      <div v-if="citationFixLoading" class="citation-fix-loading">{{ t('popup.analyzingCitation') }}</div>
       <div v-else-if="citationFixError" class="citation-fix-error">
         <div class="error-icon">⚠️</div>
         <div class="error-text">{{ citationFixError }}</div>
-        <button class="citation-fix-btn reject" @click="closeCitationFix">Close</button>
+        <button class="citation-fix-btn reject" @click="closeCitationFix">{{ t('common.close') }}</button>
       </div>
       <div v-else-if="citationFixResult" class="citation-fix-content">
-        <div class="citation-fix-label">Corrected citation (APA):</div>
+        <div class="citation-fix-label">{{ t('popup.correctedCitation') }}</div>
         <div class="citation-fix-result">{{ citationFixResult }}</div>
         <div class="citation-fix-actions">
-          <button class="citation-fix-btn accept" @click="acceptCitationFix">Replace in Document</button>
-          <button class="citation-fix-btn copy" @click="writeText(citationFixResult); closeCitationFix(); hideCurrent();">Copy & Close</button>
-          <button class="citation-fix-btn reject" @click="closeCitationFix">Close</button>
+          <button class="citation-fix-btn accept" @click="acceptCitationFix">{{ t('popup.replaceInDocument') }}</button>
+          <button class="citation-fix-btn copy" @click="writeText(citationFixResult); closeCitationFix(); hideCurrent();">{{ t('popup.copyAndClose') }}</button>
+          <button class="citation-fix-btn reject" @click="closeCitationFix">{{ t('common.close') }}</button>
         </div>
       </div>
     </div>
 
     <!-- Main menu -->
-    <div v-else
-      v-for="item in menuItems"
-      :key="item.action"
-      class="menu-item"
-      :class="{ 'processing': isProcessing }"
-      @click="handleAction(item.action)"
-    >
-      <span class="icon">{{ item.icon }}</span>
-      <span class="label">{{ item.label }}</span>
+    <div v-else ref="menuContentRef" class="popup-menu-content">
+      <div
+        v-for="item in menuItems"
+        :key="item.action"
+        class="menu-item"
+        :class="{ 'processing': isProcessing }"
+        @click="handleAction(item.action)"
+      >
+        <span class="icon">{{ item.icon }}</span>
+        <span class="label">{{ getMenuItemLabel(item.action, item.label) }}</span>
+      </div>
     </div>
 
     <div v-if="isProcessing" class="processing-overlay">
       <div class="progress-container">
+        <div class="progress-action">{{ processingActionLabel }}</div>
         <div class="progress-label">{{ progressLabel }}</div>
+        <div class="io-block">
+          <div class="io-title">输入</div>
+          <pre class="io-content">{{ processingInput }}</pre>
+        </div>
+        <div class="io-block">
+          <div class="io-title">输出</div>
+          <pre class="io-content">{{ processingOutput || '处理中...' }}</pre>
+        </div>
         <div class="progress-bar-track">
           <div class="progress-bar-fill" :style="{ width: progress + '%' }"></div>
         </div>
@@ -993,16 +1142,22 @@ const cancelProgress = async () => {
 
 <style scoped>
 .popup-window {
+  box-sizing: border-box;
   width: 100%;
-  height: 100%;
+  min-height: 100%;
   background: var(--bg-elevated);
   border-radius: var(--radius-lg);
   padding: var(--space-xs);
   box-shadow: var(--shadow-lg);
   border: 1px solid var(--border-light);
   position: relative;
-  overflow-x: hidden;
-  overflow-y: auto;
+  overflow: hidden;
+  clip-path: inset(0 round var(--radius-lg));
+}
+
+.popup-menu-content {
+  display: flex;
+  flex-direction: column;
 }
 
 .menu-item {
@@ -1049,24 +1204,64 @@ const cancelProgress = async () => {
 .processing-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(255, 255, 255, 0.92);
+  background: color-mix(in srgb, var(--bg-base) 88%, transparent);
   backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-lg);
+  border: 1px solid var(--border-subtle);
 }
 
 .progress-container {
   width: 80%;
   max-width: 280px;
   text-align: center;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm);
+  box-shadow: var(--shadow-sm);
 }
 
 .progress-label {
   font-size: 0.8125rem;
   color: var(--text-secondary);
   margin-bottom: var(--space-md);
+}
+
+.progress-action {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: var(--space-xs);
+}
+
+.io-block {
+  text-align: left;
+  margin-bottom: var(--space-sm);
+}
+
+.io-title {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.io-content {
+  margin: 0;
+  max-height: 80px;
+  overflow: auto;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: var(--space-xs);
+  font-size: 0.7rem;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .progress-bar-track {
@@ -1105,7 +1300,7 @@ const cancelProgress = async () => {
 }
 
 .cancel-btn:hover {
-  background: var(--error-bg);
+  background: color-mix(in srgb, var(--error-bg) 75%, var(--error) 25%);
 }
 
 /* Citation recommendation panel */

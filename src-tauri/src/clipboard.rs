@@ -1,4 +1,8 @@
 use arboard::Clipboard;
+use arboard::ImageData;
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
+use std::borrow::Cow;
 
 /// Read plain text from the system clipboard.
 #[tauri::command]
@@ -18,6 +22,30 @@ pub fn set_clipboard_text(text: String) -> Result<(), String> {
 
     clipboard.set_text(text)
         .map_err(|e| format!("Failed to write clipboard: {}", e))
+}
+
+/// Write a base64 PNG/JPEG image to the system clipboard.
+#[tauri::command]
+pub fn set_clipboard_image(image_base64: String) -> Result<(), String> {
+    let bytes = STANDARD
+        .decode(image_base64)
+        .map_err(|e| format!("Failed to decode base64 image: {}", e))?;
+
+    let img = image::load_from_memory(&bytes)
+        .map_err(|e| format!("Failed to parse image bytes: {}", e))?
+        .to_rgba8();
+
+    let (width, height) = img.dimensions();
+    let mut clipboard = Clipboard::new()
+        .map_err(|e| format!("Failed to access clipboard: {}", e))?;
+
+    clipboard
+        .set_image(ImageData {
+            width: width as usize,
+            height: height as usize,
+            bytes: Cow::Owned(img.into_raw()),
+        })
+        .map_err(|e| format!("Failed to write image to clipboard: {}", e))
 }
 
 /// Write HTML content to the clipboard using Windows CF_HTML format.

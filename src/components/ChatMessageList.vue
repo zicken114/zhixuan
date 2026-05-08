@@ -2,6 +2,9 @@
 import { ref, nextTick } from 'vue';
 import type { ChatMessage, CallMetadata, MessageContent } from '../utils/aiClient';
 import type { SearchResult } from '../utils/knowledgeBase';
+import { useI18n } from '../composables/useI18n';
+
+const { t } = useI18n();
 
 defineProps<{
   messages: ChatMessage[];
@@ -42,7 +45,6 @@ const emit = defineEmits<{
 
 defineExpose({ scrollToBottom });
 
-/** Parse [TODOS] blocks from assistant message content. */
 const parseTodos = (content: MessageContent): string[] => {
   const text = extractText(content);
   const match = text.match(/\[TODOS\]([\s\S]*?)\[\/TODOS\]/);
@@ -55,7 +57,6 @@ const parseTodos = (content: MessageContent): string[] => {
     .filter(Boolean);
 };
 
-/** Strip [TODOS] block for display. */
 const stripTodos = (content: MessageContent): string => {
   const text = extractText(content);
   return text.replace(/\[TODOS\][\s\S]*?\[\/TODOS\]\n?/, '').trim();
@@ -79,14 +80,14 @@ const handleDismissTodos = (msgIdx: number) => {
       :class="['message', msg.role === 'user' ? 'user-message' : 'ai-message']"
     >
       <div class="message-content">{{ msg.role === 'assistant' ? stripTodos(msg.content) : msg.content }}</div>
-      <!-- Suggested todo cards -->
+
       <div
         v-if="msg.role === 'assistant' && parseTodos(msg.content).length > 0 && !processedTodos.has(idx)"
         class="todo-suggestions"
       >
         <div class="todo-suggestions-header">
-          <span class="todo-icon">📌</span>
-          <span class="todo-label">Suggested todos from this reply</span>
+          <span class="todo-icon">📝</span>
+          <span class="todo-label">{{ t('chatMessages.todoHeader') }}</span>
         </div>
         <div
           v-for="(todo, tIdx) in parseTodos(msg.content)"
@@ -95,16 +96,16 @@ const handleDismissTodos = (msgIdx: number) => {
         >
           <span class="todo-text">{{ todo }}</span>
           <div class="todo-actions">
-            <button class="todo-btn add" @click="handleAddTodo(idx, todo)">Add</button>
-            <button class="todo-btn dismiss" @click="handleDismissTodos(idx)">Ignore</button>
+            <button class="todo-btn add" @click="handleAddTodo(idx, todo)">{{ t('common.add') }}</button>
+            <button class="todo-btn dismiss" @click="handleDismissTodos(idx)">{{ t('common.ignore') }}</button>
           </div>
         </div>
       </div>
-      <!-- Message actions for AI messages -->
+
       <div v-if="msg.role === 'assistant'" class="message-actions">
         <button
           class="action-btn"
-          title="Save to Obsidian"
+          :title="t('chatHeader.saveToObsidian')"
           @click="emit('save-to-obsidian', extractText(msg.content))"
         >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -114,10 +115,10 @@ const handleDismissTodos = (msgIdx: number) => {
             <line x1="16" y1="17" x2="8" y2="17"/>
             <polyline points="10 9 9 9 8 9"/>
           </svg>
-          Obsidian
+          {{ t('chatMessages.obsidian') }}
         </button>
       </div>
-      <!-- KB citations for AI messages -->
+
       <div
         v-if="msg.role === 'assistant' && kbCitations?.has(idx)"
         class="kb-citations"
@@ -125,7 +126,7 @@ const handleDismissTodos = (msgIdx: number) => {
         <details class="citations-details">
           <summary class="citations-summary">
             <span class="citations-icon">📚</span>
-            <span>References from knowledge base</span>
+            <span>{{ t('chatMessages.references') }}</span>
             <span class="citations-count">({{ kbCitations.get(idx)?.length }})</span>
           </summary>
           <div class="citations-list">
@@ -141,16 +142,16 @@ const handleDismissTodos = (msgIdx: number) => {
           </div>
         </details>
       </div>
-      <!-- Model metadata badge for AI messages -->
+
       <div
         v-if="msg.role === 'assistant' && metadata?.has(idx)"
         class="model-badge"
-        :title="metadata.get(idx)?.fallbackReason || 'Model routing info'"
+        :title="metadata.get(idx)?.fallbackReason || t('chatMessages.modelInfo')"
       >
-        <span class="badge-model">via {{ metadata.get(idx)?.modelName }}</span>
+        <span class="badge-model">{{ t('chatMessages.via') }} {{ metadata.get(idx)?.modelName }}</span>
         <span class="badge-sep">·</span>
         <span class="badge-latency">{{ formatLatency(metadata.get(idx)!.latencyMs) }}</span>
-        <span v-if="metadata.get(idx)?.isFallback" class="badge-fallback">降级</span>
+        <span v-if="metadata.get(idx)?.isFallback" class="badge-fallback">{{ t('chatMessages.fallback') }}</span>
       </div>
     </div>
 
@@ -161,8 +162,8 @@ const handleDismissTodos = (msgIdx: number) => {
 
     <div v-if="messages.length === 0 && !isStreaming" class="empty-state">
       <div class="empty-icon">💡</div>
-      <p class="empty-text">Ask me anything about your research</p>
-      <p class="empty-hint">LaTeX, citations, translations, and more</p>
+      <p class="empty-text">{{ t('chatMessages.emptyTitle') }}</p>
+      <p class="empty-hint">{{ t('chatMessages.emptyHint') }}</p>
     </div>
   </div>
 </template>
@@ -235,7 +236,6 @@ const handleDismissTodos = (msgIdx: number) => {
   font-size: 0.9rem;
 }
 
-/* Model metadata badge */
 .model-badge {
   display: flex;
   align-items: center;
@@ -344,7 +344,6 @@ const handleDismissTodos = (msgIdx: number) => {
   color: var(--accent);
 }
 
-/* Todo suggestion cards */
 .todo-suggestions {
   margin-top: 0.75rem;
   padding: 0.75rem;
@@ -425,7 +424,6 @@ const handleDismissTodos = (msgIdx: number) => {
   color: var(--text-secondary);
 }
 
-/* KB citation panel */
 .kb-citations {
   margin-top: 0.6rem;
   padding: 0.5rem 0.6rem;

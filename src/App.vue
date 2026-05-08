@@ -3,6 +3,7 @@ import { onMounted, ref } from 'vue';
 import WidgetWindow from './windows/WidgetWindow.vue';
 import MainWindow from './windows/MainWindow.vue';
 import PopupWindow from './windows/PopupWindow.vue';
+import HistoryWindow from './windows/HistoryWindow.vue';
 import CaptureWindow from './windows/CaptureWindow.vue';
 import ResultWindow from './windows/ResultWindow.vue';
 import SentinelBriefWindow from './windows/SentinelBriefWindow.vue';
@@ -22,6 +23,7 @@ onMounted(() => {
     <WidgetWindow v-if="windowType === 'widget'" />
     <MainWindow v-else-if="windowType === 'main'" />
     <PopupWindow v-else-if="windowType === 'popup'" />
+    <HistoryWindow v-else-if="windowType === 'history'" />
     <CaptureWindow v-else-if="windowType === 'capture'" />
     <ResultWindow v-else-if="windowType === 'result'" />
     <SentinelBriefWindow v-else-if="windowType === 'sentinel_brief'" />

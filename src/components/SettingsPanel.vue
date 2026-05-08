@@ -3,8 +3,10 @@ import { computed, onMounted, ref } from 'vue';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import {
   providerPresets,
+  supportedAppLanguages,
   supportedLanguages,
   useSettingsStore,
+  type AppLanguage,
   type AIConfig,
   type ModelConfig,
   type ProviderPreset,
@@ -13,9 +15,11 @@ import {
 import { resetAllData } from '../composables/useDatabase';
 import { setEmbedderMirrorUrl } from '../utils/embedder';
 import { checkZoteroConnection } from '../utils/zoteroBridge';
+import { useI18n } from '../composables/useI18n';
 
 const appWindow = getCurrentWebviewWindow();
 const settingsStore = useSettingsStore();
+const { t } = useI18n();
 
 const handleDragStart = async (e: MouseEvent) => {
   // Don't drag if clicking interactive elements inside settings
@@ -156,6 +160,35 @@ const resetSettings = async () => {
   location.reload();
 };
 
+const toggleThemeMode = async () => {
+  const nextThemeMode = localConfig.value.themeMode === 'dark' ? 'light' : 'dark';
+  localConfig.value.themeMode = nextThemeMode;
+
+  try {
+    await settingsStore.updateConfig({
+      ...settingsStore.config,
+      themeMode: nextThemeMode
+    });
+  } catch (error) {
+    console.error('Failed to update theme mode:', error);
+    localConfig.value.themeMode = settingsStore.config.themeMode;
+  }
+};
+
+const updateAppLanguage = async (language: AppLanguage) => {
+  localConfig.value.appLanguage = language;
+
+  try {
+    await settingsStore.updateConfig({
+      ...settingsStore.config,
+      appLanguage: language
+    });
+  } catch (error) {
+    console.error('Failed to update app language:', error);
+    localConfig.value.appLanguage = settingsStore.config.appLanguage;
+  }
+};
+
 const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate' | 'privacy' | 'routing' | 'knowledge' | 'external') => {
   if (target === 'text') textExpanded.value = !textExpanded.value;
   if (target === 'vision') visionExpanded.value = !visionExpanded.value;
@@ -173,25 +206,71 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate' | 'pri
     <div class="drag-handle" @mousedown="handleDragStart"></div>
     <div class="header">
       <div>
-        <h2>Settings</h2>
-        <p class="header-subtitle">Choose a provider preset or keep using a custom OpenAI-compatible endpoint.</p>
+        <h2>{{ t('settings.title') }}</h2>
+        <p class="header-subtitle">{{ t('settings.subtitle') }}</p>
       </div>
-      <button class="close-btn" @click="emit('close')">x</button>
+      <div class="header-actions">
+        <button class="theme-toggle-btn" @click="toggleThemeMode">
+          <span class="theme-toggle-label">{{ localConfig.themeMode === 'dark' ? t('common.dark') : t('common.light') }}</span>
+          <span class="theme-toggle-state">{{ t('common.mode') }}</span>
+        </button>
+        <button class="close-btn" @click="emit('close')">x</button>
+      </div>
     </div>
 
     <div class="content">
       <div class="card">
+        <button class="card-header" type="button">
+          <div>
+            <h3 class="card-title">{{ t('settings.appearance') }}</h3>
+            <p class="card-subtitle">{{ t('settings.appearanceSubtitle') }}</p>
+          </div>
+        </button>
+
+        <div class="card-body">
+          <div class="form-group toggle-row">
+            <div>
+              <label class="label">{{ t('settings.themeMode') }}</label>
+              <p class="hint">{{ t('settings.themeModeHint') }}</p>
+            </div>
+            <button class="theme-toggle-btn inline" @click="toggleThemeMode">
+              <span class="theme-toggle-label">{{ localConfig.themeMode === 'dark' ? t('common.dark') : t('common.light') }}</span>
+              <span class="theme-toggle-state">{{ t('common.mode') }}</span>
+            </button>
+          </div>
+
+          <div class="form-group">
+            <label class="label">{{ t('settings.appLanguage') }}</label>
+            <select
+              :value="localConfig.appLanguage"
+              class="input select-input"
+              @change="updateAppLanguage(($event.target as HTMLSelectElement).value as AppLanguage)"
+            >
+              <option
+                v-for="language in supportedAppLanguages"
+                :key="language.code"
+                :value="language.code"
+              >
+                {{ language.label }}
+              </option>
+            </select>
+            <p class="hint">{{ t('settings.appLanguageHint') }}</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
         <button class="card-header" @click="toggleCard('text')">
           <div>
-            <h3 class="card-title">Text Model</h3>
-            <p class="card-subtitle">Chat, translation, citation formatting, and clipboard cleanup.</p>
+            <h3 class="card-title">{{ t('settings.textModel') }}</h3>
+            <p class="card-subtitle">{{ t('settings.textModelSubtitle') }}</p>
           </div>
-          <span class="card-toggle">{{ textExpanded ? 'Hide' : 'Show' }}</span>
+          <span class="card-toggle">{{ textExpanded ? t('common.hide') : t('common.show') }}</span>
         </button>
 
         <div v-if="textExpanded" class="card-body">
           <div class="provider-group">
-            <div class="provider-label">Provider Presets</div>
+            <div class="provider-label">{{ t('settings.providerPresets') }}</div>
             <div class="provider-grid">
               <button
                 v-for="preset in textProviderPresets"
@@ -207,7 +286,7 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate' | 'pri
           </div>
 
           <div class="form-group">
-            <label class="label">Base URL</label>
+            <label class="label">{{ t('settings.baseUrl') }}</label>
             <input
               v-model="localConfig.textConfig.baseUrl"
               type="text"
@@ -218,7 +297,7 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate' | 'pri
           </div>
 
           <div class="form-group">
-            <label class="label">API Key</label>
+            <label class="label">{{ t('settings.apiKey') }}</label>
             <div class="password-input">
               <input
                 v-model="localConfig.textConfig.apiKey"
@@ -227,13 +306,13 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate' | 'pri
                 placeholder="sk-..."
               />
               <button class="toggle-password" @click="showTextPassword = !showTextPassword">
-                {{ showTextPassword ? 'Hide' : 'Show' }}
+                {{ showTextPassword ? t('settings.hidePassword') : t('settings.showPassword') }}
               </button>
             </div>
           </div>
 
           <div class="form-group">
-            <label class="label">Model</label>
+            <label class="label">{{ t('settings.model') }}</label>
             <input
               v-model="localConfig.textConfig.model"
               type="text"
@@ -248,15 +327,15 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate' | 'pri
       <div class="card">
         <button class="card-header" @click="toggleCard('vision')">
           <div>
-            <h3 class="card-title">Vision Model</h3>
-            <p class="card-subtitle">Screenshot OCR and multimodal extraction.</p>
+            <h3 class="card-title">{{ t('settings.visionModel') }}</h3>
+            <p class="card-subtitle">{{ t('settings.visionModelSubtitle') }}</p>
           </div>
-          <span class="card-toggle">{{ visionExpanded ? 'Hide' : 'Show' }}</span>
+          <span class="card-toggle">{{ visionExpanded ? t('common.hide') : t('common.show') }}</span>
         </button>
 
         <div v-if="visionExpanded" class="card-body">
           <div class="provider-group">
-            <div class="provider-label">Provider Presets</div>
+            <div class="provider-label">{{ t('settings.providerPresets') }}</div>
             <div class="provider-grid">
               <button
                 v-for="preset in visionProviderPresets"
@@ -272,7 +351,7 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate' | 'pri
           </div>
 
           <div class="form-group">
-            <label class="label">Base URL</label>
+            <label class="label">{{ t('settings.baseUrl') }}</label>
             <input
               v-model="localConfig.visionConfig.baseUrl"
               type="text"
@@ -283,7 +362,7 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate' | 'pri
           </div>
 
           <div class="form-group">
-            <label class="label">API Key</label>
+            <label class="label">{{ t('settings.apiKey') }}</label>
             <div class="password-input">
               <input
                 v-model="localConfig.visionConfig.apiKey"
@@ -292,13 +371,13 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate' | 'pri
                 placeholder="sk-..."
               />
               <button class="toggle-password" @click="showVisionPassword = !showVisionPassword">
-                {{ showVisionPassword ? 'Hide' : 'Show' }}
+                {{ showVisionPassword ? t('settings.hidePassword') : t('settings.showPassword') }}
               </button>
             </div>
           </div>
 
           <div class="form-group">
-            <label class="label">Model</label>
+            <label class="label">{{ t('settings.model') }}</label>
             <input
               v-model="localConfig.visionConfig.model"
               type="text"
@@ -313,10 +392,10 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate' | 'pri
       <div class="card">
         <button class="card-header" @click="toggleCard('translate')">
           <div>
-            <h3 class="card-title">Translation</h3>
-            <p class="card-subtitle">Configure your translation language preference.</p>
+            <h3 class="card-title">{{ t('settings.translation') }}</h3>
+            <p class="card-subtitle">{{ t('settings.translationSubtitle') }}</p>
           </div>
-          <span class="card-toggle">{{ translateExpanded ? 'Hide' : 'Show' }}</span>
+          <span class="card-toggle">{{ translateExpanded ? t('common.hide') : t('common.show') }}</span>
         </button>
 
         <div v-if="translateExpanded" class="card-body">
@@ -345,10 +424,10 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate' | 'pri
       <div class="card">
         <button class="card-header" @click="toggleCard('shortcuts')">
           <div>
-            <h3 class="card-title">Keyboard Shortcuts</h3>
-            <p class="card-subtitle">Read-only shortcuts used by the current desktop build.</p>
+            <h3 class="card-title">{{ t('settings.shortcuts') }}</h3>
+            <p class="card-subtitle">{{ t('settings.shortcutsSubtitle') }}</p>
           </div>
-          <span class="card-toggle">{{ shortcutsExpanded ? 'Hide' : 'Show' }}</span>
+          <span class="card-toggle">{{ shortcutsExpanded ? t('common.hide') : t('common.show') }}</span>
         </button>
 
         <div v-if="shortcutsExpanded" class="card-body">
@@ -379,10 +458,10 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate' | 'pri
       <div class="card">
         <button class="card-header" @click="toggleCard('privacy')">
           <div>
-            <h3 class="card-title">Privacy</h3>
-            <p class="card-subtitle">Control data collection and local storage.</p>
+            <h3 class="card-title">{{ t('settings.privacy') }}</h3>
+            <p class="card-subtitle">{{ t('settings.privacySubtitle') }}</p>
           </div>
-          <span class="card-toggle">{{ privacyExpanded ? 'Hide' : 'Show' }}</span>
+          <span class="card-toggle">{{ privacyExpanded ? t('common.hide') : t('common.show') }}</span>
         </button>
 
         <div v-if="privacyExpanded" class="card-body">
@@ -629,14 +708,14 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate' | 'pri
         @click="saveSettings"
         :disabled="saveStatus === 'saving'"
       >
-        <span v-if="saveStatus === 'idle'">Save Settings</span>
-        <span v-else-if="saveStatus === 'saving'">Saving...</span>
-        <span v-else-if="saveStatus === 'saved'">Saved</span>
-        <span v-else>Error</span>
+        <span v-if="saveStatus === 'idle'">{{ t('settings.saveSettings') }}</span>
+        <span v-else-if="saveStatus === 'saving'">{{ t('common.saving') }}</span>
+        <span v-else-if="saveStatus === 'saved'">{{ t('settings.saved') }}</span>
+        <span v-else>{{ t('settings.error') }}</span>
       </button>
 
       <button class="reset-btn" @click="resetSettings">
-        Reset to Default
+        {{ t('settings.reset') }}
       </button>
     </div>
   </div>
@@ -697,6 +776,46 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate' | 'pri
   height: 34px;
   border-radius: 8px;
   transition: all 0.2s ease;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.theme-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.5rem 0.8rem;
+  border: 1px solid var(--border-medium);
+  border-radius: 999px;
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.theme-toggle-btn.inline {
+  flex-shrink: 0;
+}
+
+.theme-toggle-btn:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
+  border-color: var(--border-focus);
+}
+
+.theme-toggle-label {
+  color: var(--accent);
+}
+
+.theme-toggle-state {
+  color: var(--text-muted);
+  font-weight: 600;
 }
 
 .close-btn:hover {

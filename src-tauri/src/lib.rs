@@ -258,6 +258,7 @@ pub fn run() {
             // Clipboard
             clipboard::get_clipboard_text,
             clipboard::set_clipboard_text,
+            clipboard::set_clipboard_image,
             clipboard::set_clipboard_html,
             // Screenshot
             screenshot::capture_fullscreen,
@@ -280,6 +281,7 @@ pub fn run() {
             events::emit_to_result,
             events::emit_extraction_complete,
             events::emit_extraction_error,
+            events::notify_history_changed,
             // App control
             app_control::quit_app,
             app_control::show_popup_with_clipboard,

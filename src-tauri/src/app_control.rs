@@ -3,6 +3,48 @@ use tauri::{Emitter, Manager, PhysicalPosition};
 
 use crate::models::ClipboardPayload;
 
+fn clamp_popup_position(
+    app: &tauri::AppHandle,
+    window: &tauri::WebviewWindow,
+    anchor_x: i32,
+    anchor_y: i32,
+) -> Result<PhysicalPosition<i32>, String> {
+    const EDGE_PADDING: i32 = 12;
+    const CURSOR_OFFSET: i32 = 8;
+
+    let window_size = window.outer_size().map_err(|e| e.to_string())?;
+
+    let monitor = app
+        .available_monitors()
+        .map_err(|e| e.to_string())?
+        .into_iter()
+        .find(|monitor| {
+            let pos = monitor.position();
+            let size = monitor.size();
+            anchor_x >= pos.x
+                && anchor_x < pos.x + size.width as i32
+                && anchor_y >= pos.y
+                && anchor_y < pos.y + size.height as i32
+        })
+        .or_else(|| app.primary_monitor().ok().flatten())
+        .ok_or("No monitor available".to_string())?;
+
+    let monitor_pos = monitor.position();
+    let monitor_size = monitor.size();
+    let min_x = monitor_pos.x + EDGE_PADDING;
+    let min_y = monitor_pos.y + EDGE_PADDING;
+    let max_x = monitor_pos.x + monitor_size.width as i32 - window_size.width as i32 - EDGE_PADDING;
+    let max_y = monitor_pos.y + monitor_size.height as i32 - window_size.height as i32 - EDGE_PADDING;
+
+    let preferred_x = anchor_x + CURSOR_OFFSET;
+    let preferred_y = anchor_y + CURSOR_OFFSET;
+
+    let clamped_x = preferred_x.clamp(min_x, max_x.max(min_x));
+    let clamped_y = preferred_y.clamp(min_y, max_y.max(min_y));
+
+    Ok(PhysicalPosition::new(clamped_x, clamped_y))
+}
+
 /// Write or append text content to a file path, creating parent directories as needed.
 #[tauri::command]
 pub fn write_text_file(path: String, contents: String, append: bool) -> Result<(), String> {
@@ -91,8 +133,9 @@ pub fn show_popup_with_clipboard(app: tauri::AppHandle) -> Result<(), String> {
     };
 
     if let Some(window) = app.get_webview_window("popup") {
+        let target_position = clamp_popup_position(&app, &window, x, y)?;
         window
-            .set_position(PhysicalPosition::new(x, y))
+            .set_position(target_position)
             .map_err(|e| e.to_string())?;
 
         let payload = ClipboardPayload { text, x, y };
@@ -113,7 +156,9 @@ pub fn show_window_with_settings(app: tauri::AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("main") {
         window.show().map_err(|e| e.to_string())?;
         window.set_focus().map_err(|e| e.to_string())?;
-        window.emit("show-settings", ()).map_err(|e| e.to_string())?;
+        window
+            .emit("show-settings", serde_json::json!({ "standalone": true }))
+            .map_err(|e| e.to_string())?;
     }
     Ok(())
 }
@@ -136,8 +181,9 @@ pub fn show_popup_with_action(app: tauri::AppHandle, action: String) -> Result<(
     };
 
     if let Some(window) = app.get_webview_window("popup") {
+        let target_position = clamp_popup_position(&app, &window, x, y)?;
         window
-            .set_position(PhysicalPosition::new(x, y))
+            .set_position(target_position)
             .map_err(|e| e.to_string())?;
 
         let payload = ClipboardPayload { text, x, y };

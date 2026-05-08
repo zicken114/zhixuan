@@ -49,7 +49,6 @@ export function useWindow() {
 
   /** Show the main window and open settings inside it. */
   const showSettings = async () => {
-    await show('main');
     await invoke('show_window_with_settings');
   };
 

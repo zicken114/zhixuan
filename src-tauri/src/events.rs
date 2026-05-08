@@ -29,3 +29,10 @@ pub async fn emit_extraction_error(app: tauri::AppHandle, error: String) -> Resu
     let _ = app.emit("extraction-error", error);
     Ok(())
 }
+
+/// Broadcast popup-history updates to all windows.
+#[tauri::command]
+pub async fn notify_history_changed(app: tauri::AppHandle) -> Result<(), String> {
+    let _ = app.emit("history-changed", ());
+    Ok(())
+}

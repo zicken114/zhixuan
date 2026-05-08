@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue';
+import { useI18n } from '../composables/useI18n';
+
+const { t } = useI18n();
 
 const props = defineProps<{
   modelValue: string;
@@ -25,7 +28,7 @@ const canSend = computed(() => !props.isStreaming && inputText.value.trim().leng
     <input
       v-model="inputText"
       type="text"
-      placeholder="Ask me anything..."
+      :placeholder="t('chatInput.placeholder')"
       class="input-field"
       :disabled="isStreaming"
       @keyup.enter="canSend && emit('send')"
@@ -35,7 +38,7 @@ const canSend = computed(() => !props.isStreaming && inputText.value.trim().leng
       class="send-btn stop-btn"
       @click="emit('stop')"
     >
-      Stop
+      {{ t('chatInput.stop') }}
     </button>
     <button
       v-else
@@ -43,7 +46,7 @@ const canSend = computed(() => !props.isStreaming && inputText.value.trim().leng
       :disabled="!canSend"
       @click="emit('send')"
     >
-      Send
+      {{ t('chatInput.send') }}
     </button>
   </div>
 </template>

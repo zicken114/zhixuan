@@ -32,7 +32,7 @@ interface ReadingSessionStartPayload {
 }
 
 const appWindow = getCurrentWebviewWindow();
-const { showPopup: showPopupMenu, show, showSentinelBrief, snapWidget: snapWidgetToBounds, setWidgetDefaultPosition, center } = useWindow();
+const { showPopup: showPopupMenu, show, resize, showSentinelBrief, snapWidget: snapWidgetToBounds, setWidgetDefaultPosition, center } = useWindow();
 
 const collapsedOffset = 44;
 const collapseDelayMs = 1200;
@@ -318,6 +318,7 @@ const showMainWindow = async () => {
   // Refresh sentinel count on user interaction
   refreshUnread();
   try {
+    await resize('main', 860, 800).catch(() => {});
     await show('main');
   } catch (error) {
     console.error('Failed to show main window:', error);
@@ -331,6 +332,7 @@ const handleContextMenu = (e: MouseEvent) => {
 onMounted(async () => {
   await setWidgetDefaultPosition();
   await center('main');
+  await resize('main', 560, 800).catch(() => {});
   await show('main');
 
   unlistenMoved = await appWindow.onMoved(() => {

@@ -6,11 +6,13 @@ import { aiClient, type ChatMessage } from '../utils/aiClient';
 import { useClipboard } from '../composables/useClipboard';
 import { useWindow } from '../composables/useWindow';
 import { recordEvent } from '../composables/useEvents';
+import { usePopupHistoryStore } from '../stores/popupHistory';
 import { useScreenshotSelection } from '../composables/useScreenshotSelection';
 import ExtractPromptMenu from '../components/ExtractPromptMenu.vue';
 import ExtractProcessingOverlay from '../components/ExtractProcessingOverlay.vue';
 import ExtractResultOverlay from '../components/ExtractResultOverlay.vue';
 import type { ExtractionPrompt } from '../components/ExtractPromptMenu.vue';
+import type { PopupActionType } from '../stores/popupHistory';
 
 interface ScreenshotPayload {
   image: string;  // Base64 PNG
@@ -22,6 +24,7 @@ interface ScreenshotPayload {
 
 const { writeText, writeHtml } = useClipboard();
 const { hideCapture, showResult: showResultWindow, waitForResultReady } = useWindow();
+const popupHistoryStore = usePopupHistoryStore();
 const {
   hasSelected,
   startX,
@@ -55,6 +58,13 @@ const extractionPrompts: ExtractionPrompt[] = [
   { label: '提取为纯文本', icon: '📝', prompt: '请将图片中的所有文字内容完整提取为纯文本，只返回文本内容，不要任何解释。', format: 'text' },
   { label: '提取伪代码/流程', icon: '🔣', prompt: '请将图片中的伪代码、算法流程图或流程描述提取为清晰的步骤说明，返回结构化的文本描述。', format: 'text' },
 ];
+
+const toHistoryActionType = (prompt: ExtractionPrompt): PopupActionType => {
+  if (prompt.format === 'latex') return 'extract-latex';
+  if (prompt.format === 'markdown') return 'extract-table';
+  if (prompt.label.includes('公式')) return 'extract-math';
+  return 'extract-text';
+};
 
 const presetHint = ref<string>('');
 let presetPromptIndex = -1;
@@ -188,6 +198,15 @@ const extractWithPrompt = async (prompt: ExtractionPrompt) => {
         } else {
           await writeText(clipboardText);
         }
+
+        popupHistoryStore.addItem({
+          actionType: toHistoryActionType(prompt),
+          actionLabel: prompt.label,
+          inputText: '[截图输入]',
+          inputImage: croppedImage,
+          outputText: clipboardText
+        });
+        await invoke('notify_history_changed');
 
         await invoke('emit_extraction_complete', {
           icon: prompt.icon,

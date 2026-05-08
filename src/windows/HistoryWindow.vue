@@ -1,19 +1,19 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted } from 'vue';
-import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { usePopupHistoryStore } from '../stores/popupHistory';
+import { useSettingsStore } from '../stores/settings';
+import { useI18n } from '../composables/useI18n';
 
-const appWindow = getCurrentWebviewWindow();
 const historyStore = usePopupHistoryStore();
+const settingsStore = useSettingsStore();
+const { t } = useI18n();
 
-let unlistenFocus: (() => void) | null = null;
 let unlistenHistoryChanged: (() => void) | null = null;
 
 const refreshHistory = () => {
   historyStore.loadFromStorage();
-  console.log('[History] Loaded history, items:', historyStore.items.length);
 };
 
 const getActionIcon = (actionType: string) => {
@@ -22,37 +22,28 @@ const getActionIcon = (actionType: string) => {
     case 'clean': return '🧹';
     case 'citation': return '📚';
     case 'extract-text': return '📝';
-    case 'extract-latex': return '🔢';
-    case 'extract-math': return '📐';
+    case 'extract-latex': return '🧮';
+    case 'extract-math': return '∑';
     case 'extract-table': return '📊';
-    default: return '📋';
+    case 'screenshot': return '📸';
+    default: return '🕘';
   }
 };
 
 const getActionLabel = (actionType: string) => {
   switch (actionType) {
-    case 'translate': return '翻译';
-    case 'clean': return '清理文本';
-    case 'citation': return '格式引用';
-    case 'extract-text': return '提取文字';
-    case 'extract-latex': return '提取LaTeX';
-    case 'extract-math': return '提取公式';
-    case 'extract-table': return '提取表格';
+    case 'translate': return t('popup.translate');
+    case 'clean': return t('popup.clean');
+    case 'citation': return t('popup.formatCitation');
+    case 'history': return t('popup.history');
+    case 'screenshot': return t('common.screenshot');
     default: return actionType;
   }
 };
 
 const formatTime = (timestamp: number) => {
   const date = new Date(timestamp);
-  const now = new Date();
-  const isToday = date.toDateString() === now.toDateString();
-
-  const timeStr = date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
-
-  if (isToday) {
-    return `今天 ${timeStr}`;
-  }
-  return `${date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })} ${timeStr}`;
+  return date.toLocaleString();
 };
 
 const copyToClipboard = async (text: string) => {
@@ -66,7 +57,6 @@ const copyToClipboard = async (text: string) => {
 const copyImage = async (base64Data: string) => {
   try {
     await invoke('set_clipboard_image', { imageBase64: base64Data });
-    console.log('[History] Image copied to clipboard');
   } catch (e) {
     console.error('Failed to copy image:', e);
   }
@@ -83,59 +73,47 @@ const clearAll = async () => {
 };
 
 const closeWindow = async () => {
-  await appWindow.hide();
+  await invoke('hide_window', { label: 'history' });
 };
 
 onMounted(async () => {
+  await settingsStore.init();
   refreshHistory();
 
-  // Listen for history changes from other windows
   unlistenHistoryChanged = await listen('history-changed', () => {
-    console.log('[History] Received history-changed event');
     refreshHistory();
-  });
-
-  unlistenFocus = await appWindow.onFocusChanged(({ payload: focused }) => {
-    if (!focused) {
-      closeWindow();
-    }
   });
 });
 
 onUnmounted(() => {
-  if (unlistenFocus) unlistenFocus();
   if (unlistenHistoryChanged) unlistenHistoryChanged();
 });
 </script>
 
 <template>
   <div class="history-window">
-    <!-- Header -->
-    <div class="header" @mousedown="appWindow.startDragging()">
-      <h2 class="title">历史记录</h2>
+    <div class="header">
+      <h2 class="title">{{ t('history.title') }}</h2>
       <div class="header-actions">
         <button v-if="historyStore.items.length > 0" class="clear-btn" @click.stop="clearAll">
-          清空
+          {{ t('history.clearAll') }}
         </button>
         <button class="close-btn" @click.stop="closeWindow">×</button>
       </div>
     </div>
 
-    <!-- Empty state -->
     <div v-if="historyStore.items.length === 0" class="empty-state">
-      <div class="empty-icon">📋</div>
-      <div class="empty-text">暂无历史记录</div>
-      <div class="empty-hint">使用翻译、清理等功能后会自动记录</div>
+      <div class="empty-icon">🕘</div>
+      <div class="empty-text">{{ t('history.emptyTitle') }}</div>
+      <div class="empty-hint">{{ t('history.emptyHint') }}</div>
     </div>
 
-    <!-- History list -->
     <div v-else class="history-list">
       <div
         v-for="item in historyStore.items"
         :key="item.id"
         class="history-item"
       >
-        <!-- Item header -->
         <div class="item-header">
           <div class="item-action">
             <span class="action-icon">{{ getActionIcon(item.actionType) }}</span>
@@ -143,29 +121,27 @@ onUnmounted(() => {
           </div>
           <div class="item-meta">
             <span class="item-time">{{ formatTime(item.timestamp) }}</span>
-            <button class="delete-btn" @click.stop="deleteItem(item.id)" title="删除">×</button>
+            <button class="delete-btn" @click.stop="deleteItem(item.id)" :title="t('history.delete')">×</button>
           </div>
         </div>
 
-        <!-- Input section - show thumbnail for screenshots -->
         <div class="section">
-          <div class="section-label">输入</div>
+          <div class="section-label">{{ t('history.input') }}</div>
           <div class="section-content">
             <div v-if="item.inputImage" class="thumbnail-container">
-              <img :src="'data:image/png;base64,' + item.inputImage" alt="截图" class="thumbnail" />
-              <button class="copy-btn thumbnail-copy-btn" @click.stop="copyImage(item.inputImage)" title="复制图片">复制图片</button>
+              <img :src="'data:image/png;base64,' + item.inputImage" alt="screenshot" class="thumbnail" />
+              <button class="copy-btn thumbnail-copy-btn" @click.stop="copyImage(item.inputImage)" :title="t('history.copyImage')">{{ t('history.copyImage') }}</button>
             </div>
             <pre v-else class="text-content">{{ item.inputText }}</pre>
-            <button v-if="!item.inputImage" class="copy-btn" @click.stop="copyToClipboard(item.inputText)" title="复制输入">复制</button>
+            <button v-if="!item.inputImage" class="copy-btn" @click.stop="copyToClipboard(item.inputText)" :title="t('common.copy')">{{ t('common.copy') }}</button>
           </div>
         </div>
 
-        <!-- Output section -->
         <div class="section">
-          <div class="section-label">输出</div>
+          <div class="section-label">{{ t('history.output') }}</div>
           <div class="section-content">
             <pre class="text-content output">{{ item.outputText }}</pre>
-            <button class="copy-btn" @click.stop="copyToClipboard(item.outputText)" title="复制输出">复制</button>
+            <button class="copy-btn" @click.stop="copyToClipboard(item.outputText)" :title="t('common.copy')">{{ t('common.copy') }}</button>
           </div>
         </div>
       </div>
@@ -177,10 +153,11 @@ onUnmounted(() => {
 .history-window {
   width: 100%;
   height: 100%;
-  background: rgba(13, 13, 20, 0.98);
+  background: var(--bg-elevated);
   backdrop-filter: blur(20px);
-  border-radius: 16px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-xl);
+  border: 1px solid var(--border-light);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -191,8 +168,8 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: 16px 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(0, 229, 204, 0.03);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
   cursor: move;
   -webkit-app-region: drag;
 }
@@ -201,28 +178,33 @@ onUnmounted(() => {
   margin: 0;
   font-size: 16px;
   font-weight: 600;
-  color: #f0f0f5;
+  color: var(--text-primary);
 }
 
 .header-actions {
   display: flex;
   align-items: center;
   gap: 8px;
+  -webkit-app-region: no-drag;
+}
+
+button {
+  -webkit-app-region: no-drag;
 }
 
 .clear-btn {
   padding: 4px 12px;
-  background: rgba(239, 68, 68, 0.15);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: 6px;
-  color: #ef4444;
+  background: var(--error-bg);
+  border: 1px solid color-mix(in srgb, var(--error) 30%, transparent);
+  border-radius: var(--radius-sm);
+  color: var(--error);
   cursor: pointer;
   font-size: 12px;
   transition: all 0.15s;
 }
 
 .clear-btn:hover {
-  background: rgba(239, 68, 68, 0.25);
+  background: color-mix(in srgb, var(--error-bg) 80%, var(--error) 20%);
 }
 
 .close-btn {
@@ -231,10 +213,10 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 6px;
-  color: rgba(240, 240, 245, 0.7);
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
   cursor: pointer;
   font-size: 18px;
   line-height: 1;
@@ -243,9 +225,9 @@ onUnmounted(() => {
 }
 
 .close-btn:hover {
-  background: rgba(239, 68, 68, 0.3);
-  border-color: rgba(239, 68, 68, 0.4);
-  color: #ef4444;
+  background: var(--error-bg);
+  border-color: color-mix(in srgb, var(--error) 35%, transparent);
+  color: var(--error);
 }
 
 .empty-state {
@@ -265,13 +247,13 @@ onUnmounted(() => {
 
 .empty-text {
   font-size: 15px;
-  color: rgba(240, 240, 245, 0.6);
+  color: var(--text-secondary);
   font-weight: 500;
 }
 
 .empty-hint {
   font-size: 12px;
-  color: rgba(240, 240, 245, 0.35);
+  color: var(--text-muted);
 }
 
 .history-list {
@@ -284,9 +266,9 @@ onUnmounted(() => {
 }
 
 .history-item {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
   padding: 12px 14px;
   display: flex;
   flex-direction: column;
@@ -312,7 +294,7 @@ onUnmounted(() => {
 .action-label {
   font-size: 13px;
   font-weight: 600;
-  color: #00e5cc;
+  color: var(--text-primary);
 }
 
 .item-meta {
@@ -323,7 +305,7 @@ onUnmounted(() => {
 
 .item-time {
   font-size: 11px;
-  color: rgba(240, 240, 245, 0.4);
+  color: var(--text-muted);
 }
 
 .delete-btn {
@@ -332,10 +314,10 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.2);
+  background: var(--error-bg);
+  border: 1px solid color-mix(in srgb, var(--error) 30%, transparent);
   border-radius: 4px;
-  color: #ef4444;
+  color: var(--error);
   cursor: pointer;
   font-size: 14px;
   line-height: 1;
@@ -344,7 +326,7 @@ onUnmounted(() => {
 }
 
 .delete-btn:hover {
-  background: rgba(239, 68, 68, 0.25);
+  background: color-mix(in srgb, var(--error-bg) 80%, var(--error) 20%);
 }
 
 .section {
@@ -356,7 +338,7 @@ onUnmounted(() => {
 .section-label {
   font-size: 10px;
   font-weight: 600;
-  color: rgba(0, 229, 204, 0.6);
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -377,7 +359,7 @@ onUnmounted(() => {
   max-width: 100%;
   max-height: 80px;
   border-radius: 6px;
-  border: 1px solid rgba(0, 229, 204, 0.15);
+  border: 1px solid var(--accent-border);
   cursor: pointer;
   transition: opacity 0.15s;
 }
@@ -392,13 +374,13 @@ onUnmounted(() => {
 
 .text-content {
   flex: 1;
-  background: rgba(0, 0, 0, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
   padding: 8px 10px;
   font-family: inherit;
   font-size: 12px;
-  color: rgba(240, 240, 245, 0.8);
+  color: var(--text-secondary);
   margin: 0;
   white-space: pre-wrap;
   word-break: break-word;
@@ -408,17 +390,18 @@ onUnmounted(() => {
 }
 
 .text-content.output {
-  color: #00e5cc;
-  border-color: rgba(0, 229, 204, 0.15);
+  color: var(--text-primary);
+  border-color: var(--accent-border);
+  background: color-mix(in srgb, var(--accent-subtle) 35%, var(--bg-card) 65%);
 }
 
 .copy-btn {
   flex-shrink: 0;
   padding: 4px 10px;
-  background: rgba(0, 229, 204, 0.1);
-  border: 1px solid rgba(0, 229, 204, 0.2);
-  border-radius: 6px;
-  color: #00e5cc;
+  background: var(--accent-subtle);
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-sm);
+  color: var(--accent-text);
   cursor: pointer;
   font-size: 11px;
   transition: all 0.15s;
@@ -426,6 +409,6 @@ onUnmounted(() => {
 }
 
 .copy-btn:hover {
-  background: rgba(0, 229, 204, 0.2);
+  background: color-mix(in srgb, var(--accent-subtle) 70%, var(--accent) 30%);
 }
 </style>

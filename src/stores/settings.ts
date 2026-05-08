@@ -110,10 +110,21 @@ export interface ExternalToolsConfig {
   obsidianDefaultFolder: string;
 }
 
+export type ThemeMode = 'light' | 'dark';
+export type AppLanguage = 'en' | 'zh' | 'ja';
+
+export const supportedAppLanguages = [
+  { code: 'en', label: 'English' },
+  { code: 'zh', label: '中文' },
+  { code: 'ja', label: '日本語' }
+] as const;
+
 export interface AIConfig {
   textConfig: ModelConfig;
   visionConfig: ModelConfig;
   translateConfig: TranslateConfig;
+  themeMode: ThemeMode;
+  appLanguage: AppLanguage;
   hasCompletedWelcome: boolean;
   autoHideOnBlur: boolean;
   popupShortcut: string;
@@ -330,6 +341,8 @@ const createDefaultConfig = (): AIConfig => {
       sourceLang: 'auto',
       targetLang: 'zh'
     },
+    themeMode: 'light',
+    appLanguage: 'en',
     hasCompletedWelcome: false,
     autoHideOnBlur: true,
     popupShortcut: 'Alt+Q',
@@ -405,6 +418,8 @@ export const normalizeConfig = (partial: Partial<AIConfig> | undefined): AIConfi
     sourceLang: partial?.translateConfig?.sourceLang ?? defaultConfig.translateConfig.sourceLang,
     targetLang: partial?.translateConfig?.targetLang ?? defaultConfig.translateConfig.targetLang
   },
+  themeMode: partial?.themeMode ?? defaultConfig.themeMode,
+  appLanguage: partial?.appLanguage ?? defaultConfig.appLanguage,
   hasCompletedWelcome: partial?.hasCompletedWelcome ?? defaultConfig.hasCompletedWelcome,
   autoHideOnBlur: partial?.autoHideOnBlur ?? defaultConfig.autoHideOnBlur,
   popupShortcut: partial?.popupShortcut ?? defaultConfig.popupShortcut,
@@ -433,6 +448,17 @@ export const normalizeConfig = (partial: Partial<AIConfig> | undefined): AIConfi
 export const useSettingsStore = defineStore('settings', () => {
   const config = ref<AIConfig>(defaultConfig);
 
+  const applyTheme = (themeMode: ThemeMode) => {
+    if (typeof document === 'undefined') return;
+    document.documentElement.setAttribute('data-theme', themeMode);
+  };
+
+  const applyLanguage = (appLanguage: AppLanguage) => {
+    if (typeof document === 'undefined') return;
+    document.documentElement.setAttribute('lang', appLanguage);
+    document.documentElement.setAttribute('data-app-language', appLanguage);
+  };
+
   /** Track whether the cross-window sync listener has been wired up. */
   let crossWindowListenerReady = false;
 
@@ -446,6 +472,8 @@ export const useSettingsStore = defineStore('settings', () => {
       const stored = await loadSettings();
       if (stored) {
         config.value = normalizeConfig(stored);
+        applyTheme(config.value.themeMode);
+        applyLanguage(config.value.appLanguage);
       }
     } catch (e) {
       console.warn('[Settings] Failed to reload after sync event:', e);
@@ -459,6 +487,8 @@ export const useSettingsStore = defineStore('settings', () => {
       if (stored) {
         config.value = normalizeConfig(stored);
       }
+      applyTheme(config.value.themeMode);
+      applyLanguage(config.value.appLanguage);
       // Sync incognito mode with Rust backend
       await setIncognitoMode(config.value.incognitoMode);
       // Configure embedding model mirror URL
@@ -517,6 +547,8 @@ export const useSettingsStore = defineStore('settings', () => {
 
   const updateConfig = async (newConfig: AIConfig) => {
     config.value = normalizeConfig(JSON.parse(JSON.stringify(newConfig)));
+    applyTheme(config.value.themeMode);
+    applyLanguage(config.value.appLanguage);
     await saveToDb();
     await broadcastUpdate();
   };

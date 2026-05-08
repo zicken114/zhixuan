@@ -10,6 +10,7 @@ import { useProjectStore, PROJECT_COLORS, type Project } from '../stores/project
 import { useUsageStore } from '../stores/usage';
 import { useKnowledgeBaseStore } from '../stores/knowledgeBase';
 import { useWindow } from '../composables/useWindow';
+import { useI18n } from '../composables/useI18n';
 import { recordEvent } from '../composables/useEvents';
 import { saveNoteToObsidian, openNoteInObsidian } from '../utils/obsidianBridge';
 import { syncZoteroLibrary } from '../utils/zoteroBridge';
@@ -38,12 +39,15 @@ import PluginPanel from '../components/PluginPanel.vue';
 import TeamPanel from '../components/TeamPanel.vue';
 
 const appWindow = getCurrentWebviewWindow();
+const WELCOME_WINDOW_WIDTH = 560;
+const CHAT_WINDOW_WIDTH = 860;
 const settingsStore = useSettingsStore();
 const historyStore = useHistoryStore();
 const projectStore = useProjectStore();
 const usageStore = useUsageStore();
 const kbStore = useKnowledgeBaseStore();
-const { setWidgetDefaultPosition, show } = useWindow();
+const { setWidgetDefaultPosition, show, resize } = useWindow();
+const { t } = useI18n();
 
 const messages = ref<ChatMessage[]>([]);
 const inputText = ref('');
@@ -60,8 +64,13 @@ const showExperiment = ref(false);
 const showDashboard = ref(false);
 const showPlugin = ref(false);
 const showTeam = ref(false);
-const showWelcome = ref(false);
+const showWelcome = ref(true);
+const settingsOpenedStandalone = ref(false);
 const messageListRef = ref<InstanceType<typeof ChatMessageList> | null>(null);
+
+interface ShowSettingsPayload {
+  standalone?: boolean;
+}
 
 // Router metadata for each AI message (keyed by message index or timestamp)
 const messageMetadata = ref<Map<number, CallMetadata>>(new Map());
@@ -123,9 +132,10 @@ watch(messages, async (newMessages) => {
 // Listen for show-settings event from Rust
 onMounted(async () => {
   await settingsStore.init();
-  showWelcome.value = !settingsStore.config.hasCompletedWelcome;
+  await resize('main', WELCOME_WINDOW_WIDTH, 800).catch(() => {});
 
-  await listen('show-settings', () => {
+  await listen<ShowSettingsPayload>('show-settings', (event) => {
+    settingsOpenedStandalone.value = event.payload?.standalone === true;
     showSettings.value = true;
   });
 
@@ -259,6 +269,17 @@ onUnmounted(() => {
 
 const stopStreaming = () => {
   aiClient.cancel();
+};
+
+const handleWindowMouseDown = async (e: MouseEvent) => {
+  const target = e.target as HTMLElement | null;
+  if (!target) return;
+
+  if (target.closest('button, input, textarea, select, option, a, label, summary, details, [role="button"], [contenteditable="true"], .modal-content, .project-dropdown, .settings-panel, .no-window-drag')) {
+    return;
+  }
+
+  await appWindow.startDragging();
 };
 
 const sendMessage = async () => {
@@ -507,10 +528,24 @@ const closeWindow = async () => {
   await appWindow.hide();
 };
 
+const openSettingsFromChat = () => {
+  settingsOpenedStandalone.value = false;
+  showSettings.value = true;
+};
+
+const closeSettingsPanel = async () => {
+  showSettings.value = false;
+  if (settingsOpenedStandalone.value) {
+    settingsOpenedStandalone.value = false;
+    await appWindow.hide();
+  }
+};
+
 const finishWelcome = async () => {
   await settingsStore.completeWelcome();
   showWelcome.value = false;
   showSettings.value = false;
+  await resize('main', WELCOME_WINDOW_WIDTH, 800).catch(() => {});
   await setWidgetDefaultPosition();
   await show('widget');
   await appWindow.hide();
@@ -519,6 +554,7 @@ const finishWelcome = async () => {
 const skipWelcomeAndCreateProject = async () => {
   await settingsStore.completeWelcome();
   showWelcome.value = false;
+  await resize('main', CHAT_WINDOW_WIDTH, 800).catch(() => {});
   showCreateProject.value = true;
 };
 
@@ -879,10 +915,10 @@ const saveConversationToObsidian = async () => {
       recordEvent({ event_type: 'note_save_to_obsidian', resource_id: result.filePath });
       await openNoteInObsidian(vaultPath, result.filePath);
     } else {
-      obsidianSaveResult.value = result.error || 'Save failed';
+      obsidianSaveResult.value = result.error || t('main.saveFailed');
     }
   } catch (e: any) {
-    obsidianSaveResult.value = e?.message || 'Save failed';
+    obsidianSaveResult.value = e?.message || t('main.saveFailed');
   } finally {
     obsidianSaving.value = false;
   }
@@ -892,7 +928,7 @@ const saveToObsidian = async () => {
   const vaultPath = settingsStore.config.externalTools.obsidianVaultPath;
   const folder = settingsStore.config.externalTools.obsidianDefaultFolder;
   if (!vaultPath) {
-    obsidianSaveResult.value = 'Please configure Obsidian Vault path in Settings.';
+    obsidianSaveResult.value = t('main.configureObsidian');
     return;
   }
 
@@ -924,10 +960,10 @@ const saveToObsidian = async () => {
       // Try to open in Obsidian
       await openNoteInObsidian(vaultPath, result.filePath);
     } else {
-      obsidianSaveResult.value = result.error || 'Save failed';
+      obsidianSaveResult.value = result.error || t('main.saveFailed');
     }
   } catch (e: any) {
-    obsidianSaveResult.value = e?.message || 'Save failed';
+    obsidianSaveResult.value = e?.message || t('main.saveFailed');
   } finally {
     obsidianSaving.value = false;
   }
@@ -935,9 +971,9 @@ const saveToObsidian = async () => {
 </script>
 
 <template>
-  <div class="main-window">
+  <div class="main-window" @mousedown="handleWindowMouseDown">
     <WelcomePanel v-if="showWelcome" @continue="finishWelcome" @create-project="skipWelcomeAndCreateProject" />
-    <SettingsPanel v-else-if="showSettings" @close="showSettings = false" />
+    <SettingsPanel v-else-if="showSettings" @close="closeSettingsPanel" />
     <KnowledgePanel v-else-if="showKnowledge" @close="showKnowledge = false" />
 
     <div v-else class="chat-view">
@@ -949,24 +985,24 @@ const saveToObsidian = async () => {
             :style="{ background: projectStore.currentProject()?.color || 'var(--text-muted)' }"
           />
           <span class="project-name">
-            {{ projectStore.currentProject()?.name || 'General Chat' }}
+            {{ projectStore.currentProject()?.name || t('main.generalChat') }}
           </span>
           <span class="project-arrow">{{ showProjectDropdown ? '▲' : '▼' }}</span>
         </div>
         <!-- Project stats bar -->
         <div v-if="projectStore.currentProjectId" class="project-stats-bar">
-          <span class="stat-item">📄 {{ projectStats.docCount }} docs</span>
+          <span class="stat-item">📄 {{ t('main.docsCount', { count: projectStats.docCount }) }}</span>
           <span class="stat-sep">·</span>
-          <span class="stat-item">💬 {{ projectStats.conversationCount }} chats</span>
+          <span class="stat-item">💬 {{ t('main.chatsCount', { count: projectStats.conversationCount }) }}</span>
           <span class="stat-sep">·</span>
-          <span class="stat-item">📌 {{ projectStats.todoCount }} todos</span>
+          <span class="stat-item">📌 {{ t('main.todosCount', { count: projectStats.todoCount }) }}</span>
           <span v-if="sentinelUnreadCount > 0" class="stat-sep">·</span>
           <span
             v-if="sentinelUnreadCount > 0"
             class="stat-item sentinel-badge"
             @click="showSentinel = true"
           >
-            📡 {{ sentinelUnreadCount }} new papers
+            📡 {{ t('main.newPapersCount', { count: sentinelUnreadCount }) }}
           </span>
         </div>
 
@@ -978,7 +1014,7 @@ const saveToObsidian = async () => {
             @click="selectProject(null)"
           >
             <span class="project-dot" style="background: var(--text-muted)" />
-            <span>General Chat</span>
+            <span>{{ t('main.generalChat') }}</span>
           </div>
           <div
             v-for="project in projectStore.projects"
@@ -992,7 +1028,7 @@ const saveToObsidian = async () => {
             </div>
             <button
               class="project-edit-btn"
-              title="Edit project"
+              :title="t('main.editProject')"
               @click.stop="openEditProject(project)"
             >
               ✎
@@ -1000,7 +1036,7 @@ const saveToObsidian = async () => {
           </div>
           <div class="project-divider" />
           <div class="project-option create" @click="openCreateProject">
-            <span>+ New Project</span>
+            <span>{{ t('main.newProject') }}</span>
           </div>
         </div>
       </div>
@@ -1016,7 +1052,7 @@ const saveToObsidian = async () => {
         @toggle-dashboard="toggleDashboard"
         @toggle-plugin="togglePlugin"
         @toggle-team="toggleTeam"
-        @open-settings="showSettings = true"
+        @open-settings="openSettingsFromChat"
         @save-to-obsidian="saveConversationToObsidian"
         @close="closeWindow"
       />
@@ -1093,59 +1129,59 @@ const saveToObsidian = async () => {
 
       <!-- Usage stats bar -->
       <div class="usage-bar" @click="showUsage = !showUsage">
-        <span class="usage-label">📊 Usage</span>
+        <span class="usage-label">📊 {{ t('main.usage') }}</span>
         <span v-if="usageStore.hasData" class="usage-mini">
-          {{ usageStore.todayStats?.totalCalls || 0 }} calls
+          {{ t('main.callsCount', { count: usageStore.todayStats?.totalCalls || 0 }) }}
         </span>
-        <span v-else class="usage-mini">No data yet</span>
+        <span v-else class="usage-mini">{{ t('main.noDataYet') }}</span>
         <span class="usage-toggle">{{ showUsage ? '▲' : '▼' }}</span>
       </div>
 
       <!-- Usage panel -->
       <div v-if="showUsage" class="usage-panel">
         <div class="usage-header">
-          <span>Model Usage Stats</span>
+          <span>{{ t('main.modelUsageStats') }}</span>
           <button class="usage-close" @click.stop="showUsage = false">x</button>
         </div>
-        <div v-if="usageStore.loading" class="usage-loading">Loading...</div>
+        <div v-if="usageStore.loading" class="usage-loading">{{ t('common.loading') }}</div>
         <div v-else-if="!usageStore.hasData" class="usage-empty">
-          No usage data yet. Start chatting to see stats.
+          {{ t('main.noUsageData') }}
         </div>
         <div v-else class="usage-content">
           <div class="usage-summary">
             <div class="usage-metric">
               <div class="metric-value">{{ usageStore.todayStats?.totalCalls || 0 }}</div>
-              <div class="metric-label">Calls</div>
+              <div class="metric-label">{{ t('main.calls') }}</div>
             </div>
             <div class="usage-metric">
               <div class="metric-value">{{ usageStore.todayStats?.totalTokens || 0 }}</div>
-              <div class="metric-label">Tokens</div>
+              <div class="metric-label">{{ t('main.tokens') }}</div>
             </div>
             <div class="usage-metric">
               <div class="metric-value">{{ usageStore.todayStats?.avgLatencyMs || 0 }}ms</div>
-              <div class="metric-label">Avg Latency</div>
+              <div class="metric-label">{{ t('main.avgLatency') }}</div>
             </div>
           </div>
           <div v-if="usageStore.todayStats?.modelBreakdown.length" class="usage-breakdown">
-            <div class="breakdown-title">By Model</div>
+            <div class="breakdown-title">{{ t('main.byModel') }}</div>
             <div
               v-for="item in usageStore.todayStats?.modelBreakdown"
               :key="item.modelName"
               class="breakdown-row"
             >
               <span>{{ item.modelName }}</span>
-              <span>{{ item.calls }} calls</span>
+              <span>{{ t('main.callsCount', { count: item.calls }) }}</span>
             </div>
           </div>
           <div v-if="usageStore.todayStats?.taskBreakdown.length" class="usage-breakdown">
-            <div class="breakdown-title">By Task</div>
+            <div class="breakdown-title">{{ t('main.byTask') }}</div>
             <div
               v-for="item in usageStore.todayStats?.taskBreakdown"
               :key="item.taskType"
               class="breakdown-row"
             >
               <span>{{ item.taskType }}</span>
-              <span>{{ item.calls }} calls</span>
+              <span>{{ t('main.callsCount', { count: item.calls }) }}</span>
             </div>
           </div>
         </div>
@@ -1155,21 +1191,21 @@ const saveToObsidian = async () => {
     <!-- Create / Edit project modal -->
     <div v-if="showCreateProject" class="modal-overlay" @click="showCreateProject = false">
       <div class="modal-content project-modal" @click.stop>
-        <h3>{{ isEditingProject ? 'Edit Project' : 'Create New Project' }}</h3>
+        <h3>{{ isEditingProject ? t('main.editProjectTitle') : t('main.createProjectTitle') }}</h3>
 
         <div class="form-group">
-          <label class="label">Project Name</label>
+          <label class="label">{{ t('main.projectName') }}</label>
           <input
             v-model="newProjectName"
             type="text"
             class="input"
-            placeholder="Project name..."
+            :placeholder="t('main.projectNamePlaceholder')"
             @keydown.enter="confirmCreateOrUpdateProject"
           />
         </div>
 
         <div class="form-group">
-          <label class="label">Color</label>
+          <label class="label">{{ t('main.color') }}</label>
           <div class="color-picker">
             <button
               v-for="color in PROJECT_COLORS"
@@ -1183,40 +1219,40 @@ const saveToObsidian = async () => {
         </div>
 
         <div class="form-group">
-          <label class="label">Keywords (comma-separated)</label>
+          <label class="label">{{ t('main.keywords') }}</label>
           <input
             v-model="newProjectKeywords"
             type="text"
             class="input"
-            placeholder="e.g. multimodal, hallucination detection, LLM"
+            :placeholder="t('main.keywordsPlaceholder')"
           />
         </div>
 
         <div class="form-group">
-          <label class="label">Associated Literature Folder</label>
+          <label class="label">{{ t('main.associatedFolder') }}</label>
           <div class="path-input-row">
             <input
               v-model="newProjectFolderPath"
               type="text"
               class="input"
               readonly
-              placeholder="Select a folder to auto-index..."
+              :placeholder="t('main.associatedFolderPlaceholder')"
             />
-            <button class="btn-secondary" @click="pickProjectFolder">Browse</button>
+            <button class="btn-secondary" @click="pickProjectFolder">{{ t('common.browse') }}</button>
             <button
               v-if="newProjectFolderPath"
               class="btn-secondary"
               @click="newProjectFolderPath = ''"
             >
-              Clear
+              {{ t('common.clear') }}
             </button>
           </div>
         </div>
 
         <div class="form-group">
-          <label class="label">Default Zotero Collection</label>
+          <label class="label">{{ t('main.defaultZoteroCollection') }}</label>
           <select v-model="newProjectZoteroCollection" class="input select-input">
-            <option value="">All collections</option>
+            <option value="">{{ t('main.allCollections') }}</option>
             <option
               v-for="coll in availableZoteroCollections"
               :key="coll.key"
@@ -1228,28 +1264,28 @@ const saveToObsidian = async () => {
         </div>
 
         <div class="form-group">
-          <label class="label">Obsidian Vault Path</label>
+          <label class="label">{{ t('main.obsidianVaultPath') }}</label>
           <div class="path-input-row">
             <input
               v-model="newProjectObsidianVault"
               type="text"
               class="input"
               readonly
-              placeholder="Select Obsidian Vault folder..."
+              :placeholder="t('main.obsidianVaultPlaceholder')"
             />
-            <button class="btn-secondary" @click="pickProjectObsidianVault">Browse</button>
+            <button class="btn-secondary" @click="pickProjectObsidianVault">{{ t('common.browse') }}</button>
             <button
               v-if="newProjectObsidianVault"
               class="btn-secondary"
               @click="newProjectObsidianVault = ''"
             >
-              Clear
+              {{ t('common.clear') }}
             </button>
           </div>
         </div>
 
         <div class="form-group">
-          <label class="label">Default Citation Style</label>
+          <label class="label">{{ t('main.defaultCitationStyle') }}</label>
           <select v-model="newProjectCitationStyle" class="input select-input">
             <option value="gb7714">GB/T 7714 (Chinese)</option>
             <option value="apa">APA 7th</option>
@@ -1258,9 +1294,9 @@ const saveToObsidian = async () => {
         </div>
 
         <div class="modal-actions">
-          <button class="btn-secondary" @click="showCreateProject = false">Cancel</button>
+          <button class="btn-secondary" @click="showCreateProject = false">{{ t('main.cancel') }}</button>
           <button class="btn-primary" @click="confirmCreateOrUpdateProject">
-            {{ isEditingProject ? 'Save Changes' : 'Create' }}
+            {{ isEditingProject ? t('main.saveChanges') : t('main.create') }}
           </button>
         </div>
       </div>
@@ -1269,26 +1305,26 @@ const saveToObsidian = async () => {
     <!-- Save to Obsidian modal -->
     <div v-if="showObsidianModal" class="modal-overlay" @click="showObsidianModal = false">
       <div class="modal-content" @click.stop>
-        <h3>Save to Obsidian</h3>
+        <h3>{{ t('main.saveToObsidian') }}</h3>
         <div class="form-group">
-          <label class="label">Template</label>
+          <label class="label">{{ t('main.template') }}</label>
           <select v-model="obsidianTemplate" class="input select-input">
-            <option value="summary">Summary</option>
-            <option value="full">Full Record</option>
-            <option value="qa">Q&A</option>
+            <option value="summary">{{ t('main.summary') }}</option>
+            <option value="full">{{ t('main.fullRecord') }}</option>
+            <option value="qa">{{ t('main.qa') }}</option>
           </select>
         </div>
         <div v-if="obsidianSaveResult" class="obsidian-result">
           {{ obsidianSaveResult }}
         </div>
         <div class="modal-actions">
-          <button class="btn-secondary" @click="showObsidianModal = false">Cancel</button>
+          <button class="btn-secondary" @click="showObsidianModal = false">{{ t('main.cancel') }}</button>
           <button
             class="btn-primary"
             :disabled="obsidianSaving"
             @click="saveToObsidian"
           >
-            {{ obsidianSaving ? 'Saving...' : 'Save' }}
+            {{ obsidianSaving ? t('common.saving') : t('common.save') }}
           </button>
         </div>
       </div>

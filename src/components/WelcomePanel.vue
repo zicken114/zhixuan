@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import { useI18n } from '../composables/useI18n';
+
+const { t } = useI18n();
+
 const emit = defineEmits<{
   continue: [];
   'create-project': [];
@@ -10,39 +14,36 @@ const emit = defineEmits<{
     <button class="close-btn" @click="emit('continue')">x</button>
 
     <div class="hero">
-      <div class="eyebrow">Welcome</div>
+      <div class="eyebrow">{{ t('welcome.eyebrow') }}</div>
       <h2>AI Research Assistant</h2>
-      <p class="intro">
-        A desktop helper for research and writing workflows. It gives you a floating ball,
-        quick clipboard actions, a chat sidebar, and screenshot extraction powered by AI.
-      </p>
+      <p class="intro">{{ t('welcome.intro') }}</p>
     </div>
 
     <div class="grid">
       <div class="card">
-        <h3>How To Start</h3>
-        <p>1. Double-click the floating ball to open the main chat window.</p>
-        <p>2. Open Settings and configure your text and vision providers.</p>
-        <p>3. Save your API keys, then return to the floating ball workflow.</p>
+        <h3>{{ t('welcome.startTitle') }}</h3>
+        <p>{{ t('welcome.start1') }}</p>
+        <p>{{ t('welcome.start2') }}</p>
+        <p>{{ t('welcome.start3') }}</p>
       </div>
 
       <div class="card">
-        <h3>Quick Actions</h3>
-        <p><strong>Single click</strong> the floating ball to open the quick menu.</p>
-        <p><strong>Alt + Q</strong> opens translation, cleanup, and citation tools.</p>
-        <p><strong>Alt + S</strong> starts screenshot selection and content extraction.</p>
+        <h3>{{ t('welcome.actionsTitle') }}</h3>
+        <p>{{ t('welcome.actions1') }}</p>
+        <p>{{ t('welcome.actions2') }}</p>
+        <p>{{ t('welcome.actions3') }}</p>
       </div>
 
       <div class="card">
-        <h3>Design Principle</h3>
-        <p>The app stays user-driven: no hidden background assistant behavior, no passive clipboard monitoring, and no silent word tracking.</p>
+        <h3>{{ t('welcome.designTitle') }}</h3>
+        <p>{{ t('welcome.designBody') }}</p>
       </div>
     </div>
 
     <div class="footer">
-      <button class="primary-btn" @click="emit('continue')">Start With Floating Ball</button>
-      <button class="secondary-btn" @click="emit('create-project')">Create My First Research Project</button>
-      <p class="footer-note">You can reopen the main window anytime by double-clicking the floating ball.</p>
+      <button class="primary-btn" @click="emit('continue')">{{ t('welcome.primary') }}</button>
+      <button class="secondary-btn" @click="emit('create-project')">{{ t('welcome.secondary') }}</button>
+      <p class="footer-note">{{ t('welcome.footer') }}</p>
     </div>
   </div>
 </template>
