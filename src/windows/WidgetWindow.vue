@@ -1,9 +1,17 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
-import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
+import { readFile } from '@tauri-apps/plugin-fs';
+import { useWindow } from '../composables/useWindow';
+import { startReadingSession, endReadingSession, getDocumentProgress, recordPage } from '../composables/useReadingSession';
+import { getCurrentPdfPath, estimatePdfPage } from '../composables/usePdfDetection';
+import { hasExtractableContent as checkExtractableContent } from '../composables/useContentDetection';
+import { extractPdfText } from '../utils/pdfExtractor';
+import { countUnreadSentinelPapers } from '../composables/useDatabase';
 
 type DockSide = 'left' | 'right' | null;
+type AppContext = 'writing' | 'pdf_reader' | 'code_editor' | 'browser' | 'zotero' | 'unknown';
 
 interface WidgetDockState {
   side: 'left' | 'right' | 'none';
@@ -11,7 +19,20 @@ interface WidgetDockState {
   y: number;
 }
 
+interface WindowInfoPayload {
+  process_name: string;
+  window_title: string;
+  app_type: string;
+}
+
+interface ReadingSessionStartPayload {
+  document_title: string;
+  document_path?: string;
+  process_name?: string;
+}
+
 const appWindow = getCurrentWebviewWindow();
+const { showPopup: showPopupMenu, show, showSentinelBrief, snapWidget: snapWidgetToBounds, setWidgetDefaultPosition, center } = useWindow();
 
 const collapsedOffset = 44;
 const collapseDelayMs = 1200;
@@ -21,8 +42,19 @@ const collapsedHeight = 46;
 
 const dockSide = ref<DockSide>(null);
 const isExpanded = ref(true);
-const isDragging = ref(false);
-const isPopupVisible = ref(false);
+const appContext = ref<AppContext>('unknown');
+const contextTooltip = ref('');
+const hasExtractableContent = ref(false);
+const currentWindowTitle = ref('');
+const sentinelUnreadCount = ref(0);
+const showSentinelBanner = ref(false);
+
+interface ResumeInfo {
+  lastPage: number | null;
+  totalDurationMinutes: number;
+  pagesRead: number;
+}
+const resumeInfo = ref<ResumeInfo | null>(null);
 
 let isMouseDown = false;
 let mouseDownX = 0;
@@ -33,9 +65,13 @@ let moveSettleTimeout: number | null = null;
 let collapseDelayTimeout: number | null = null;
 let suppressSingleClick = false;
 let unlistenMoved: (() => void) | null = null;
-let unlistenPopupOpened: (() => void) | null = null;
-let unlistenPopupClosed: (() => void) | null = null;
-let unlistenWelcomeClosed: (() => void) | null = null;
+let unlistenWindowActivity: (() => void) | null = null;
+let unlistenSessionStart: (() => void) | null = null;
+let unlistenSessionEnd: (() => void) | null = null;
+let unlistenSentinelPapers: (() => void) | null = null;
+let pdfCheckInterval: number | null = null;
+let lastCheckedPdfPath: string | null = null;
+let cachedPdfData: Uint8Array | null = null;
 
 const widgetShellStyle = computed(() => {
   if (!dockSide.value || isExpanded.value) {
@@ -71,8 +107,88 @@ const widgetCoreStyle = computed(() => {
   };
 });
 
+const contextClass = computed(() => {
+  switch (appContext.value) {
+    case 'writing': return 'context-writing';
+    case 'pdf_reader': return 'context-pdf';
+    case 'code_editor': return 'context-code';
+    case 'browser': return 'context-browser';
+    case 'zotero': return 'context-zotero';
+    default: return '';
+  }
+});
+
+const contextLabel = computed(() => {
+  switch (appContext.value) {
+    case 'writing': return 'Writing';
+    case 'pdf_reader': return 'Reading';
+    case 'code_editor': return 'Coding';
+    case 'browser': return 'Browsing';
+    case 'zotero': return 'Zotero';
+    default: return '';
+  }
+});
+
+/* ── PDF extractable-content detection (Phase 3.2 breathing ring) ── */
+
+const clearPdfCheck = () => {
+  if (pdfCheckInterval) {
+    clearInterval(pdfCheckInterval);
+    pdfCheckInterval = null;
+  }
+  hasExtractableContent.value = false;
+  lastCheckedPdfPath = null;
+  cachedPdfData = null;
+};
+
+const checkPdfExtractableContent = async () => {
+  if (appContext.value !== 'pdf_reader' || !currentWindowTitle.value) return;
+
+  try {
+    const page = await estimatePdfPage(currentWindowTitle.value);
+    if (!page) return;
+
+    // Track page changes for reading session (Phase 3.3)
+    recordPage(page).catch(() => {});
+
+    const pdfPath = await getCurrentPdfPath();
+    if (!pdfPath) return;
+
+    // Re-read PDF only if path changed
+    if (pdfPath !== lastCheckedPdfPath || !cachedPdfData) {
+      cachedPdfData = await readFile(pdfPath);
+      lastCheckedPdfPath = pdfPath;
+    }
+
+    const result = await extractPdfText(cachedPdfData!, pdfPath);
+    const pageData = result.pages.find(p => p.pageNumber === page);
+    if (!pageData || !pageData.text) {
+      hasExtractableContent.value = false;
+      return;
+    }
+
+    const extractable = await checkExtractableContent(pageData.text);
+    hasExtractableContent.value = extractable;
+  } catch (e) {
+    // Silently fail — breathing ring is best-effort
+    hasExtractableContent.value = false;
+  }
+};
+
+watch(appContext, (newCtx, oldCtx) => {
+  if (newCtx === 'pdf_reader') {
+    // Start periodic content detection (every 15 seconds)
+    if (!pdfCheckInterval) {
+      checkPdfExtractableContent(); // immediate first check
+      pdfCheckInterval = window.setInterval(checkPdfExtractableContent, 15000);
+    }
+  } else if (oldCtx === 'pdf_reader') {
+    clearPdfCheck();
+  }
+});
+
 const syncDockState = async () => {
-  const result = await invoke<WidgetDockState>('snap_widget_to_bounds');
+  const result = await snapWidgetToBounds() as WidgetDockState;
   dockSide.value = result.side === 'none' ? null : result.side;
   isExpanded.value = result.side === 'none';
 };
@@ -139,14 +255,6 @@ const handleMouseMove = async (e: MouseEvent) => {
     hasDragged = true;
     dockSide.value = null;
     isExpanded.value = true;
-    isDragging.value = true;
-
-    // Hide popup while dragging
-    if (isPopupVisible.value) {
-      invoke('hide_window', { label: 'popup' });
-      isPopupVisible.value = false;
-    }
-
     await appWindow.startDragging();
   }
 };
@@ -154,7 +262,6 @@ const handleMouseMove = async (e: MouseEvent) => {
 const handleMouseUp = (e: MouseEvent) => {
   if (!isMouseDown) return;
   isMouseDown = false;
-  isDragging.value = false;
 
   const dx = Math.abs(e.screenX - mouseDownX);
   const dy = Math.abs(e.screenY - mouseDownY);
@@ -166,19 +273,9 @@ const handleMouseUp = (e: MouseEvent) => {
   }
 
   if (wasClick && e.button === 0 && !suppressSingleClick) {
-    clickTimeout = window.setTimeout(async () => {
+    clickTimeout = window.setTimeout(() => {
       clickTimeout = null;
-      const popupActuallyVisible = await invoke<boolean>('is_window_visible', { label: 'popup' });
-      if (!popupActuallyVisible) {
-        isPopupVisible.value = false;
-      }
-
-      if (isPopupVisible.value) {
-        await invoke('hide_popup');
-        isPopupVisible.value = false;
-      } else {
-        await showPopup();
-      }
+      showPopup();
     }, 220);
   }
 };
@@ -198,19 +295,30 @@ const handleDoubleClick = () => {
   }, 250);
 };
 
-const showPopup = async () => {
-  isPopupVisible.value = true;
+const refreshUnread = async () => {
   try {
-    await invoke('show_popup_with_clipboard');
+    const count = await countUnreadSentinelPapers();
+    sentinelUnreadCount.value = count;
+  } catch (e) {
+    // Silent fail
+  }
+};
+
+const showPopup = async () => {
+  // Refresh sentinel count on user interaction
+  refreshUnread();
+  try {
+    await showPopupMenu();
   } catch (error) {
-    isPopupVisible.value = false;
     console.error('Failed to show popup:', error);
   }
 };
 
 const showMainWindow = async () => {
+  // Refresh sentinel count on user interaction
+  refreshUnread();
   try {
-    await invoke('show_window', { label: 'main' });
+    await show('main');
   } catch (error) {
     console.error('Failed to show main window:', error);
   }
@@ -221,27 +329,62 @@ const handleContextMenu = (e: MouseEvent) => {
 };
 
 onMounted(async () => {
-  // Always show welcome window on app startup, then reveal widget after welcome closes
-  await invoke('show_window', { label: 'main' });
-  await appWindow.hide();
+  await setWidgetDefaultPosition();
+  await center('main');
+  await show('main');
 
   unlistenMoved = await appWindow.onMoved(() => {
     scheduleDockSync();
   });
 
-  unlistenPopupOpened = await appWindow.listen('popup-opened', () => {
-    isPopupVisible.value = true;
+  // Listen for window activity changes to update context
+  unlistenWindowActivity = await listen<WindowInfoPayload>('window:activity-changed', (event) => {
+    const appType = event.payload.app_type;
+    appContext.value = appType as AppContext;
+    currentWindowTitle.value = event.payload.window_title;
+    contextTooltip.value = `${event.payload.window_title} (${event.payload.process_name})`;
   });
 
-  unlistenPopupClosed = await appWindow.listen('popup-closed', () => {
-    isPopupVisible.value = false;
+  // Listen for reading session lifecycle events from Rust (Phase 3.3)
+  unlistenSessionStart = await listen<ReadingSessionStartPayload>('reading:session-start', async (event) => {
+    const { document_title, document_path } = event.payload;
+
+    // Check if there's past progress for this document (Phase 3.3 — resume hint)
+    const progress = await getDocumentProgress(document_title);
+    if (progress.pagesRead > 0) {
+      resumeInfo.value = {
+        lastPage: progress.lastPage,
+        totalDurationMinutes: progress.totalDurationMinutes,
+        pagesRead: progress.pagesRead
+      };
+    } else {
+      resumeInfo.value = null;
+    }
+
+    startReadingSession(document_title, document_path || undefined).catch((e) => {
+      console.error('[Widget] Failed to start reading session:', e);
+    });
   });
 
-  // Show widget when welcome is closed
-  unlistenWelcomeClosed = await appWindow.listen('welcome-closed', async () => {
-    await invoke('set_widget_default_position');
-    await invoke('show_window', { label: 'widget' });
+  unlistenSessionEnd = await listen('reading:session-end', () => {
+    endReadingSession().catch((e) => {
+      console.error('[Widget] Failed to end reading session:', e);
+    });
+    resumeInfo.value = null;
   });
+
+  // Listen for new sentinel papers (Phase 4.1)
+  unlistenSentinelPapers = await listen<{ count: number }>('sentinel:new-papers', (event) => {
+    sentinelUnreadCount.value += event.payload.count;
+    showSentinelBanner.value = true;
+    // Auto-hide banner after 5 seconds
+    window.setTimeout(() => {
+      showSentinelBanner.value = false;
+    }, 5000);
+  });
+
+  // Initial load of unread count
+  refreshUnread();
 });
 
 onUnmounted(() => {
@@ -256,15 +399,22 @@ onUnmounted(() => {
   if (unlistenMoved) {
     unlistenMoved();
   }
-  if (unlistenPopupOpened) {
-    unlistenPopupOpened();
+
+  if (unlistenWindowActivity) {
+    unlistenWindowActivity();
   }
-  if (unlistenPopupClosed) {
-    unlistenPopupClosed();
+
+  if (unlistenSessionStart) {
+    unlistenSessionStart();
   }
-  if (unlistenWelcomeClosed) {
-    unlistenWelcomeClosed();
+
+  if (unlistenSessionEnd) {
+    unlistenSessionEnd();
   }
+  if (unlistenSentinelPapers) {
+    unlistenSentinelPapers();
+  }
+  clearPdfCheck();
 });
 </script>
 
@@ -273,7 +423,9 @@ onUnmounted(() => {
     class="widget-container"
     :class="{
       'is-docked': dockSide,
-      'is-collapsed': dockSide && !isExpanded
+      'is-collapsed': dockSide && !isExpanded,
+      'has-extractable': hasExtractableContent,
+      [contextClass]: true
     }"
     @mousedown="handleMouseDown"
     @mousemove="handleMouseMove"
@@ -286,6 +438,22 @@ onUnmounted(() => {
     <div class="widget-shell" :style="widgetShellStyle">
       <div class="widget-tab" :class="{ 'dock-left': dockSide === 'left', 'dock-right': dockSide === 'right' }"></div>
       <div class="widget-core" :style="widgetCoreStyle"></div>
+      <div v-if="contextLabel" class="context-badge">{{ contextLabel }}</div>
+      <!-- Sentinel notification dot (Phase 4.1) -->
+      <div v-if="sentinelUnreadCount > 0" class="sentinel-dot">{{ sentinelUnreadCount }}</div>
+      <!-- Breathing light ring -->
+      <div v-if="appContext === 'pdf_reader'" class="breathing-ring"></div>
+    </div>
+    <!-- Sentinel new papers banner -->
+    <div v-if="showSentinelBanner && sentinelUnreadCount > 0" class="sentinel-banner" @click="showSentinelBrief()">
+      本周有 {{ sentinelUnreadCount }} 篇新文献
+    </div>
+    <div v-if="contextTooltip" class="context-tooltip">{{ contextTooltip }}</div>
+    <!-- Resume reading hint (Phase 3.3) -->
+    <div v-if="appContext === 'pdf_reader' && resumeInfo" class="resume-hint">
+      <span class="resume-label">上次读到</span>
+      <span class="resume-page">P{{ resumeInfo.lastPage ?? '?' }}</span>
+      <span class="resume-detail">{{ resumeInfo.pagesRead }}页 · {{ resumeInfo.totalDurationMinutes }}分钟</span>
     </div>
   </div>
 </template>
@@ -309,39 +477,55 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(180deg, rgba(18, 24, 33, 0.96) 0%, rgba(11, 15, 22, 0.96) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--bg-base);
+  box-shadow: var(--shadow-md);
+  border: 1.5px solid var(--border-light);
   transition:
-    width 0.28s ease,
-    height 0.28s ease,
-    transform 0.24s ease,
-    border-radius 0.24s ease,
-    box-shadow 0.24s ease,
-    filter 0.24s ease,
-    background 0.24s ease;
+    width var(--transition-widget),
+    height var(--transition-widget),
+    transform var(--transition-slow),
+    border-radius var(--transition-slow),
+    box-shadow var(--transition-base),
+    filter var(--transition-slow),
+    background var(--transition-slow);
+  cursor: pointer;
+}
+
+.widget-shell:hover {
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-1px);
+}
+
+.widget-shell:active {
+  transform: translateY(0) scale(0.96);
 }
 
 .widget-core {
-  width: 52px;
-  height: 52px;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
-  background-image: url('../assets/icon.jpg');
-  background-size: cover;
-  background-position: center;
+  background: url('/cat-icon.png') center/cover no-repeat;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  font-weight: 700;
+  font-family: var(--font-display);
   transition:
-    opacity 0.2s ease,
-    transform 0.24s ease;
+    opacity var(--transition-base),
+    transform var(--transition-slow);
 }
 
 .widget-tab {
   position: absolute;
   inset: 6px 3px;
   border-radius: 10px;
-  background:
-    linear-gradient(180deg, rgba(0, 229, 204, 0.75) 0%, rgba(61, 116, 231, 0.82) 100%);
+  background: var(--accent);
   opacity: 0;
-  transition: opacity 0.24s ease;
+  transition: opacity var(--transition-slow);
 }
 
 .widget-tab::after {
@@ -352,7 +536,7 @@ onUnmounted(() => {
   width: 4px;
   height: 18px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.85);
+  background: var(--text-on-accent);
   transform: translate(-50%, -50%);
 }
 
@@ -365,11 +549,224 @@ onUnmounted(() => {
 }
 
 .widget-container.is-collapsed .widget-shell {
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.2);
-  filter: saturate(0.94);
+  box-shadow: var(--shadow-sm);
 }
 
 .widget-container.is-collapsed .widget-tab {
   opacity: 1;
+}
+
+/* Context-aware subtle border effects */
+.widget-container.context-writing .widget-shell {
+  border-color: var(--accent-border);
+}
+
+.widget-container.context-pdf .widget-shell {
+  border-color: var(--accent-border);
+}
+
+.widget-container.context-code .widget-shell {
+  border-color: rgba(251, 188, 4, 0.4);
+}
+
+.widget-container.context-browser .widget-shell {
+  border-color: rgba(139, 92, 246, 0.4);
+}
+
+.widget-container.context-zotero .widget-shell {
+  border-color: rgba(234, 67, 53, 0.4);
+}
+
+/* Context badge */
+.context-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: var(--accent);
+  color: var(--text-on-accent);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.context-pdf .context-badge {
+  background: var(--accent);
+  color: var(--text-on-accent);
+}
+
+.context-code .context-badge {
+  background: var(--warning);
+  color: var(--text-on-accent);
+}
+
+.context-browser .context-badge {
+  background: var(--accent);
+  color: var(--text-on-accent);
+}
+
+.context-zotero .context-badge {
+  background: var(--error);
+  color: var(--text-on-accent);
+}
+
+/* Context tooltip */
+.context-tooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--transition-base);
+  box-shadow: var(--shadow-lg);
+}
+
+.widget-container:hover .context-tooltip {
+  opacity: 1;
+}
+
+/* Breathing light ring for PDF reading companion — updated to subtle ring */
+.breathing-ring {
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 1.5px solid transparent;
+  pointer-events: none;
+  animation: breathe 3s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  0%, 100% {
+    border-color: rgba(26, 115, 232, 0.15);
+    transform: scale(1);
+  }
+  50% {
+    border-color: rgba(26, 115, 232, 0.35);
+    transform: scale(1.03);
+  }
+}
+
+/* Enhanced breathing when extractable content detected */
+.widget-container.has-extractable .breathing-ring {
+  animation: breathe-intense 2s ease-in-out infinite;
+}
+
+@keyframes breathe-intense {
+  0%, 100% {
+    border-color: rgba(26, 115, 232, 0.3);
+    transform: scale(1);
+  }
+  50% {
+    border-color: rgba(26, 115, 232, 0.6);
+    transform: scale(1.05);
+  }
+}
+
+/* Docked state: adjust breathing ring shape */
+.widget-container.is-collapsed .breathing-ring {
+  border-radius: var(--radius-md);
+  inset: -2px;
+}
+
+/* Resume reading hint (Phase 3.3) */
+.resume-hint {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--transition-base);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.widget-container:hover .resume-hint {
+  opacity: 1;
+}
+
+.resume-hint .resume-label {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.resume-hint .resume-page {
+  font-weight: 700;
+  color: var(--accent);
+  font-size: 12px;
+}
+
+.resume-hint .resume-detail {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+/* Sentinel notification dot (Phase 4.1) */
+.sentinel-dot {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--error);
+  color: white;
+  font-size: 9px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+/* Sentinel banner */
+.sentinel-banner {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 14px;
+  background: var(--bg-elevated);
+  border: 1px solid rgba(234, 67, 53, 0.2);
+  border-radius: var(--radius-md);
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  animation: banner-in 0.3s ease forwards, banner-out 0.3s ease 4.7s forwards;
+  box-shadow: var(--shadow-lg);
+}
+
+@keyframes banner-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(-4px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+@keyframes banner-out {
+  from { opacity: 1; transform: translateX(-50%) translateY(0); }
+  to { opacity: 0; transform: translateX(-50%) translateY(-4px); }
 }
 </style>

@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Capability for all windows",
-  "windows": ["main", "widget", "popup", "capture", "result", "history"],
+  "windows": ["main", "widget", "popup", "capture", "result", "review_wizard"],
   "permissions": [
     "core:default",
     "core:window:allow-show",
@@ -12,14 +12,35 @@
     "core:window:allow-outer-position",
     "core:window:allow-is-visible",
     "core:window:allow-start-dragging",
+    "core:window:allow-set-focus",
     "core:window:allow-close",
-    "core:window:allow-outer-size",
     "core:event:default",
     "core:event:allow-listen",
     "core:event:allow-emit",
     "opener:default",
     "global-shortcut:allow-register",
     "global-shortcut:allow-unregister",
-    "global-shortcut:allow-is-registered"
+    "global-shortcut:allow-is-registered",
+    "sql:default",
+    "sql:allow-load",
+    "sql:allow-execute",
+    "sql:allow-select",
+    "dialog:default",
+    "dialog:allow-open",
+    "fs:default",
+    "fs:allow-read-dir",
+    "fs:allow-read-file",
+    "fs:allow-app-read",
+    "fs:allow-write-file",
+    "fs:allow-mkdir",
+    "http:default",
+    "http:allow-fetch",
+    {
+      "identifier": "http:allow-fetch",
+      "allow": [
+        { "url": "https://hf-mirror.com" },
+        { "url": "https://huggingface.co" }
+      ]
+    }
   ]
 }

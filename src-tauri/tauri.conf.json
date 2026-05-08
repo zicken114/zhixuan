@@ -31,7 +31,7 @@
         "label": "main",
         "title": "AI Chat",
         "url": "index.html?window=main",
-        "width": 400,
+        "width": 520,
         "height": 800,
         "resizable": true,
         "decorations": false,
@@ -93,6 +93,42 @@
         "alwaysOnTop": false,
         "center": true,
         "url": "index.html?window=result",
+        "visible": false
+      },
+      {
+        "label": "sentinel_brief",
+        "title": "文献简报",
+        "width": 360,
+        "height": 480,
+        "resizable": true,
+        "decorations": true,
+        "alwaysOnTop": true,
+        "center": true,
+        "url": "index.html?window=sentinel_brief",
+        "visible": false
+      },
+      {
+        "label": "experiment_snapshot",
+        "title": "实验快照",
+        "width": 320,
+        "height": 420,
+        "resizable": true,
+        "decorations": true,
+        "alwaysOnTop": true,
+        "center": true,
+        "url": "index.html?window=experiment_snapshot",
+        "visible": false
+      },
+      {
+        "label": "review_wizard",
+        "title": "文献综述生成",
+        "width": 600,
+        "height": 520,
+        "resizable": true,
+        "decorations": true,
+        "alwaysOnTop": false,
+        "center": true,
+        "url": "index.html?window=review_wizard",
         "visible": false
       }
     ],
