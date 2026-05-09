@@ -16,6 +16,19 @@ import { resetAllData } from '../composables/useDatabase';
 import { setEmbedderMirrorUrl } from '../utils/embedder';
 import { checkZoteroConnection } from '../utils/zoteroBridge';
 import { useI18n } from '../composables/useI18n';
+import {
+  listMcpServers,
+  startMcpServer,
+  stopMcpServer,
+  restartMcpServer,
+  listMcpTools,
+  toggleMcpTool,
+  setMcpToolPermission,
+  getMcpServersDir,
+  type McpServerStatus,
+  type McpTool,
+  type McpServerConfig,
+} from '../composables/useMcp';
 
 const appWindow = getCurrentWebviewWindow();
 const settingsStore = useSettingsStore();
@@ -41,6 +54,7 @@ const privacyExpanded = ref(false);
 const routingExpanded = ref(false);
 const knowledgeExpanded = ref(false);
 const externalToolsExpanded = ref(false);
+const mcpExpanded = ref(false);
 
 const emit = defineEmits<{
   close: [];
@@ -189,7 +203,113 @@ const updateAppLanguage = async (language: AppLanguage) => {
   }
 };
 
-const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate' | 'privacy' | 'routing' | 'knowledge' | 'external') => {
+// ── MCP Management ──
+const mcpServers = ref<McpServerStatus[]>([]);
+const mcpTools = ref<McpTool[]>([]);
+const mcpServersDir = ref('');
+const mcpLoading = ref(false);
+
+const showAddServerModal = ref(false);
+const newServer = ref<McpServerConfig>({
+  name: '',
+  command: '',
+  args: [],
+  env: {},
+  transport: { type: 'stdio' },
+  auto_start: true,
+  timeout_ms: 30000,
+  enabled: true,
+});
+const newServerArgsText = ref('');
+
+const loadMcpData = async () => {
+  mcpLoading.value = true;
+  try {
+    const [servers, tools, dir] = await Promise.all([
+      listMcpServers(),
+      listMcpTools(),
+      getMcpServersDir(),
+    ]);
+    mcpServers.value = servers;
+    mcpTools.value = tools;
+    mcpServersDir.value = dir;
+  } catch (e) {
+    console.error('Failed to load MCP data:', e);
+  } finally {
+    mcpLoading.value = false;
+  }
+};
+
+const handleRestartServer = async (name: string) => {
+  try {
+    await restartMcpServer(name);
+    await loadMcpData();
+  } catch (e) {
+    console.error('Failed to restart MCP server:', e);
+    alert(`Failed to start server: ${e}`);
+  }
+};
+
+const handleStopServer = async (name: string) => {
+  try {
+    await stopMcpServer(name);
+    await loadMcpData();
+  } catch (e) {
+    console.error('Failed to stop MCP server:', e);
+    alert(`Failed to stop server: ${e}`);
+  }
+};
+
+const handleToggleTool = async (tool: McpTool) => {
+  try {
+    await toggleMcpTool(tool.name, !tool.enabled);
+    await loadMcpData();
+  } catch (e) {
+    console.error('Failed to toggle MCP tool:', e);
+  }
+};
+
+const handleSetPermission = async (tool: McpTool, level: string) => {
+  try {
+    await setMcpToolPermission(tool.name, level);
+    await loadMcpData();
+  } catch (e) {
+    console.error('Failed to set tool permission:', e);
+  }
+};
+
+const openAddServerModal = () => {
+  newServer.value = {
+    name: '',
+    command: '',
+    args: [],
+    env: {},
+    transport: { type: 'stdio' },
+    auto_start: true,
+    timeout_ms: 30000,
+    enabled: true,
+  };
+  newServerArgsText.value = '';
+  showAddServerModal.value = true;
+};
+
+const submitNewServer = async () => {
+  try {
+    const args = newServerArgsText.value
+      .split('\n')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+    const config = { ...newServer.value, args };
+    await startMcpServer(config);
+    showAddServerModal.value = false;
+    await loadMcpData();
+  } catch (e) {
+    console.error('Failed to add MCP server:', e);
+    alert(`Failed to add server: ${e}`);
+  }
+};
+
+const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate' | 'privacy' | 'routing' | 'knowledge' | 'external' | 'mcp') => {
   if (target === 'text') textExpanded.value = !textExpanded.value;
   if (target === 'vision') visionExpanded.value = !visionExpanded.value;
   if (target === 'shortcuts') shortcutsExpanded.value = !shortcutsExpanded.value;
@@ -198,6 +318,10 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate' | 'pri
   if (target === 'routing') routingExpanded.value = !routingExpanded.value;
   if (target === 'knowledge') knowledgeExpanded.value = !knowledgeExpanded.value;
   if (target === 'external') externalToolsExpanded.value = !externalToolsExpanded.value;
+  if (target === 'mcp') {
+    mcpExpanded.value = !mcpExpanded.value;
+    if (mcpExpanded.value) loadMcpData();
+  }
 };
 </script>
 
@@ -698,6 +822,179 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate' | 'pri
               placeholder="AI-Research-Assistant"
             />
             <p class="hint">Subfolder inside the vault where AI-generated notes are saved.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- MCP Servers -->
+      <div class="card">
+        <button class="card-header" @click="toggleCard('mcp')">
+          <div>
+            <h3 class="card-title">MCP Servers</h3>
+            <p class="card-subtitle">Manage Model Context Protocol servers and tools.</p>
+          </div>
+          <span class="card-toggle">{{ mcpExpanded ? 'Hide' : 'Show' }}</span>
+        </button>
+
+        <div v-if="mcpExpanded" class="card-body">
+          <div v-if="mcpLoading" class="mcp-loading">Loading...</div>
+
+          <!-- Servers Directory -->
+          <div class="form-group">
+            <label class="label">Servers Directory</label>
+            <input :value="mcpServersDir" type="text" class="input" readonly />
+            <p class="hint">Place MCP server scripts here. Built-in servers are auto-deployed on startup.</p>
+          </div>
+
+          <!-- Server List -->
+          <div class="mcp-section">
+            <div class="mcp-section-header">
+              <h4 class="mcp-section-title">Servers</h4>
+              <button class="btn-secondary small" @click="openAddServerModal">+ Add Server</button>
+            </div>
+
+            <div v-if="mcpServers.length === 0" class="mcp-empty">No servers configured.</div>
+
+            <div v-for="server in mcpServers" :key="server.name" class="mcp-item">
+              <div class="mcp-item-main">
+                <div class="mcp-item-info">
+                  <span class="mcp-item-name">{{ server.name }}</span>
+                  <span
+                    class="mcp-status-badge"
+                    :class="{
+                      running: server.status === 'Running',
+                      starting: server.status === 'Starting',
+                      error: server.status === 'Error',
+                      stopped: server.status === 'Stopped',
+                    }"
+                  >
+                    {{ server.status }}
+                  </span>
+                </div>
+                <div class="mcp-item-actions">
+                  <button
+                    v-if="server.status === 'Running'"
+                    class="btn-secondary small"
+                    @click="handleStopServer(server.name)"
+                  >
+                    Stop
+                  </button>
+                  <button
+                    v-else
+                    class="btn-secondary small"
+                    @click="handleRestartServer(server.name)"
+                  >
+                    Start
+                  </button>
+                  <button class="btn-secondary small" @click="loadMcpData">Refresh</button>
+                </div>
+              </div>
+              <p v-if="server.error_message" class="mcp-item-desc" style="color: #ef4444;">
+                {{ server.error_message }}
+              </p>
+            </div>
+          </div>
+
+          <!-- Tool List -->
+          <div class="mcp-section">
+            <div class="mcp-section-header">
+              <h4 class="mcp-section-title">Tools</h4>
+              <button class="btn-secondary small" @click="loadMcpData">Refresh</button>
+            </div>
+
+            <div v-if="mcpTools.length === 0" class="mcp-empty">No tools available.</div>
+
+            <div v-for="tool in mcpTools" :key="tool.name" class="mcp-item">
+              <div class="mcp-item-main">
+                <div class="mcp-item-info">
+                  <span class="mcp-item-name">{{ tool.name }}</span>
+                  <span class="mcp-item-server">{{ tool.server_name }}</span>
+                </div>
+                <div class="mcp-item-actions">
+                  <button
+                    class="toggle-switch small"
+                    :class="{ active: tool.enabled }"
+                    @click="handleToggleTool(tool)"
+                  >
+                    <span class="toggle-knob"></span>
+                  </button>
+                </div>
+              </div>
+              <p class="mcp-item-desc">{{ tool.description }}</p>
+              <div class="mcp-permission">
+                <label class="mcp-permission-label">Permission:</label>
+                <select
+                  :value="tool.permission_level"
+                  class="input small"
+                  @change="handleSetPermission(tool, ($event.target as HTMLSelectElement).value)"
+                >
+                  <option value="always_allow">Always Allow</option>
+                  <option value="ask_user">Ask User</option>
+                  <option value="never_allow">Never Allow</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Add Server Modal -->
+      <div v-if="showAddServerModal" class="modal-overlay" @click.self="showAddServerModal = false">
+        <div class="modal-content">
+          <h3 class="modal-title">Add MCP Server</h3>
+
+          <div class="form-group">
+            <label class="label">Name</label>
+            <input v-model="newServer.name" type="text" class="input" placeholder="e.g. web_search" />
+          </div>
+
+          <div class="form-group">
+            <label class="label">Command</label>
+            <input v-model="newServer.command" type="text" class="input" placeholder="e.g. node or python" />
+          </div>
+
+          <div class="form-group">
+            <label class="label">Arguments (one per line)</label>
+            <textarea
+              v-model="newServerArgsText"
+              class="input"
+              rows="3"
+              placeholder="/path/to/server.js"
+            />
+            <p class="hint">Absolute path to the server script.</p>
+          </div>
+
+          <div class="form-group toggle-row">
+            <div>
+              <label class="label">Auto Start</label>
+              <p class="hint">Start this server automatically on app launch.</p>
+            </div>
+            <button
+              class="toggle-switch"
+              :class="{ active: newServer.auto_start }"
+              @click="newServer.auto_start = !newServer.auto_start"
+            >
+              <span class="toggle-knob"></span>
+            </button>
+          </div>
+
+          <div class="form-group toggle-row">
+            <div>
+              <label class="label">Enabled</label>
+              <p class="hint">Enable this server for tool discovery.</p>
+            </div>
+            <button
+              class="toggle-switch"
+              :class="{ active: newServer.enabled }"
+              @click="newServer.enabled = !newServer.enabled"
+            >
+              <span class="toggle-knob"></span>
+            </button>
+          </div>
+
+          <div class="modal-actions">
+            <button class="btn-secondary" @click="showAddServerModal = false">Cancel</button>
+            <button class="save-btn" @click="submitNewServer">Add Server</button>
           </div>
         </div>
       </div>
@@ -1232,5 +1529,198 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate' | 'pri
   padding: 0.5rem 0.9rem;
   font-size: 0.78rem;
   white-space: nowrap;
+}
+
+/* MCP Panel */
+.mcp-loading {
+  padding: 1rem;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.mcp-section {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.mcp-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.mcp-section-title {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.mcp-empty {
+  padding: 1rem;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  background: var(--bg-base);
+  border-radius: 10px;
+}
+
+.mcp-item {
+  padding: 0.75rem 1rem;
+  background: var(--bg-base);
+  border-radius: 12px;
+  margin-bottom: 0.5rem;
+  border: 1px solid var(--border-subtle);
+}
+
+.mcp-item-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.mcp-item-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.mcp-item-name {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+}
+
+.mcp-item-server {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  background: var(--bg-card);
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+}
+
+.mcp-item-desc {
+  margin: 0.4rem 0 0 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.mcp-item-actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.mcp-status-badge {
+  font-size: 0.7rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.mcp-status-badge.running {
+  background: rgba(52, 168, 83, 0.12);
+  color: var(--success);
+}
+
+.mcp-status-badge.starting {
+  background: rgba(251, 188, 5, 0.12);
+  color: #f9ab00;
+}
+
+.mcp-status-badge.error {
+  background: rgba(234, 67, 53, 0.12);
+  color: var(--error);
+}
+
+.mcp-status-badge.stopped {
+  background: var(--bg-card);
+  color: var(--text-muted);
+}
+
+.mcp-permission {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.mcp-permission-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.btn-secondary.small {
+  padding: 0.35rem 0.7rem;
+  font-size: 0.75rem;
+}
+
+.toggle-switch.small {
+  width: 36px;
+  height: 20px;
+}
+
+.toggle-switch.small .toggle-knob {
+  width: 16px;
+  height: 16px;
+}
+
+.toggle-switch.small.active .toggle-knob {
+  transform: translateX(16px);
+}
+
+.input.small {
+  padding: 0.35rem 0.6rem;
+  font-size: 0.78rem;
+  width: auto;
+  min-width: 140px;
+}
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.modal-content {
+  background: var(--bg-card);
+  border-radius: 18px;
+  padding: 1.5rem;
+  width: 100%;
+  max-width: 480px;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border-subtle);
+}
+
+.modal-title {
+  margin: 0 0 1rem 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-subtle);
 }
 </style>

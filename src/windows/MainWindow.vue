@@ -12,6 +12,7 @@ import { useKnowledgeBaseStore } from '../stores/knowledgeBase';
 import { useWindow } from '../composables/useWindow';
 import { useI18n } from '../composables/useI18n';
 import { recordEvent } from '../composables/useEvents';
+import { runAgent } from '../composables/useAgent';
 import { saveNoteToObsidian, openNoteInObsidian } from '../utils/obsidianBridge';
 import { syncZoteroLibrary } from '../utils/zoteroBridge';
 import { type SearchResult } from '../utils/knowledgeBase';
@@ -53,6 +54,7 @@ const messages = ref<ChatMessage[]>([]);
 const inputText = ref('');
 const isStreaming = ref(false);
 const streamingText = ref('');
+const isAgentMode = ref(false);
 const showSettings = ref(false);
 const showHistory = ref(false);
 const showKnowledge = ref(false);
@@ -315,8 +317,75 @@ const sendMessage = async () => {
   recordEvent({
     event_type: 'chat_start',
     resource_id: historyStore.currentConversationId || undefined,
-    metadata: { model: modelUsed }
+    metadata: { model: modelUsed, agent_mode: isAgentMode.value }
   });
+
+  // ── Agent Mode (Phase 2) ──
+  if (isAgentMode.value) {
+    const textCfg = settingsStore.config.textConfig;
+    try {
+      await runAgent(
+        {
+          query: userMessage.content as string,
+          llmConfig: {
+            provider: textCfg.provider,
+            api_key: textCfg.apiKey,
+            base_url: textCfg.baseUrl || undefined,
+            model: textCfg.model,
+          },
+        },
+        {
+          onStart: () => {
+            streamingText.value = 'Agent is thinking...';
+          },
+          onComplete: (result) => {
+            messages.value.push({
+              role: 'assistant',
+              content: result.final_answer,
+            });
+            streamingText.value = '';
+            isStreaming.value = false;
+            messageListRef.value?.scrollToBottom();
+
+            recordEvent({
+              event_type: 'agent_complete',
+              resource_id: historyStore.currentConversationId || undefined,
+              duration_ms: Math.round(performance.now() - chatStartTime),
+              metadata: {
+                model: modelUsed,
+                tools_used: result.tools_used,
+                steps_count: result.steps.length,
+              },
+            });
+          },
+          onError: (error) => {
+            messages.value.push({
+              role: 'assistant',
+              content: `Agent error: ${error}`,
+            });
+            streamingText.value = '';
+            isStreaming.value = false;
+            messageListRef.value?.scrollToBottom();
+
+            recordEvent({
+              event_type: 'agent_error',
+              resource_id: historyStore.currentConversationId || undefined,
+              duration_ms: Math.round(performance.now() - chatStartTime),
+              metadata: { model: modelUsed, error },
+            });
+          },
+        }
+      );
+    } catch (e) {
+      messages.value.push({
+        role: 'assistant',
+        content: `Agent error: ${e}`,
+      });
+      isStreaming.value = false;
+      streamingText.value = '';
+    }
+    return;
+  }
 
   // ── Build system prompt with context injections ──
   let systemContent = '';
@@ -1122,6 +1191,7 @@ const saveToObsidian = async () => {
 
       <ChatInputArea
         v-model="inputText"
+        v-model:is-agent-mode="isAgentMode"
         :is-streaming="isStreaming"
         @send="sendMessage"
         @stop="stopStreaming"

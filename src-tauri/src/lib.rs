@@ -1,9 +1,11 @@
+mod agent;
 mod app_control;
 mod clipboard;
 mod content_type_detection;
 mod event_collector;
 mod events;
 mod experiment;
+mod mcp;
 mod models;
 mod pdf_detection;
 mod plugin;
@@ -31,6 +33,7 @@ pub struct AppState {
     pub current_window: Arc<RwLock<Option<WindowInfo>>>,
     pub event_collector: Arc<EventCollector>,
     pub text_selector: Arc<dyn TextSelector>,
+    pub mcp_hub: Arc<mcp::McpHub>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -122,13 +125,63 @@ pub fn run() {
             let window_detector = window_detector::create_window_detector();
             let current_window = Arc::new(RwLock::new(None));
 
+            // ── MCP Hub (Phase 1) ──────────────────────────────────────────
+            // Copy built-in MCP server scripts to app_data_dir/mcp_servers/
+            let servers_dir = app_data_dir.join("mcp_servers");
+            std::fs::create_dir_all(&servers_dir).ok();
+
+            // Try to locate the source mcp_servers directory
+            let mcp_src = if cfg!(debug_assertions) {
+                // Dev mode: exe is at target/debug/ai-research-assistant.exe
+                // Need to go up to project root: target/debug -> target -> project root
+                std::env::current_exe()
+                    .ok()
+                    .and_then(|exe| {
+                        // exe.parent() = target/debug/
+                        // .parent() = target/
+                        // .parent() = src-tauri/ (Cargo.toml dir)
+                        let project_root = exe.parent()?.parent()?.parent()?;
+                        let candidate = project_root.join("src").join("mcp_servers");
+                        if candidate.exists() { Some(candidate) } else { None }
+                    })
+            } else {
+                app.path().resource_dir().ok()
+                    .map(|d| d.join("mcp_servers"))
+            };
+
+            if let Some(src_dir) = mcp_src {
+                if let Ok(entries) = std::fs::read_dir(&src_dir) {
+                    for entry in entries.flatten() {
+                        let dest = servers_dir.join(entry.file_name());
+                        if let Err(e) = std::fs::copy(entry.path(), &dest) {
+                            eprintln!("[MCP] Failed to copy server file to {:?}: {}", dest, e);
+                        } else {
+                            println!("[MCP] Deployed server file: {:?}", dest);
+                        }
+                    }
+                }
+            } else {
+                eprintln!("[MCP] Could not locate built-in MCP server scripts");
+            }
+
+            let mcp_hub = mcp::McpHub::new(&app_data_dir);
+            // Start MCP servers asynchronously after setup completes
+            let mcp_hub_for_spawn = mcp_hub.clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = mcp_hub_for_spawn.start_all().await {
+                    eprintln!("Failed to start MCP servers: {}", e);
+                }
+            });
+
             let app_state = AppState {
                 window_detector: window_detector.clone(),
                 current_window: current_window.clone(),
                 event_collector: event_collector.clone(),
                 text_selector: text_selector.clone(),
+                mcp_hub: Arc::new(mcp_hub.clone()),
             };
             app.manage(app_state);
+            app.manage(mcp_hub);
 
             let app_handle = app.handle().clone();
             let ec_for_window = event_collector.clone();
@@ -249,6 +302,21 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            // Agent (Phase 2)
+            agent::agent_run,
+            agent::agent_cancel,
+            agent::agent_get_state,
+            agent::agent_user_response,
+            // MCP (Phase 1)
+            mcp::mcp_list_tools,
+            mcp::mcp_call_tool,
+            mcp::mcp_toggle_tool,
+            mcp::mcp_set_tool_permission,
+            mcp::mcp_list_servers,
+            mcp::mcp_start_server,
+            mcp::mcp_stop_server,
+            mcp::mcp_restart_server,
+            mcp::mcp_get_servers_dir,
             // Event collection
             event_collector::record_event,
             event_collector::set_incognito_mode,
