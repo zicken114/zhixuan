@@ -53,16 +53,15 @@ const showResult = ref(false);
 const selectedPrompt = ref<ExtractionPrompt | null>(null);
 
 const extractionPrompts: ExtractionPrompt[] = [
-  { label: '提取公式为 LaTeX', icon: '📐', prompt: '请将图片中的数学公式完整提取为 LaTeX 代码，只返回 LaTeX 代码，不要任何解释或markdown代码块标记。', format: 'latex' },
-  { label: '提取表格为 Markdown', icon: '📊', prompt: '请将图片中的表格完整提取为 Markdown 格式的表格代码，只返回 Markdown 代码，不要任何解释或markdown代码块标记。', format: 'markdown' },
-  { label: '提取为纯文本', icon: '📝', prompt: '请将图片中的所有文字内容完整提取为纯文本，只返回文本内容，不要任何解释。', format: 'text' },
-  { label: '提取伪代码/流程', icon: '🔣', prompt: '请将图片中的伪代码、算法流程图或流程描述提取为清晰的步骤说明，返回结构化的文本描述。', format: 'text' },
+  { label: '硬核图表分析', icon: '📈', prompt: '哥们儿帮我看看这张图，图表里数据走势咋样，有没有啥值得注意的点。用知乎上那种专业但不装的口吻聊聊，别整一堆数字堆砌，直接说人话给结论就行。输出纯文本，不要用星号、井号这些 markdown 符号，也不要用 1.2.3. 列表。', format: 'text' },
+  { label: '复杂布局拆解', icon: '🧩', prompt: '这张图信息挺杂的，帮我理一理。看看视觉层级怎么排的，核心论点是什么，支撑材料在哪，广告和背景直接忽略。最后给我一份创作大纲，用自然的中文写出来，不要用 markdown 格式，也不要用 1.2.3. 编号列表，就像跟朋友口述思路一样。', format: 'markdown' },
+  { label: '灵感手稿一键转正', icon: '✨', prompt: '这是我随手记的东西，可能写得比较潦草甚至有手写内容。帮我把核心意思抓住，然后扩写成一段知乎风格的开场白，要真诚、有温度，像真人写的而不是 AI 生成的。保持我原来的意图，但把口语化的地方顺一顺。直接输出文字，不要加星号、井号，不要用列表符号。', format: 'text' },
+  { label: '梗图解码', icon: '🦊', prompt: '你现在是知乎的刘看山，一只住在北极、偶尔掉毛、爱吃鳕鱼的短尾巴北极狐。看看这张图里有啥好玩的梗或者特别的氛围，用你平时那种调皮呆萌的语气随便吐槽两句，最后丢个颜文字就行。要像真人聊天一样自然，别整得跟说明书似的，不要出现星号、井号这些符号。', format: 'text' },
 ];
 
 const toHistoryActionType = (prompt: ExtractionPrompt): PopupActionType => {
-  if (prompt.format === 'latex') return 'extract-latex';
-  if (prompt.format === 'markdown') return 'extract-table';
-  if (prompt.label.includes('公式')) return 'extract-math';
+  if (prompt.label.includes('布局')) return 'extract-table';
+  if (prompt.label.includes('图表')) return 'extract-latex';
   return 'extract-text';
 };
 
@@ -95,11 +94,11 @@ onMounted(async () => {
   // Listen for preset triggers from reading-companion hotkeys (F2=formula, F3=table)
   listen<string>('capture:preset', (event) => {
     if (event.payload === 'formula') {
-      presetHint.value = '阅读助手：拖拽选择公式区域，按 Enter 提取为 LaTeX';
-      presetPromptIndex = 0; // LaTeX extraction
+      presetHint.value = '阅读助手：拖拽选择图表区域，按 Enter 进行图表分析';
+      presetPromptIndex = 0; // 图表分析
     } else if (event.payload === 'table') {
-      presetHint.value = '阅读助手：拖拽选择表格区域，按 Enter 提取为 Markdown';
-      presetPromptIndex = 1; // Markdown table extraction
+      presetHint.value = '阅读助手：拖拽选择布局区域，按 Enter 拆解布局';
+      presetPromptIndex = 1; // 布局拆解
     }
   });
 });

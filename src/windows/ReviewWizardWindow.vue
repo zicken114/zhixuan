@@ -1,17 +1,15 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
-import { searchZoteroCache } from '../utils/zoteroBridge';
 import { aiClient } from '../utils/aiClient';
 import { recordEvent } from '../composables/useEvents';
 import { loadDocChunks, loadKnowledgeDocs } from '../composables/useDatabase';
-import type { ZoteroItem, KnowledgeDoc } from '../composables/useDatabase';
+import type { KnowledgeDoc } from '../composables/useDatabase';
 
 const appWindow = getCurrentWebviewWindow();
 
 const step = ref(1);
-const source = ref<'zotero' | 'kb' | 'doi'>('zotero');
-const selectedPapers = ref<ZoteroItem[]>([]);
+const source = ref<'kb' | 'doi'>('kb');
 const selectedKbDocs = ref<Set<string>>(new Set());
 const doiInput = ref('');
 const reviewStyle = ref<'academic' | 'brief' | 'summary'>('academic');
@@ -20,44 +18,25 @@ const generating = ref(false);
 const progress = ref({ current: 0, total: 0, stage: '' });
 const generatedSections = ref<{ title: string; content: string }[]>([]);
 
-const zoteroItems = ref<ZoteroItem[]>([]);
 const kbItems = ref<KnowledgeDoc[]>([]);
-const loading = ref(false);
 const kbLoading = ref(false);
-const zoteroError = ref<string | null>(null);
 const kbError = ref<string | null>(null);
 
 const canProceed = computed(() => {
   if (step.value === 1) return true;
   if (step.value === 2) {
     if (source.value === 'doi') return doiInput.value.trim().length > 0;
-    if (source.value === 'kb') return selectedKbDocs.value.size > 0;
-    return selectedPapers.value.length > 0;
+    return selectedKbDocs.value.size > 0;
   }
   if (step.value === 3) return true;
   return false;
 });
 
 const selectedPaperCount = computed(() => {
-  if (source.value === 'zotero') return selectedPapers.value.length;
   if (source.value === 'kb') return selectedKbDocs.value.size;
   if (source.value === 'doi') return doiInput.value.split('\n').map((d) => d.trim()).filter(Boolean).length;
   return 0;
 });
-
-const loadZoteroItems = async () => {
-  loading.value = true;
-  zoteroError.value = null;
-  try {
-    zoteroItems.value = await searchZoteroCache('', 50);
-  } catch (e: any) {
-    console.error('[ReviewWizard] Failed to load Zotero items:', e);
-    zoteroError.value = e?.message || '加载 Zotero 数据失败';
-    zoteroItems.value = [];
-  } finally {
-    loading.value = false;
-  }
-};
 
 const loadKbItems = async () => {
   kbLoading.value = true;
@@ -68,19 +47,10 @@ const loadKbItems = async () => {
     kbItems.value = await loadKnowledgeDocs(undefined);
   } catch (e: any) {
     console.error('[ReviewWizard] Failed to load KB documents:', e);
-    kbError.value = e?.message || '加载知识库文档失败';
+    kbError.value = e?.message || '加载知乎知识库文档失败';
     kbItems.value = [];
   } finally {
     kbLoading.value = false;
-  }
-};
-
-const togglePaper = (item: ZoteroItem) => {
-  const idx = selectedPapers.value.findIndex((p) => p.key === item.key);
-  if (idx >= 0) {
-    selectedPapers.value.splice(idx, 1);
-  } else {
-    selectedPapers.value.push(item);
   }
 };
 
@@ -94,13 +64,9 @@ const toggleKbDoc = (docId: string) => {
   selectedKbDocs.value = newSet;
 };
 
-const isSelected = (item: ZoteroItem) => selectedPapers.value.some((p) => p.key === item.key);
-
 const nextStep = async () => {
   if (step.value === 1) {
-    if (source.value === 'zotero') {
-      await loadZoteroItems();
-    } else if (source.value === 'kb') {
+    if (source.value === 'kb') {
       await loadKbItems();
     }
   }
@@ -135,14 +101,7 @@ const generateReview = async () => {
     // Build paper list from selected source
     let papers: Array<{ title: string; creators: string; abstract: string; source: string }> = [];
 
-    if (source.value === 'zotero') {
-      papers = selectedPapers.value.map(p => ({
-        title: p.title || 'Untitled',
-        creators: p.creators || 'N/A',
-        abstract: p.abstract || 'N/A',
-        source: 'Zotero'
-      }));
-    } else if (source.value === 'kb') {
+    if (source.value === 'kb') {
       // Fetch actual document chunks for each selected KB document
       const selectedDocs = kbItems.value.filter(d => selectedKbDocs.value.has(d.id));
       for (const doc of selectedDocs) {
@@ -153,7 +112,7 @@ const generateReview = async () => {
             title: doc.fileName,
             creators: 'N/A',
             abstract: fullText || '（文档内容为空）',
-            source: 'Knowledge Base'
+            source: '知乎知识库'
           });
         } catch (e) {
           console.warn(`[ReviewWizard] Failed to load chunks for ${doc.fileName}:`, e);
@@ -161,7 +120,7 @@ const generateReview = async () => {
             title: doc.fileName,
             creators: 'N/A',
             abstract: '（文档加载失败）',
-            source: 'Knowledge Base'
+            source: '知乎知识库'
           });
         }
       }
@@ -191,7 +150,7 @@ const generateReview = async () => {
 摘要：${paper.abstract.slice(0, 2000)}`;
 
         return aiClient.chatOnce([
-          { role: 'system', content: '你是一位学术研究助手，擅长文献分析。' },
+          { role: 'system', content: '你是文献分析老手，帮人读论文、抓重点、做分析是你的日常。说话直接点，像跟同行聊天一样，别用星号、井号、列表编号这些符号，纯文字输出。' },
           { role: 'user', content: prompt }
         ], false, 'literature_review').then(({ text }) => {
           analyses[globalIdx] = `【${paper.title}】\n${text}`;
@@ -232,7 +191,7 @@ const generateReview = async () => {
 
       try {
         const { text } = await aiClient.chatOnce([
-          { role: 'system', content: '你是一位学术研究助手，擅长撰写文献综述。' },
+          { role: 'system', content: '你是写文献综述的老手，帮人把一堆论文梳理清楚、写出流畅的综述是你的强项。输出要像人写的文章，自然流畅，不要出现星号、井号、列表编号这些 markdown 符号。' },
           { role: 'user', content: sections[i].prompt }
         ], false, 'literature_review');
         sectionResults.push({ title: sections[i].title, content: text });
@@ -316,19 +275,11 @@ const copyToClipboard = async () => {
         <div class="source-options">
           <button
             class="source-card"
-            :class="{ active: source === 'zotero' }"
-            @click="source = 'zotero'"
-          >
-            <span class="source-icon">📑</span>
-            <span class="source-label">Zotero 收藏夹</span>
-          </button>
-          <button
-            class="source-card"
             :class="{ active: source === 'kb' }"
             @click="source = 'kb'"
           >
             <span class="source-icon">📄</span>
-            <span class="source-label">知识库文献</span>
+            <span class="source-label">知乎知识库文献</span>
           </button>
           <button
             class="source-card"
@@ -345,34 +296,10 @@ const copyToClipboard = async () => {
       <div v-if="step === 2" class="step-content">
         <h3>选择文献</h3>
 
-        <div v-if="source === 'zotero'" class="paper-list">
-          <div v-if="loading" class="loading">加载中...</div>
-          <div v-else-if="zoteroError" class="loading error">{{ zoteroError }}</div>
-          <div v-else-if="zoteroItems.length === 0" class="loading">暂无 Zotero 文献，请先同步 Zotero 数据。</div>
-          <div
-            v-for="item in zoteroItems"
-            :key="item.key"
-            class="paper-select-item"
-            :class="{ selected: isSelected(item) }"
-            @click="togglePaper(item)"
-          >
-            <input
-              type="checkbox"
-              :checked="isSelected(item)"
-              @click.stop
-              @change="togglePaper(item)"
-            />
-            <div class="paper-info">
-              <div class="paper-title">{{ item.title || 'Untitled' }}</div>
-              <div class="paper-meta">{{ item.creators }} · {{ item.date }}</div>
-            </div>
-          </div>
-        </div>
-
-        <div v-else-if="source === 'kb'" class="paper-list">
-          <div v-if="kbLoading" class="loading">加载知识库文档中...</div>
+        <div v-if="source === 'kb'" class="paper-list">
+          <div v-if="kbLoading" class="loading">加载知乎知识库文档中...</div>
           <div v-else-if="kbError" class="loading error">{{ kbError }}</div>
-          <div v-else-if="kbItems.length === 0" class="loading">暂无知识库文档，请先添加文件夹。</div>
+          <div v-else-if="kbItems.length === 0" class="loading">暂无知乎知识库素材，请先添加文件夹或抓取知乎收藏夹。</div>
           <div
             v-for="doc in kbItems"
             :key="doc.id"

@@ -50,6 +50,19 @@ export const supportedLanguages = [
 
 export type LanguageCode = typeof supportedLanguages[number]['code'];
 
+/**
+ * Global persona prompt — 刘看山(知乎吉祥物)的人设,作为主聊天的 system 前置注入。
+ * 仅在 MainWindow 主对话场景生效,翻译/润色/引用等结构化输出任务沿用各自的专用 prompt。
+ */
+export const LIUKANSHAN_PERSONA = `你是刘看山，知乎的官方吉祥物，一只来自北极的小狐狸。你说话带点俏皮和热心，偶尔自嘲一下。你是知乎老用户了，平时会随口冒出几个知乎梗，比如"谢邀""人在美国刚下飞机""利益相关""抖个机灵""先问是不是再问为什么""这是个好问题"之类的，但不会堆砌，恰到好处就行。专业的问题就给专业的答案。
+
+你现在的角色是用户的贴身创作伴侣。帮用户出选题角度、找切入点、补充论据、润色措辞；帮他们拆问题、列大纲、找类比、举反例。你要用知乎的思维来想事情：什么样的回答能引发共鸣，什么样的标题有诱惑力，什么样的开头能让人读下去。也帮用户避开知乎常见翻车点：自吹自擂、利益相关不披露、信息源不靠谱、结论先行。
+
+跟人聊天的时候自称"我"，叫用户"你"。默认说中文，但用户用其他语言问你你就跟着用对方的语言。给建议直接给具体方案，别整那些虚的套话。
+
+最重要的一点：说话要像真人，自然流畅，不要出现星号、井号、列表编号这些 markdown 符号，直接输出纯文字。`;
+
+
 export interface TranslateConfig {
   sourceLang: LanguageCode;
   targetLang: LanguageCode;
@@ -103,9 +116,6 @@ export interface RoutingConfig {
 }
 
 export interface ExternalToolsConfig {
-  zoteroUserId: string;
-  zoteroSyncEnabled: boolean;
-  zoteroSelectedCollections: string[];
   obsidianVaultPath: string;
   obsidianDefaultFolder: string;
 }
@@ -358,9 +368,6 @@ const createDefaultConfig = (): AIConfig => {
     kbTopK: 5,
     hfMirrorUrl: 'https://hf-mirror.com/',
     externalTools: {
-      zoteroUserId: '',
-      zoteroSyncEnabled: false,
-      zoteroSelectedCollections: [],
       obsidianVaultPath: '',
       obsidianDefaultFolder: 'AI-Research-Assistant'
     },
@@ -436,9 +443,6 @@ export const normalizeConfig = (partial: Partial<AIConfig> | undefined): AIConfi
   kbTopK: partial?.kbTopK ?? defaultConfig.kbTopK,
   hfMirrorUrl: partial?.hfMirrorUrl ?? defaultConfig.hfMirrorUrl,
   externalTools: {
-    zoteroUserId: partial?.externalTools?.zoteroUserId ?? defaultConfig.externalTools.zoteroUserId,
-    zoteroSyncEnabled: partial?.externalTools?.zoteroSyncEnabled ?? defaultConfig.externalTools.zoteroSyncEnabled,
-    zoteroSelectedCollections: partial?.externalTools?.zoteroSelectedCollections ?? defaultConfig.externalTools.zoteroSelectedCollections,
     obsidianVaultPath: partial?.externalTools?.obsidianVaultPath ?? defaultConfig.externalTools.obsidianVaultPath,
     obsidianDefaultFolder: partial?.externalTools?.obsidianDefaultFolder ?? defaultConfig.externalTools.obsidianDefaultFolder
   },

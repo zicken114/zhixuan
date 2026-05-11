@@ -13,9 +13,8 @@ import { useWindow } from '../composables/useWindow';
 import { useI18n } from '../composables/useI18n';
 import { replaceSelectedText } from '../composables/useTextInjection';
 import { recordEvent } from '../composables/useEvents';
-import { searchZoteroCache, formatCitation } from '../utils/zoteroBridge';
+import { formatCitation } from '../utils/citationFormatter';
 import { saveNoteToObsidian } from '../utils/obsidianBridge';
-import type { ZoteroItem } from '../composables/useDatabase';
 
 const settingsStore = useSettingsStore();
 const projectStore = useProjectStore();
@@ -35,7 +34,7 @@ const menuContentRef = ref<HTMLElement | null>(null);
 
 // Citation recommendation state
 const showCitations = ref(false);
-const citationResults = ref<ZoteroItem[]>([]);
+const citationResults = ref<any[]>([]);
 const citationLoading = ref(false);
 const citationReasons = ref<Map<string, string>>(new Map());
 const citationReasonsLoading = ref<Set<string>>(new Set());
@@ -71,9 +70,8 @@ interface WindowInfoPayload {
 
 const baseMenuItems = [
   { icon: '💬', label: 'Chat', action: 'chat' },
-  { icon: '🌍', label: 'Translate', action: 'translate' },
-  { icon: '🧹', label: 'Clean to Word', action: 'clean' },
-  { icon: '📚', label: 'Format Citation', action: 'citation' },
+  { icon: '🕵️', label: '"杠精"视角审视', action: 'translate' },
+  { icon: '📖', label: '盐选脑洞扩写', action: 'clean' },
   { icon: '📜', label: 'History', action: 'history' },
 ];
 
@@ -87,7 +85,7 @@ const menuItems = computed(() => {
   const items = [...baseMenuItems];
   // Show writing companion actions when in writing apps
   if (currentAppType.value === 'writing') {
-    items.splice(2, 0, { icon: '✨', label: 'Polish', action: 'polish' });
+    items.splice(2, 0, { icon: '🌟', label: '转为"知乎高赞体"', action: 'polish' });
     items.splice(3, 0, { icon: '📖', label: 'Recommend Citation', action: 'recommend_citation' });
     items.splice(4, 0, { icon: '🔧', label: 'Fix Citation Format', action: 'fix_citation' });
   }
@@ -300,10 +298,6 @@ const handleAction = async (action: string) => {
         eventType = 'clipboard_purify';
         outputTextForHistory = await handleCleanToWord();
         break;
-      case 'citation':
-        eventType = 'clipboard_format';
-        outputTextForHistory = await handleFormatCitation();
-        break;
       case 'polish':
         eventType = 'clipboard_polish';
         await handlePolish();
@@ -396,9 +390,7 @@ const handleTranslate = async () => {
   const sourceLabel = supportedLanguages.find(l => l.code === sourceLang)?.label || sourceLang;
   const targetLabel = supportedLanguages.find(l => l.code === targetLang)?.label || targetLang;
 
-  const systemPrompt = sourceLang === 'auto'
-    ? `You are a professional translator. Translate the given text to ${targetLabel}. Only output the translation, no explanations.`
-    : `You are a professional translator. Translate the given text from ${sourceLabel} to ${targetLabel}. Only output the translation, no explanations.`;
+  const systemPrompt = "你现在扮演知乎评论区最严格的'逻辑杠精'。请审视用户提供的这段文字，指出其中可能存在的：1. 逻辑漏洞；2. 幸存者偏差；3. 容易被网友攻击的靶点。最后给出 1-2 条修改建议，帮助作者让这段论述无懈可击。语气可以稍微犀利一点，但最终目的是帮助作者完善文章。";
 
   const messages = [
     { role: 'system' as const, content: systemPrompt },
@@ -424,7 +416,7 @@ const handleCleanToWord = async () => {
     const messages = [
       {
         role: 'system' as const,
-        content: 'Clean up the given text by removing extra whitespace, fixing formatting issues, and making it suitable for pasting into Word. Return the cleaned text only.'
+        content: '你是知乎盐选专栏的金牌小说作者，悬疑、脑洞、反转类是你的拿手好戏。根据用户给的东西，扩写成一段 300 字左右的盐选小说高潮或开头，悬念要足，画面感要强，结尾卡在最勾人的地方。像真人写小说一样自然，不要出现星号、井号、列表编号这些 markdown 符号。'
       },
       { role: 'user' as const, content: clipboardText.value }
     ];
@@ -436,20 +428,6 @@ const handleCleanToWord = async () => {
   }
 };
 
-const handleFormatCitation = async () => {
-  const messages = [
-    {
-      role: 'system' as const,
-      content: 'Convert the given citation or reference into proper BibTeX format. Only output the BibTeX entry, no explanations.'
-    },
-    { role: 'user' as const, content: clipboardText.value }
-  ];
-
-  const text = await streamTextResponse(messages, 'citation_format');
-  await writeText(text);
-  await completeProgress();
-  return text;
-};
 
 const handlePolish = async () => {
   if (!clipboardText.value.trim()) {
@@ -470,7 +448,7 @@ const handlePolish = async () => {
     const messages = [
       {
         role: 'system' as const,
-        content: 'You are an academic writing assistant. Polish the given text to improve clarity, conciseness, and academic tone. Preserve the original meaning. Only output the polished text, no explanations or markdown formatting.'
+        content: '你是知乎百万粉大V，改文案是你的绝活。把用户给的内容改成知乎高赞风格，适当来点"谢邀""利益相关"这种知乎味儿。结构上就按知乎套路来：先抛观点，再展开说，最后上个金句收尾。语气要专业但别端着，怎么接地气怎么来。直接输出改写后的内容，别废话，也别用星号、井号、列表编号这些 markdown 符号，纯文字输出。'
       },
       { role: 'user' as const, content: clipboardText.value }
     ];
@@ -661,9 +639,7 @@ const handleRecommendCitation = async () => {
 
   try {
     // Extract keywords from selected text (simple heuristic: take first 10 words)
-    const keywords = clipboardText.value.split(/\s+/).slice(0, 10).join(' ');
-    const results = await searchZoteroCache(keywords, 10);
-    citationResults.value = results;
+      citationResults.value = [];
     completeProgress();
 
     recordEvent({
@@ -676,7 +652,7 @@ const handleRecommendCitation = async () => {
     generateReasonsForResults(clipboardText.value);
   } catch (e: any) {
     console.error('[Citation Recommend] Failed:', e);
-    progressLabel.value = `${t('popup.failedToSearchZotero')}: ${e?.message || t('common.unknownError')}`;
+    progressLabel.value = `文献推荐失败: ${e?.message || t('common.unknownError')}`;
   } finally {
     citationLoading.value = false;
     stopProgress();
@@ -718,7 +694,7 @@ const handleSaveToObsidian = async () => {
   await completeProgress();
 };
 
-const copyCitationFormat = async (item: ZoteroItem, style?: 'apa' | 'ieee' | 'gb7714') => {
+const copyCitationFormat = async (item: any, style?: 'apa' | 'ieee' | 'gb7714') => {
   const resolvedStyle = style || preferredCitationStyle.value;
   const citation = formatCitation(item, resolvedStyle);
   await writeText(citation);
@@ -738,7 +714,7 @@ const closeCitations = () => {
 };
 
 /** Generate an AI-powered recommendation reason for a single citation. */
-const generateReasonForItem = async (item: ZoteroItem, userText: string) => {
+const generateReasonForItem = async (item: any, userText: string) => {
   if (!item.key || citationReasons.value.has(item.key)) return;
   citationReasonsLoading.value.add(item.key);
 
@@ -858,24 +834,9 @@ const parseInformalCitation = (text: string): ParsedCitation | null => {
   return null;
 };
 
-/** Find matching Zotero items by author+year. */
-const findCitationMatches = async (parsed: ParsedCitation): Promise<ZoteroItem[]> => {
-  // Search by year first (narrower)
-  const yearResults = await searchZoteroCache(parsed.year, 50);
-
-  // Then filter by author name similarity
-  const authorQuery = parsed.rawAuthors.toLowerCase()
-    .replace(/等|et al\./g, '')
-    .replace(/[,，\s]+/g, ' ')
-    .trim();
-
-  return yearResults.filter(item => {
-    if (!item.creators) return false;
-    const creatorsLower = item.creators.toLowerCase();
-    // Check if any part of the author query matches
-    const parts = authorQuery.split(/\s+/);
-    return parts.some(part => part.length >= 2 && creatorsLower.includes(part));
-  });
+/** Find matching citation items by author+year. */
+const findCitationMatches = async (_parsed: ParsedCitation): Promise<any[]> => {
+  return [];
 };
 
 const handleFixCitation = async () => {
@@ -1015,9 +976,9 @@ const cancelProgress = async () => {
         <span class="citation-title">📖 {{ t('popup.recommendedCitations') }}</span>
         <button class="citation-close" @click="closeCitations">✕</button>
       </div>
-      <div v-if="citationLoading" class="citation-loading">{{ t('popup.searchingZotero') }}</div>
+      <div v-if="citationLoading" class="citation-loading">搜索文献中...</div>
       <div v-else-if="citationResults.length === 0" class="citation-empty">
-        {{ t('popup.noCitationMatches') }}
+        暂无匹配的文献推荐。
       </div>
       <div v-else class="citation-list">
         <div

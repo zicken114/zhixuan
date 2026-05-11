@@ -1,27 +1,12 @@
 <script setup lang="ts">
-import { onMounted, watch, ref, computed } from 'vue';
+import { onMounted, watch } from 'vue';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { useKnowledgeBaseStore } from '../stores/knowledgeBase';
 import { useProjectStore } from '../stores/projects';
-import { useSettingsStore } from '../stores/settings';
-import {
-  syncZoteroLibrary,
-  searchZoteroCache,
-  formatCitation,
-  fetchCollections,
-  getCachedCollections,
-  type ZoteroSyncResult
-} from '../utils/zoteroBridge';
-import { useClipboard } from '../composables/useClipboard';
-import { useWindow } from '../composables/useWindow';
-import { recordEvent } from '../composables/useEvents';
-import type { ZoteroItem, ZoteroCollection } from '../composables/useDatabase';
 
 const appWindow = getCurrentWebviewWindow();
 const kbStore = useKnowledgeBaseStore();
 const projectStore = useProjectStore();
-const settingsStore = useSettingsStore();
-const { show: showWindow } = useWindow();
 
 const emit = defineEmits<{
   close: [];
@@ -36,7 +21,6 @@ onMounted(() => {
   kbStore.loadDocuments();
 });
 
-// Reload documents when project changes
 watch(() => projectStore.currentProjectId, () => {
   kbStore.loadDocuments();
   kbStore.searchResults = [];
@@ -49,10 +33,10 @@ const handleSearch = async () => {
 
 const statusIcon = (status: string) => {
   switch (status) {
-    case 'completed': return 'indexed';
-    case 'indexing': return 'indexing...';
-    case 'error': return 'error';
-    default: return 'pending';
+    case 'completed': return '已索引';
+    case 'indexing': return '索引中...';
+    case 'error': return '错误';
+    default: return '待处理';
   }
 };
 
@@ -62,165 +46,6 @@ const statusClass = (status: string) => {
     case 'indexing': return 'status-indexing';
     case 'error': return 'status-error';
     default: return 'status-pending';
-  }
-};
-
-/* ── Zotero state ── */
-const activeTab = ref<'docs' | 'zotero'>('docs');
-const zoteroSyncing = ref(false);
-const zoteroSyncResult = ref<ZoteroSyncResult | null>(null);
-const zoteroItems = ref<ZoteroItem[]>([]);
-const zoteroSearchQuery = ref('');
-const zoteroSearching = ref(false);
-
-// Collection selection
-const zoteroCollections = ref<ZoteroCollection[]>([]);
-const loadingCollections = ref(false);
-const showCollectionSelector = ref(false);
-const selectedCollections = ref<string[]>([...settingsStore.config.externalTools.zoteroSelectedCollections]);
-
-// Collection hierarchy navigation
-const currentParentKey = ref<string | null>(null);
-const parentChain = ref<{ key: string | null; name: string }[]>([{ key: null, name: 'Root' }]);
-
-const visibleCollections = computed(() => {
-  return zoteroCollections.value.filter((c) => (c.parentKey ?? null) === currentParentKey.value);
-});
-
-const hasChildren = (key: string) => {
-  return zoteroCollections.value.some((c) => c.parentKey === key);
-};
-
-const enterCollection = (key: string, name: string) => {
-  currentParentKey.value = key;
-  parentChain.value.push({ key, name });
-};
-
-const goUp = () => {
-  if (parentChain.value.length > 1) {
-    parentChain.value.pop();
-    currentParentKey.value = parentChain.value[parentChain.value.length - 1].key;
-  }
-};
-
-const goToBreadcrumb = (index: number) => {
-  parentChain.value = parentChain.value.slice(0, index + 1);
-  currentParentKey.value = parentChain.value[parentChain.value.length - 1].key;
-};
-
-const loadZoteroCollections = async () => {
-  loadingCollections.value = true;
-  try {
-    // Always fetch fresh from Zotero API so we see the full library tree
-    const userId = settingsStore.config.externalTools.zoteroUserId || '0';
-    const apiCollections = await fetchCollections(userId);
-    console.log('[KnowledgePanel] Fetched collections:', apiCollections.length, apiCollections);
-    zoteroCollections.value = apiCollections.map((c) => {
-      const d = c.data || {};
-      return {
-        id: 0,
-        key: c.key || d.key || '',
-        name: d.name?.trim() || '(Unnamed Collection)',
-        parentKey: d.parentCollection && typeof d.parentCollection === 'string' ? d.parentCollection : undefined,
-        version: c.version || d.version || 0,
-        syncedAt: Date.now()
-      };
-    });
-    // Reset hierarchy when opening selector
-    currentParentKey.value = null;
-    parentChain.value = [{ key: null, name: 'Root' }];
-    showCollectionSelector.value = true;
-  } catch (e: any) {
-    console.error('[KnowledgePanel] Failed to fetch collections from API:', e);
-    // Fallback to cache if API fails
-    try {
-      const cached = await getCachedCollections();
-      if (cached.length > 0) {
-        zoteroCollections.value = cached;
-        currentParentKey.value = null;
-        parentChain.value = [{ key: null, name: 'Root' }];
-        showCollectionSelector.value = true;
-      }
-    } catch (_) {
-      // ignore
-    }
-    zoteroSyncResult.value = { itemsSynced: 0, collectionsSynced: 0, success: false, error: e?.message || 'Failed to load collections' };
-  } finally {
-    loadingCollections.value = false;
-  }
-};
-
-const toggleCollection = (key: string) => {
-  const idx = selectedCollections.value.indexOf(key);
-  if (idx >= 0) {
-    selectedCollections.value.splice(idx, 1);
-  } else {
-    selectedCollections.value.push(key);
-  }
-};
-
-const saveCollectionSelection = async () => {
-  const newConfig = {
-    ...settingsStore.config,
-    externalTools: {
-      ...settingsStore.config.externalTools,
-      zoteroSelectedCollections: [...selectedCollections.value]
-    }
-  };
-  await settingsStore.updateConfig(newConfig);
-};
-
-const handleZoteroSync = async (forceFullSync = true) => {
-  const userId = settingsStore.config.externalTools.zoteroUserId || '0';
-  const collectionKeys = settingsStore.config.externalTools.zoteroSelectedCollections;
-  zoteroSyncing.value = true;
-  zoteroSyncResult.value = null;
-  const startTime = Date.now();
-  let result: ZoteroSyncResult | null = null;
-  try {
-    result = await syncZoteroLibrary(userId, collectionKeys.length > 0 ? collectionKeys : undefined, forceFullSync);
-    zoteroSyncResult.value = result;
-    if (result.success) {
-      await handleZoteroSearch();
-    }
-  } catch (e: any) {
-    result = { itemsSynced: 0, collectionsSynced: 0, success: false, error: e?.message || 'Unknown error' };
-    zoteroSyncResult.value = result;
-  } finally {
-    zoteroSyncing.value = false;
-    await recordEvent({
-      event_type: 'zotero_sync',
-      project_id: projectStore.currentProjectId ?? undefined,
-      duration_ms: Date.now() - startTime,
-      metadata: {
-        items_synced: result?.itemsSynced ?? 0,
-        collections_synced: result?.collectionsSynced ?? 0,
-        success: result?.success ?? false,
-        force_full_sync: forceFullSync,
-        error: result?.error ?? undefined,
-      },
-    });
-  }
-};
-
-const handleZoteroSearch = async () => {
-  zoteroSearching.value = true;
-  try {
-    zoteroItems.value = await searchZoteroCache(zoteroSearchQuery.value, 50);
-  } finally {
-    zoteroSearching.value = false;
-  }
-};
-
-const { writeText } = useClipboard();
-
-const copyCitation = async (item: ZoteroItem) => {
-  const citation = formatCitation(item, 'gb7714');
-  try {
-    await writeText(citation);
-  } catch {
-    // fallback
-    navigator.clipboard.writeText(citation);
   }
 };
 </script>
@@ -234,9 +59,9 @@ const copyCitation = async (item: ZoteroItem) => {
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M19 12H5M12 19l-7-7 7-7"/>
           </svg>
-          Back
+          返回
         </button>
-        <span class="header-title">Knowledge Base</span>
+        <span class="header-title">知乎知识库</span>
       </div>
       <button class="close-btn" @click="emit('close')">×</button>
     </div>
@@ -248,7 +73,7 @@ const copyCitation = async (item: ZoteroItem) => {
           v-model="kbStore.searchQuery"
           type="text"
           class="search-input"
-          placeholder="Search documents..."
+          placeholder="搜索知乎素材..."
           @keydown.enter="handleSearch"
         />
         <button
@@ -256,132 +81,30 @@ const copyCitation = async (item: ZoteroItem) => {
           :disabled="kbStore.isSearching || !kbStore.searchQuery.trim()"
           @click="handleSearch"
         >
-          {{ kbStore.isSearching ? '...' : 'Search' }}
+          {{ kbStore.isSearching ? '搜索中...' : '搜索' }}
         </button>
       </div>
     </div>
 
-    <!-- Tab switcher + actions -->
+    <!-- Actions -->
     <div class="actions-section">
-      <div class="tab-bar">
-        <button
-          class="tab-btn"
-          :class="{ active: activeTab === 'docs' }"
-          @click="activeTab = 'docs'"
-        >
-          Local Docs
-        </button>
-        <button
-          class="tab-btn"
-          :class="{ active: activeTab === 'zotero' }"
-          @click="activeTab = 'zotero'"
-        >
-          Zotero
-        </button>
-      </div>
-      <button class="review-btn" @click="showWindow('review_wizard')">
-        📚 生成综述
-      </button>
-
-      <div v-if="activeTab === 'docs'" class="tab-actions">
+      <div class="action-row">
         <button
           class="add-folder-btn"
-          :disabled="kbStore.isIndexing || kbStore.embedderLoading"
+          :disabled="kbStore.isIndexing || kbStore.embedderLoading || kbStore.zhihuFetching"
           @click="kbStore.addFolder"
         >
           <span class="btn-icon">+</span>
-          <span>{{ kbStore.isIndexing ? 'Indexing...' : 'Add Folder' }}</span>
+          <span>{{ kbStore.isIndexing ? '索引中...' : '导入本地文档/PDF' }}</span>
         </button>
-      </div>
-
-      <div v-else class="tab-actions">
-        <div class="zotero-action-row">
-          <button
-            class="add-folder-btn zotero-btn"
-            :disabled="zoteroSyncing"
-            @click="handleZoteroSync()"
-          >
-            <span>{{ zoteroSyncing ? 'Syncing...' : 'Sync Zotero' }}</span>
-          </button>
-          <button
-            class="collection-select-btn"
-            :disabled="loadingCollections"
-            @click="loadZoteroCollections"
-          >
-            {{ loadingCollections ? '...' : 'Select Folders' }}
-          </button>
-        </div>
-        <div v-if="settingsStore.config.externalTools.zoteroSelectedCollections.length > 0" class="sync-hint">
-          Syncing {{ settingsStore.config.externalTools.zoteroSelectedCollections.length }} folder(s)
-        </div>
-        <div v-else class="sync-hint">
-          Syncing all folders
-        </div>
-        <div v-if="zoteroSyncResult" class="sync-status">
-          <span v-if="zoteroSyncResult.success" class="sync-ok">
-            Synced {{ zoteroSyncResult.itemsSynced }} items
-          </span>
-          <span v-else class="sync-error">{{ zoteroSyncResult.error }}</span>
-        </div>
-      </div>
-
-      <!-- Collection selector dropdown -->
-      <div v-if="showCollectionSelector" class="collection-selector">
-        <div class="selector-header">
-          <span class="selector-title">Select folders to sync</span>
-          <button class="selector-close" @click="showCollectionSelector = false">x</button>
-        </div>
-
-        <!-- Breadcrumb -->
-        <div class="breadcrumb">
-          <span
-            v-for="(crumb, idx) in parentChain"
-            :key="idx"
-            class="breadcrumb-item"
-            :class="{ active: idx === parentChain.length - 1 }"
-            @click="goToBreadcrumb(idx)"
-          >
-            {{ crumb.name }}
-            <span v-if="idx < parentChain.length - 1" class="breadcrumb-sep">/</span>
-          </span>
-        </div>
-
-        <!-- Go up button -->
-        <div v-if="parentChain.length > 1" class="go-up-row">
-          <button class="go-up-btn" @click="goUp">
-            ↑ Back to parent
-          </button>
-        </div>
-
-        <div class="collection-list">
-          <div
-            v-for="coll in visibleCollections"
-            :key="coll.key"
-            class="collection-item"
-          >
-            <input
-              type="checkbox"
-              :checked="selectedCollections.includes(coll.key)"
-              @click.stop
-              @change="toggleCollection(coll.key)"
-            />
-            <span class="collection-name" @click="toggleCollection(coll.key)">{{ coll.name }}</span>
-            <button
-              v-if="hasChildren(coll.key)"
-              class="enter-folder-btn"
-              @click.stop="enterCollection(coll.key, coll.name)"
-            >
-              Open ▶
-            </button>
-          </div>
-          <div v-if="visibleCollections.length === 0" class="empty-state" style="padding: 1rem;">
-            No folders at this level.
-          </div>
-        </div>
-        <div class="selector-actions">
-          <button class="selector-btn secondary" @click="showCollectionSelector = false">Cancel</button>
-          <button class="selector-btn primary" @click="saveCollectionSelection(); showCollectionSelector = false">Save</button>
-        </div>
+        <button
+          class="zhihu-fetch-btn"
+          :disabled="kbStore.zhihuFetching || kbStore.isIndexing"
+          @click="kbStore.fetchZhihuFavorites"
+        >
+          <span class="btn-icon">➕</span>
+          <span>{{ kbStore.zhihuFetching ? '抓取中...' : '抓取知乎收藏夹/回答' }}</span>
+        </button>
       </div>
     </div>
 
@@ -389,7 +112,7 @@ const copyCitation = async (item: ZoteroItem) => {
     <div v-if="kbStore.showDownloadModal" class="modal-overlay" @click.self="kbStore.showDownloadModal = false">
       <div class="modal-content">
         <div v-if="kbStore.embedderLoading">
-          <h3 class="modal-title">Downloading Embedding Model</h3>
+          <h3 class="modal-title">正在下载嵌入模型</h3>
           <p class="modal-desc">Xenova/all-MiniLM-L6-v2 (~22 MB)</p>
           <div class="progress-track" style="margin: 1rem 0;">
             <div class="progress-fill" :style="{ width: `${kbStore.embedderProgress}%` }" />
@@ -397,22 +120,22 @@ const copyCitation = async (item: ZoteroItem) => {
           <div class="modal-desc" style="text-align: center;">{{ kbStore.embedderProgress }}%</div>
         </div>
         <div v-else-if="kbStore.embedderStatus === 'error'">
-          <h3 class="modal-title" style="color: var(--error);">Download Failed</h3>
+          <h3 class="modal-title" style="color: var(--error);">下载失败</h3>
           <p class="modal-desc">{{ kbStore.lastError }}</p>
           <div class="modal-actions">
-            <button class="modal-btn primary" @click="kbStore.downloadEmbedder">Retry</button>
-            <button class="modal-btn secondary" @click="kbStore.showDownloadModal = false">Cancel</button>
+            <button class="modal-btn primary" @click="kbStore.downloadEmbedder">重试</button>
+            <button class="modal-btn secondary" @click="kbStore.showDownloadModal = false">取消</button>
           </div>
         </div>
         <div v-else>
-          <h3 class="modal-title">Download Required</h3>
+          <h3 class="modal-title">需要下载模型</h3>
           <p class="modal-desc">
-            Knowledge Base needs an embedding model (Xenova/all-MiniLM-L6-v2, ~22 MB) for semantic search.
-            The model will be cached locally after first download.
+            知乎知识库需要一个嵌入模型 (Xenova/all-MiniLM-L6-v2, ~22 MB) 来进行语义搜索。
+            模型在首次下载后会缓存在本地。
           </p>
           <div class="modal-actions">
-            <button class="modal-btn primary" @click="kbStore.downloadEmbedder">Download</button>
-            <button class="modal-btn secondary" @click="kbStore.showDownloadModal = false">Cancel</button>
+            <button class="modal-btn primary" @click="kbStore.downloadEmbedder">下载</button>
+            <button class="modal-btn secondary" @click="kbStore.showDownloadModal = false">取消</button>
           </div>
         </div>
       </div>
@@ -427,7 +150,7 @@ const copyCitation = async (item: ZoteroItem) => {
         />
       </div>
       <div class="progress-text">
-        {{ kbStore.indexProgress.current }} / {{ kbStore.indexProgress.total }} documents
+        {{ kbStore.indexProgress.current }} / {{ kbStore.indexProgress.total }} 个文档
       </div>
     </div>
 
@@ -438,7 +161,7 @@ const copyCitation = async (item: ZoteroItem) => {
 
     <!-- Search results -->
     <div v-if="kbStore.searchResults.length > 0" class="results-section">
-      <div class="section-title">Search Results</div>
+      <div class="section-title">搜索结果</div>
       <div
         v-for="(result, idx) in kbStore.searchResults"
         :key="`${result.docId}-${result.chunk.chunkIndex}`"
@@ -448,7 +171,7 @@ const copyCitation = async (item: ZoteroItem) => {
           <span class="result-rank">#{{ idx + 1 }}</span>
           <span class="result-score">{{ (result.score * 100).toFixed(1) }}%</span>
           <span v-if="result.chunk.pageNumber" class="result-page">
-            Page {{ result.chunk.pageNumber }}
+            第 {{ result.chunk.pageNumber }} 页
           </span>
         </div>
         <div class="result-content">{{ result.chunk.content.slice(0, 200) }}...</div>
@@ -456,14 +179,14 @@ const copyCitation = async (item: ZoteroItem) => {
     </div>
 
     <!-- Document list -->
-    <div v-if="activeTab === 'docs'" class="documents-section">
+    <div class="documents-section">
       <div class="section-title">
-        Documents
+        知乎素材
         <span class="doc-count">({{ kbStore.projectDocuments.length }})</span>
       </div>
 
       <div v-if="kbStore.projectDocuments.length === 0" class="empty-state">
-        No documents yet. Add a folder to get started.
+        暂无素材。导入本地文档或抓取知乎收藏夹。
       </div>
 
       <div class="doc-list">
@@ -479,74 +202,20 @@ const copyCitation = async (item: ZoteroItem) => {
             </span>
           </div>
           <div class="doc-meta">
-            <span v-if="doc.totalPages">{{ doc.totalPages }} pages</span>
+            <span v-if="doc.totalPages">{{ doc.totalPages }} 页</span>
             <button
               v-if="doc.indexStatus === 'error'"
               class="doc-action"
               @click="kbStore.reindexDocument(doc)"
             >
-              retry
+              重试
             </button>
             <button class="doc-action delete" @click="kbStore.deleteDocument(doc.id)">
-              remove
+              移除
             </button>
           </div>
           <div v-if="doc.errorMessage" class="doc-error">
             {{ doc.errorMessage }}
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Zotero library -->
-    <div v-else class="documents-section">
-      <div class="section-title">
-        Zotero Library
-        <span class="doc-count">({{ zoteroItems.length }})</span>
-      </div>
-
-      <div class="search-input-wrapper" style="margin-bottom: 0.75rem;">
-        <input
-          v-model="zoteroSearchQuery"
-          type="text"
-          class="search-input"
-          placeholder="Search Zotero items..."
-          @keydown.enter="handleZoteroSearch"
-        />
-        <button
-          class="search-btn"
-          :disabled="zoteroSearching"
-          @click="handleZoteroSearch"
-        >
-          {{ zoteroSearching ? '...' : 'Search' }}
-        </button>
-      </div>
-
-      <div v-if="zoteroItems.length === 0" class="empty-state">
-        No Zotero items cached. Click "Sync Zotero" to import your library.
-      </div>
-
-      <div class="doc-list">
-        <div
-          v-for="item in zoteroItems"
-          :key="item.key"
-          class="doc-item"
-        >
-          <div class="doc-info">
-            <span class="doc-name" :title="item.title || 'Untitled'">
-              {{ item.title || 'Untitled' }}
-            </span>
-            <span class="doc-status status-completed">{{ item.itemType }}</span>
-          </div>
-          <div class="doc-meta">
-            <span v-if="item.creators">{{ item.creators }}</span>
-            <span v-if="item.date">{{ item.date.split('-')[0] }}</span>
-            <button class="doc-action" @click="copyCitation(item)">
-              cite
-            </button>
-          </div>
-          <div v-if="item.abstract" class="doc-abstract">
-            {{ item.abstract.slice(0, 120) }}...
           </div>
         </div>
       </div>
@@ -705,8 +374,13 @@ const copyCitation = async (item: ZoteroItem) => {
   border-bottom: 1px solid var(--border-subtle);
 }
 
+.action-row {
+  display: flex;
+  gap: var(--space-sm);
+}
+
 .add-folder-btn {
-  width: 100%;
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -729,6 +403,34 @@ const copyCitation = async (item: ZoteroItem) => {
 }
 
 .add-folder-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.zhihu-fetch-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  background: var(--accent-subtle);
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm);
+  color: var(--accent-text);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.zhihu-fetch-btn:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--text-on-accent);
+  border-color: var(--accent);
+}
+
+.zhihu-fetch-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
@@ -953,100 +655,6 @@ const copyCitation = async (item: ZoteroItem) => {
   line-height: 1.4;
 }
 
-.doc-abstract {
-  margin-top: var(--space-xs);
-  font-size: 0.72rem;
-  color: var(--text-muted);
-  line-height: 1.4;
-}
-
-/* Tab bar */
-.tab-bar {
-  display: flex;
-  gap: var(--space-xs);
-  padding: 0 var(--space-lg);
-  margin-bottom: var(--space-sm);
-}
-
-.review-btn {
-  width: 100%;
-  padding: var(--space-sm) var(--space-md);
-  margin: 0 var(--space-lg) var(--space-sm);
-  background: var(--accent-subtle);
-  border: 1px solid var(--accent-border);
-  border-radius: var(--radius-sm);
-  color: var(--accent-text);
-  font-size: 0.8rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all var(--transition-fast);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-xs);
-}
-
-.review-btn:hover {
-  background: var(--accent);
-  color: var(--text-on-accent);
-  border-color: var(--accent);
-}
-
-.tab-btn {
-  flex: 1;
-  padding: var(--space-xs) var(--space-sm);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-light);
-  background: var(--bg-card);
-  color: var(--text-muted);
-  font-size: 0.78rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-
-.tab-btn:hover {
-  border-color: var(--border-medium);
-  color: var(--text-secondary);
-}
-
-.tab-btn.active {
-  background: var(--accent-subtle);
-  border-color: var(--accent-border);
-  color: var(--accent-text);
-}
-
-.tab-actions {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-xs);
-}
-
-.zotero-btn {
-  background: var(--accent-subtle);
-  border-color: var(--accent-border);
-  color: var(--accent-text);
-}
-
-.zotero-btn:hover:not(:disabled) {
-  background: var(--accent);
-  color: var(--text-on-accent);
-  border-color: var(--accent);
-}
-
-.sync-status {
-  font-size: 0.72rem;
-  text-align: center;
-}
-
-.sync-ok {
-  color: var(--success);
-}
-
-.sync-error {
-  color: var(--error);
-}
-
 /* Modal */
 .modal-overlay {
   position: fixed;
@@ -1118,205 +726,5 @@ const copyCitation = async (item: ZoteroItem) => {
   background: var(--bg-card-hover);
   border-color: var(--border-medium);
   color: var(--text-primary);
-}
-
-/* Collection selector */
-.zotero-action-row {
-  display: flex;
-  gap: var(--space-sm);
-}
-
-.collection-select-btn {
-  flex-shrink: 0;
-  padding: var(--space-sm);
-  background: var(--bg-card);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-sm);
-  color: var(--text-muted);
-  font-size: 0.78rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-
-.collection-select-btn:hover {
-  background: var(--bg-card-hover);
-  border-color: var(--border-medium);
-  color: var(--text-secondary);
-}
-
-.sync-hint {
-  font-size: 0.7rem;
-  color: var(--text-muted);
-  text-align: center;
-}
-
-.collection-selector {
-  margin-top: var(--space-sm);
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-md);
-  padding: var(--space-md);
-  max-height: 260px;
-  overflow-y: auto;
-  box-shadow: var(--shadow-lg);
-}
-
-.selector-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--space-sm);
-}
-
-.selector-title {
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: var(--text-muted);
-}
-
-.selector-close {
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  font-size: 0.85rem;
-  cursor: pointer;
-  padding: 0 0.3rem;
-}
-
-.collection-list {
-  flex: 1;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  margin-bottom: var(--space-sm);
-}
-
-.collection-item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  padding: var(--space-xs) var(--space-sm);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: background var(--transition-fast);
-}
-
-.collection-item:hover {
-  background: var(--bg-surface);
-}
-
-.collection-item input[type="checkbox"] {
-  accent-color: var(--accent);
-  cursor: pointer;
-}
-
-.collection-name {
-  flex: 1;
-  font-size: 0.78rem;
-  color: var(--text-secondary);
-}
-
-.collection-count {
-  font-size: 0.65rem;
-  color: var(--text-dim);
-  font-family: var(--font-mono);
-}
-
-/* Breadcrumb navigation */
-.breadcrumb {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.25rem;
-  margin-bottom: 0.4rem;
-  font-size: 0.7rem;
-  color: var(--text-muted);
-}
-
-.breadcrumb-item {
-  cursor: pointer;
-  transition: color var(--transition-fast);
-}
-
-.breadcrumb-item:hover {
-  color: var(--text-secondary);
-}
-
-.breadcrumb-item.active {
-  color: var(--accent-text);
-  font-weight: 600;
-  cursor: default;
-}
-
-.breadcrumb-sep {
-  margin: 0 0.2rem;
-  color: var(--border-light);
-}
-
-/* Go up button */
-.go-up-row {
-  margin-bottom: 0.3rem;
-}
-
-.go-up-btn {
-  background: var(--bg-card);
-  border: none;
-  border-radius: var(--radius-sm);
-  padding: 0.35rem 0.6rem;
-  color: var(--text-muted);
-  font-size: 0.72rem;
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-
-.go-up-btn:hover {
-  background: var(--bg-card-hover);
-  color: var(--text-secondary);
-}
-
-/* Enter folder button */
-.enter-folder-btn {
-  background: var(--accent-subtle);
-  border: none;
-  border-radius: var(--radius-sm);
-  padding: 2px var(--space-sm);
-  color: var(--accent-text);
-  font-size: 0.65rem;
-  cursor: pointer;
-  transition: background var(--transition-fast);
-  flex-shrink: 0;
-}
-
-.enter-folder-btn:hover {
-  background: var(--accent-border);
-}
-
-.selector-actions {
-  display: flex;
-  gap: var(--space-sm);
-  justify-content: flex-end;
-}
-
-.selector-btn {
-  padding: var(--space-xs) var(--space-sm);
-  border-radius: var(--radius-sm);
-  font-size: 0.78rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all var(--transition-fast);
-  border: none;
-}
-
-.selector-btn.primary {
-  background: var(--accent);
-  color: var(--text-on-accent);
-}
-
-.selector-btn.secondary {
-  background: var(--bg-card);
-  border: 1px solid var(--border-light);
-  color: var(--text-secondary);
 }
 </style>

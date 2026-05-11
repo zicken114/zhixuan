@@ -209,8 +209,8 @@ const activityTypes = computed(() => {
     sentinel_check: '文献哨兵',
     project_create: '创建项目',
     todo_complete: '完成待办',
-    zotero_sync: 'Zotero同步',
-    kb_index_complete: '知识库索引',
+    zhihu_mock_fetch: '知乎抓取',
+    kb_index_complete: '知乎知识库索引',
     synthesis_complete: '综述生成'
   };
 
@@ -440,7 +440,7 @@ const maxActivityCount = computed(() => {
         <div class="project-stats-grid">
           <div class="proj-stat">
             <div class="proj-stat-value">{{ projectStats?.docCount ?? 0 }}</div>
-            <div class="proj-stat-label">知识库文献</div>
+            <div class="proj-stat-label">知乎知识库素材</div>
           </div>
           <div class="proj-stat">
             <div class="proj-stat-value">{{ projectStats?.conversationCount ?? 0 }}</div>

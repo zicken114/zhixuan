@@ -15,7 +15,7 @@ const emit = defineEmits<{
 
     <div class="hero">
       <div class="eyebrow">{{ t('welcome.eyebrow') }}</div>
-      <h2>AI Research Assistant</h2>
+      <h2>「知玄」- 知乎全场景悬浮创作舱</h2>
       <p class="intro">{{ t('welcome.intro') }}</p>
     </div>
 

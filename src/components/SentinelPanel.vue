@@ -150,7 +150,7 @@ const handleInferDirections = async () => {
 Recent conversation topics:
 ${userMessages.slice(0, 3000)}
 
-Knowledge base documents:
+知乎知识库素材：
 ${docNames}
 
 Return STRICTLY in this JSON format without any other text:

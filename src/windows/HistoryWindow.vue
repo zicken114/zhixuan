@@ -2,6 +2,7 @@
 import { onMounted, onUnmounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { usePopupHistoryStore } from '../stores/popupHistory';
 import { useSettingsStore } from '../stores/settings';
 import { useI18n } from '../composables/useI18n';
@@ -9,8 +10,26 @@ import { useI18n } from '../composables/useI18n';
 const historyStore = usePopupHistoryStore();
 const settingsStore = useSettingsStore();
 const { t } = useI18n();
+const appWindow = getCurrentWebviewWindow();
 
 let unlistenHistoryChanged: (() => void) | null = null;
+
+const handleWindowMouseDown = async (e: MouseEvent) => {
+  const target = e.target as HTMLElement | null;
+  if (!target) return;
+
+  // 排除可交互元素和内容区域
+  if (target.closest('button, input, textarea, pre, .section-content, .copy-btn, .thumbnail')) {
+    return;
+  }
+
+  // 只在 header 区域触发拖拽
+  if (!target.closest('.header')) {
+    return;
+  }
+
+  await appWindow.startDragging();
+};
 
 const refreshHistory = () => {
   historyStore.loadFromStorage();
@@ -37,6 +56,10 @@ const getActionLabel = (actionType: string) => {
     case 'citation': return t('popup.formatCitation');
     case 'history': return t('popup.history');
     case 'screenshot': return t('common.screenshot');
+    case 'extract-text': return t('history.extractText');
+    case 'extract-latex': return t('history.extractLatex');
+    case 'extract-math': return t('history.extractMath');
+    case 'extract-table': return t('history.extractTable');
     default: return actionType;
   }
 };
@@ -91,7 +114,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="history-window">
+  <div class="history-window" @mousedown="handleWindowMouseDown">
     <div class="header">
       <h2 class="title">{{ t('history.title') }}</h2>
       <div class="header-actions">

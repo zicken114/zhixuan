@@ -38,7 +38,6 @@ export async function initDatabase(): Promise<void> {
       color       TEXT NOT NULL DEFAULT '#3d74e7',
       keywords    TEXT,
       folder_path TEXT,
-      zotero_collection TEXT,
       obsidian_vault TEXT,
       created_at  INTEGER NOT NULL,
       updated_at  INTEGER NOT NULL
@@ -171,43 +170,6 @@ export async function initDatabase(): Promise<void> {
     )
   `);
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_kb_chunks_doc ON doc_chunks(doc_id)`);
-
-  // Zotero cache: local mirror of Zotero library items
-  await db.execute(`
-    CREATE TABLE IF NOT EXISTS zotero_items_cache (
-      id          INTEGER PRIMARY KEY,
-      key         TEXT NOT NULL UNIQUE,
-      item_type   TEXT NOT NULL,
-      title       TEXT,
-      creators    TEXT,
-      abstract    TEXT,
-      url         TEXT,
-      doi         TEXT,
-      date        TEXT,
-      publication TEXT,
-      tags        TEXT,
-      collections TEXT,
-      json_data   TEXT NOT NULL,
-      version     INTEGER NOT NULL DEFAULT 0,
-      synced_at   INTEGER NOT NULL
-    )
-  `);
-  await db.execute(`CREATE INDEX IF NOT EXISTS idx_zotero_title ON zotero_items_cache(title)`);
-  await db.execute(`CREATE INDEX IF NOT EXISTS idx_zotero_key ON zotero_items_cache(key)`);
-  await db.execute(`CREATE INDEX IF NOT EXISTS idx_zotero_type ON zotero_items_cache(item_type)`);
-
-  // Zotero collections cache
-  await db.execute(`
-    CREATE TABLE IF NOT EXISTS zotero_collections_cache (
-      id          INTEGER PRIMARY KEY,
-      key         TEXT NOT NULL UNIQUE,
-      name        TEXT NOT NULL,
-      parent_key  TEXT,
-      version     INTEGER NOT NULL DEFAULT 0,
-      synced_at   INTEGER NOT NULL
-    )
-  `);
-  await db.execute(`CREATE INDEX IF NOT EXISTS idx_zotero_coll_parent ON zotero_collections_cache(parent_key)`);
 
   // Reading sessions: track PDF reading progress
   await db.execute(`
@@ -447,7 +409,7 @@ export async function saveSettings(config: AIConfig): Promise<void> {
 export async function loadProjects(): Promise<Project[]> {
   const db = await getDb();
   const rows = await db.select<
-    { id: string; name: string; color: string; keywords: string | null; folder_path: string | null; zotero_collection: string | null; obsidian_vault: string | null; citation_style: string | null; created_at: number; updated_at: number }[]
+    { id: string; name: string; color: string; keywords: string | null; folder_path: string | null; obsidian_vault: string | null; citation_style: string | null; created_at: number; updated_at: number }[]
   >('SELECT * FROM projects ORDER BY updated_at DESC');
 
   return rows.map((r) => ({
@@ -456,7 +418,6 @@ export async function loadProjects(): Promise<Project[]> {
     color: r.color,
     keywords: r.keywords ? JSON.parse(r.keywords) : [],
     folderPath: r.folder_path ?? undefined,
-    zoteroCollection: r.zotero_collection ?? undefined,
     obsidianVault: r.obsidian_vault ?? undefined,
     citationStyle: (r.citation_style as Project['citationStyle']) ?? undefined,
     createdAt: r.created_at,
@@ -468,15 +429,14 @@ export async function saveProject(project: Project): Promise<void> {
   const db = await getDb();
   await db.execute(
     `INSERT OR REPLACE INTO projects
-     (id, name, color, keywords, folder_path, zotero_collection, obsidian_vault, citation_style, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     (id, name, color, keywords, folder_path, obsidian_vault, citation_style, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       project.id,
       project.name,
       project.color,
       project.keywords ? JSON.stringify(project.keywords) : null,
       project.folderPath || null,
-      project.zoteroCollection || null,
       project.obsidianVault || null,
       project.citationStyle || null,
       project.createdAt,
@@ -1157,173 +1117,6 @@ function decodeEmbedding(b64: string): number[] {
 }
 
 /* ───────────────────────────────────────────────
-   Zotero Cache CRUD
-   ─────────────────────────────────────────────── */
-
-export interface ZoteroItem {
-  id: number;
-  key: string;
-  itemType: string;
-  title?: string;
-  creators?: string;
-  abstract?: string;
-  url?: string;
-  doi?: string;
-  date?: string;
-  publication?: string;
-  tags?: string;
-  collections?: string;
-  jsonData: string;
-  version: number;
-  syncedAt: number;
-}
-
-export interface ZoteroCollection {
-  id: number;
-  key: string;
-  name: string;
-  parentKey?: string;
-  version: number;
-  syncedAt: number;
-}
-
-export async function saveZoteroItems(items: ZoteroItem[]): Promise<void> {
-  console.log('[DB] saveZoteroItems called with', items.length, 'items. Keys:', items.map((i) => i.key));
-  const db = await getDb();
-  for (const item of items) {
-    await db.execute(
-      `INSERT OR REPLACE INTO zotero_items_cache
-       (key, item_type, title, creators, abstract, url, doi, date, publication, tags, collections, json_data, version, synced_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        item.key,
-        item.itemType,
-        item.title || null,
-        item.creators || null,
-        item.abstract || null,
-        item.url || null,
-        item.doi || null,
-        item.date || null,
-        item.publication || null,
-        item.tags || null,
-        item.collections || null,
-        item.jsonData,
-        item.version,
-        item.syncedAt
-      ]
-    );
-  }
-}
-
-export async function searchZoteroItems(query: string, limit: number = 20): Promise<ZoteroItem[]> {
-  console.log('[DB] searchZoteroItems query="', query, '" limit=', limit);
-  const db = await getDb();
-  // Empty query: return all items without LIKE filtering (NULL values break LIKE '%%')
-  if (!query.trim()) {
-    const rows = await db.select<
-      { id: number; key: string; item_type: string; title: string | null; creators: string | null; abstract: string | null; url: string | null; doi: string | null; date: string | null; publication: string | null; tags: string | null; collections: string | null; json_data: string; version: number; synced_at: number }[]
-    >(
-      `SELECT * FROM zotero_items_cache ORDER BY synced_at DESC LIMIT ?`,
-      [limit]
-    );
-    const results = rows.map((r) => ({
-      id: r.id,
-      key: r.key,
-      itemType: r.item_type,
-      title: r.title || undefined,
-      creators: r.creators || undefined,
-      abstract: r.abstract || undefined,
-      url: r.url || undefined,
-      doi: r.doi || undefined,
-      date: r.date || undefined,
-      publication: r.publication || undefined,
-      tags: r.tags || undefined,
-      collections: r.collections || undefined,
-      jsonData: r.json_data,
-      version: r.version,
-      syncedAt: r.synced_at
-    }));
-    console.log('[DB] searchZoteroItems (empty query) returned', results.length, 'results. Keys:', results.map((i) => i.key));
-    return results;
-  }
-
-  const like = `%${query}%`;
-  const rows = await db.select<
-    { id: number; key: string; item_type: string; title: string | null; creators: string | null; abstract: string | null; url: string | null; doi: string | null; date: string | null; publication: string | null; tags: string | null; collections: string | null; json_data: string; version: number; synced_at: number }[]
-  >(
-    `SELECT * FROM zotero_items_cache
-     WHERE COALESCE(title, '') LIKE ?
-        OR COALESCE(creators, '') LIKE ?
-        OR COALESCE(abstract, '') LIKE ?
-        OR COALESCE(tags, '') LIKE ?
-        OR COALESCE(publication, '') LIKE ?
-     ORDER BY synced_at DESC
-     LIMIT ?`,
-    [like, like, like, like, like, limit]
-  );
-  const results = rows.map((r) => ({
-    id: r.id,
-    key: r.key,
-    itemType: r.item_type,
-    title: r.title || undefined,
-    creators: r.creators || undefined,
-    abstract: r.abstract || undefined,
-    url: r.url || undefined,
-    doi: r.doi || undefined,
-    date: r.date || undefined,
-    publication: r.publication || undefined,
-    tags: r.tags || undefined,
-    collections: r.collections || undefined,
-    jsonData: r.json_data,
-    version: r.version,
-    syncedAt: r.synced_at
-  }));
-  console.log('[DB] searchZoteroItems returned', results.length, 'results. Keys:', results.map((i) => i.key));
-  return results;
-}
-
-export async function loadZoteroItems(limit: number = 100): Promise<ZoteroItem[]> {
-  const db = await getDb();
-  const rows = await db.select<
-    { id: number; key: string; item_type: string; title: string | null; creators: string | null; abstract: string | null; url: string | null; doi: string | null; date: string | null; publication: string | null; tags: string | null; collections: string | null; json_data: string; version: number; synced_at: number }[]
-  >(
-    'SELECT * FROM zotero_items_cache ORDER BY synced_at DESC LIMIT ?',
-    [limit]
-  );
-  return rows.map((r) => ({
-    id: r.id,
-    key: r.key,
-    itemType: r.item_type,
-    title: r.title || undefined,
-    creators: r.creators || undefined,
-    abstract: r.abstract || undefined,
-    url: r.url || undefined,
-    doi: r.doi || undefined,
-    date: r.date || undefined,
-    publication: r.publication || undefined,
-    tags: r.tags || undefined,
-    collections: r.collections || undefined,
-    jsonData: r.json_data,
-    version: r.version,
-    syncedAt: r.synced_at
-  }));
-}
-
-export async function getLastZoteroSyncTime(): Promise<number | null> {
-  const db = await getDb();
-  const rows = await db.select<[{ max_synced: number | null }]>(
-    'SELECT MAX(synced_at) as max_synced FROM zotero_items_cache'
-  );
-  return rows[0]?.max_synced || null;
-}
-
-export async function clearZoteroCache(): Promise<void> {
-  const db = await getDb();
-  await db.execute('DELETE FROM zotero_items_cache');
-  await db.execute('DELETE FROM zotero_collections_cache');
-}
-
-/* ───────────────────────────────────────────────
    Project Statistics
    ─────────────────────────────────────────────── */
 
@@ -1356,33 +1149,6 @@ export async function getProjectStats(projectId: string | null): Promise<Project
     conversationCount: convRow[0]?.count || 0,
     todoCount: todoRow[0]?.count || 0
   };
-}
-
-export async function saveZoteroCollections(collections: ZoteroCollection[]): Promise<void> {
-  const db = await getDb();
-  for (const coll of collections) {
-    await db.execute(
-      `INSERT OR REPLACE INTO zotero_collections_cache
-       (id, key, name, parent_key, version, synced_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [coll.id, coll.key, coll.name, coll.parentKey || null, coll.version, coll.syncedAt]
-    );
-  }
-}
-
-export async function loadZoteroCollections(): Promise<ZoteroCollection[]> {
-  const db = await getDb();
-  const rows = await db.select<
-    { id: number; key: string; name: string; parent_key: string | null; version: number; synced_at: number }[]
-  >('SELECT * FROM zotero_collections_cache ORDER BY name');
-  return rows.map((r) => ({
-    id: r.id,
-    key: r.key,
-    name: r.name,
-    parentKey: r.parent_key || undefined,
-    version: r.version,
-    syncedAt: r.synced_at
-  }));
 }
 
 /* ───────────────────────────────────────────────
@@ -2536,8 +2302,6 @@ export async function resetAllData(): Promise<void> {
   await db.execute('DELETE FROM settings');
   await db.execute('DELETE FROM activity_events');
   await db.execute('DELETE FROM usage_records');
-  await db.execute('DELETE FROM zotero_items_cache');
-  await db.execute('DELETE FROM zotero_collections_cache');
   await db.execute('DELETE FROM reading_notes');
   await db.execute('DELETE FROM reading_sessions');
   await db.execute('DELETE FROM experiment_snapshots');

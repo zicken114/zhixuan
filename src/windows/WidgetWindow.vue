@@ -11,7 +11,7 @@ import { extractPdfText } from '../utils/pdfExtractor';
 import { countUnreadSentinelPapers } from '../composables/useDatabase';
 
 type DockSide = 'left' | 'right' | null;
-type AppContext = 'writing' | 'pdf_reader' | 'code_editor' | 'browser' | 'zotero' | 'unknown';
+type AppContext = 'writing' | 'pdf_reader' | 'code_editor' | 'browser' | 'unknown';
 
 interface WidgetDockState {
   side: 'left' | 'right' | 'none';
@@ -113,7 +113,6 @@ const contextClass = computed(() => {
     case 'pdf_reader': return 'context-pdf';
     case 'code_editor': return 'context-code';
     case 'browser': return 'context-browser';
-    case 'zotero': return 'context-zotero';
     default: return '';
   }
 });
@@ -124,7 +123,6 @@ const contextLabel = computed(() => {
     case 'pdf_reader': return 'Reading';
     case 'code_editor': return 'Coding';
     case 'browser': return 'Browsing';
-    case 'zotero': return 'Zotero';
     default: return '';
   }
 });
@@ -509,7 +507,7 @@ onUnmounted(() => {
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: url('/cat-icon.png') center/cover no-repeat;
+  background: url('/liukanshan.png') center/cover no-repeat;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -575,10 +573,6 @@ onUnmounted(() => {
   border-color: rgba(139, 92, 246, 0.4);
 }
 
-.widget-container.context-zotero .widget-shell {
-  border-color: rgba(234, 67, 53, 0.4);
-}
-
 /* Context badge */
 .context-badge {
   position: absolute;
@@ -608,11 +602,6 @@ onUnmounted(() => {
 
 .context-browser .context-badge {
   background: var(--accent);
-  color: var(--text-on-accent);
-}
-
-.context-zotero .context-badge {
-  background: var(--error);
   color: var(--text-on-accent);
 }
 

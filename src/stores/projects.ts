@@ -18,7 +18,6 @@ export interface Project {
   color: string;
   keywords: string[];
   folderPath?: string;
-  zoteroCollection?: string;
   obsidianVault?: string;
   citationStyle?: CitationStyle;
   createdAt: number;

@@ -4,7 +4,7 @@ import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import { aiClient, type ChatMessage, type CallMetadata } from '../utils/aiClient';
-import { useSettingsStore } from '../stores/settings';
+import { useSettingsStore, LIUKANSHAN_PERSONA } from '../stores/settings';
 import { useHistoryStore, toHistoryMessages } from '../stores/history';
 import { useProjectStore, PROJECT_COLORS, type Project } from '../stores/projects';
 import { useUsageStore } from '../stores/usage';
@@ -14,11 +14,10 @@ import { useI18n } from '../composables/useI18n';
 import { recordEvent } from '../composables/useEvents';
 import { runAgent } from '../composables/useAgent';
 import { saveNoteToObsidian, openNoteInObsidian } from '../utils/obsidianBridge';
-import { syncZoteroLibrary } from '../utils/zoteroBridge';
 import { type SearchResult } from '../utils/knowledgeBase';
 import {
   getProjectStats, type ProjectStats, loadRecentConversationSummaries,
-  loadZoteroCollections, type ZoteroCollection, countUnreadSentinelPapers
+  countUnreadSentinelPapers
 } from '../composables/useDatabase';
 import type { CitationStyle } from '../stores/projects';
 import { generateSessionSummary, shouldGenerateSummary } from '../composables/useSessionSummary';
@@ -87,11 +86,8 @@ const showUsage = ref(false);
 // Project configuration (create/edit modal)
 const newProjectKeywords = ref('');
 const newProjectFolderPath = ref('');
-const newProjectZoteroCollection = ref('');
 const newProjectObsidianVault = ref('');
 const newProjectCitationStyle = ref<CitationStyle>('gb7714');
-const availableZoteroCollections = ref<ZoteroCollection[]>([]);
-const loadingZoteroCollections = ref(false);
 const isEditingProject = ref(false);
 const editProjectId = ref<string | null>(null);
 
@@ -114,9 +110,6 @@ const obsidianContent = ref('');
 const obsidianTemplate = ref<'summary' | 'full' | 'qa'>('summary');
 const obsidianSaving = ref(false);
 const obsidianSaveResult = ref<string | null>(null);
-
-// Zotero periodic sync interval handle
-const zoteroSyncInterval = ref<number | null>(null);
 
 // Sentinel periodic check interval handle
 const sentinelCheckInterval = ref<number | null>(null);
@@ -170,34 +163,6 @@ onMounted(async () => {
   // Load usage stats
   usageStore.loadStats('today');
   await loadProjectStats();
-
-  // Auto-sync Zotero on startup if enabled
-  if (settingsStore.config.externalTools.zoteroSyncEnabled) {
-    try {
-      const userId = settingsStore.config.externalTools.zoteroUserId || '0';
-      const collections = settingsStore.config.externalTools.zoteroSelectedCollections;
-      syncZoteroLibrary(userId, collections.length > 0 ? collections : undefined, false).catch((e) => {
-        console.warn('[Zotero] Auto-sync on startup failed:', e);
-      });
-    } catch (e) {
-      console.warn('[Zotero] Auto-sync init failed:', e);
-    }
-  }
-
-  // Set up periodic Zotero sync every 30 minutes
-  zoteroSyncInterval.value = window.setInterval(() => {
-    if (settingsStore.config.externalTools.zoteroSyncEnabled) {
-      try {
-        const userId = settingsStore.config.externalTools.zoteroUserId || '0';
-        const collections = settingsStore.config.externalTools.zoteroSelectedCollections;
-        syncZoteroLibrary(userId, collections.length > 0 ? collections : undefined, false).catch((e) => {
-          console.warn('[Zotero] Periodic sync failed:', e);
-        });
-      } catch (e) {
-        console.warn('[Zotero] Periodic sync init failed:', e);
-      }
-    }
-  }, 30 * 60 * 1000); // 30 minutes
 
   // Phase 4.1: Periodic sentinel auto-check every 6 hours
   // This runs in the background and fetches new papers for active sentinel topics
@@ -259,10 +224,6 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
-  if (zoteroSyncInterval.value) {
-    clearInterval(zoteroSyncInterval.value);
-    zoteroSyncInterval.value = null;
-  }
   if (sentinelCheckInterval.value) {
     clearInterval(sentinelCheckInterval.value);
     sentinelCheckInterval.value = null;
@@ -277,7 +238,13 @@ const handleWindowMouseDown = async (e: MouseEvent) => {
   const target = e.target as HTMLElement | null;
   if (!target) return;
 
-  if (target.closest('button, input, textarea, select, option, a, label, summary, details, [role="button"], [contenteditable="true"], .modal-content, .project-dropdown, .settings-panel, .no-window-drag')) {
+  // 排除可交互元素和内容区域（这些区域需要能选中文本）
+  if (target.closest('button, input, textarea, select, option, a, label, summary, details, [role="button"], [contenteditable="true"], .modal-content, .project-dropdown, .settings-panel, .no-window-drag, pre, code, .chat-message-content, .message-text, .text-content, .message-actions')) {
+    return;
+  }
+
+  // 只在顶部区域触发拖拽（如 header、title-bar 等）
+  if (!target.closest('.title-bar, .window-header, .app-header, .header, .project-bar, .drag-region')) {
     return;
   }
 
@@ -388,7 +355,8 @@ const sendMessage = async () => {
   }
 
   // ── Build system prompt with context injections ──
-  let systemContent = '';
+  // 0. Persona — 刘看山,知乎吉祥物(注入全局人设)
+  let systemContent = LIUKANSHAN_PERSONA + '\n\n';
 
   // 1. Todo extraction instruction (Phase 1.1)
   systemContent += `If the user expresses an intention to do something later (e.g., "I will try...", "I need to...", "I should...", "let me check..."), append a todo suggestion block at the very end of your response using this exact format:
@@ -429,7 +397,7 @@ Only include this block when there is a clear future action. Keep each todo unde
       const results = await kbStore.search(userMessage.content as string, topK);
       if (results.length > 0) {
         const context = kbStore.buildContextFromResults(results);
-        systemContent += `Use the following knowledge base passages to help answer the user's question. If the passages don't contain relevant information, answer based on your general knowledge.\n\n${context}`;
+        systemContent += `以下是我收藏的知乎素材和参考文档，你帮我看看这里面有没有能回答我问题的内容。如果有就直接用，没有的话按你的常识答也行。回答要自然像人写的，别用星号、井号、列表编号这些符号，直接输出文字。\n\n${context}`;
         // Store citations for display with the upcoming assistant message
         kbCitations.value.set(messages.value.length, results);
       }
@@ -782,10 +750,8 @@ const resetProjectModal = () => {
   newProjectColor.value = PROJECT_COLORS[0];
   newProjectKeywords.value = '';
   newProjectFolderPath.value = '';
-  newProjectZoteroCollection.value = '';
   newProjectObsidianVault.value = '';
   newProjectCitationStyle.value = 'gb7714';
-  availableZoteroCollections.value = [];
   isEditingProject.value = false;
   editProjectId.value = null;
 };
@@ -804,11 +770,9 @@ const openEditProject = (project: Project) => {
   newProjectColor.value = project.color;
   newProjectKeywords.value = project.keywords?.join(', ') || '';
   newProjectFolderPath.value = project.folderPath || '';
-  newProjectZoteroCollection.value = project.zoteroCollection || '';
   newProjectObsidianVault.value = project.obsidianVault || '';
   newProjectCitationStyle.value = project.citationStyle || 'gb7714';
   showCreateProject.value = true;
-  void loadZoteroCollectionsForProject();
 };
 
 const pickProjectFolder = async () => {
@@ -822,18 +786,6 @@ const pickProjectObsidianVault = async () => {
   const selected = await open({ directory: true, multiple: false });
   if (selected && !Array.isArray(selected)) {
     newProjectObsidianVault.value = selected;
-  }
-};
-
-const loadZoteroCollectionsForProject = async () => {
-  loadingZoteroCollections.value = true;
-  try {
-    availableZoteroCollections.value = await loadZoteroCollections();
-  } catch (e) {
-    console.warn('[ProjectConfig] Failed to load Zotero collections:', e);
-    availableZoteroCollections.value = [];
-  } finally {
-    loadingZoteroCollections.value = false;
   }
 };
 
@@ -853,7 +805,6 @@ const confirmCreateOrUpdateProject = async () => {
     project.color = newProjectColor.value;
     project.keywords = keywords;
     project.folderPath = newProjectFolderPath.value || undefined;
-    project.zoteroCollection = newProjectZoteroCollection.value || undefined;
     project.obsidianVault = newProjectObsidianVault.value || undefined;
     project.citationStyle = newProjectCitationStyle.value || undefined;
     await projectStore.updateProject(project);
@@ -861,7 +812,6 @@ const confirmCreateOrUpdateProject = async () => {
     const project = await projectStore.createProject(name, newProjectColor.value);
     project.keywords = keywords;
     project.folderPath = newProjectFolderPath.value || undefined;
-    project.zoteroCollection = newProjectZoteroCollection.value || undefined;
     project.obsidianVault = newProjectObsidianVault.value || undefined;
     project.citationStyle = newProjectCitationStyle.value || undefined;
     await projectStore.updateProject(project);
@@ -1317,20 +1267,6 @@ const saveToObsidian = async () => {
               {{ t('common.clear') }}
             </button>
           </div>
-        </div>
-
-        <div class="form-group">
-          <label class="label">{{ t('main.defaultZoteroCollection') }}</label>
-          <select v-model="newProjectZoteroCollection" class="input select-input">
-            <option value="">{{ t('main.allCollections') }}</option>
-            <option
-              v-for="coll in availableZoteroCollections"
-              :key="coll.key"
-              :value="coll.key"
-            >
-              {{ coll.name }}
-            </option>
-          </select>
         </div>
 
         <div class="form-group">

@@ -2,14 +2,9 @@
 import { onMounted, watch } from 'vue';
 import { useKnowledgeBaseStore } from '../stores/knowledgeBase';
 import { useProjectStore } from '../stores/projects';
-import { searchZoteroCache, type ZoteroItem } from '../utils/zoteroBridge';
-import { ref } from 'vue';
 
 const kbStore = useKnowledgeBaseStore();
 const projectStore = useProjectStore();
-
-const zoteroItems = ref<ZoteroItem[]>([]);
-const zoteroLoading = ref(false);
 
 const emit = defineEmits<{
   'open-knowledge-panel': [];
@@ -17,25 +12,11 @@ const emit = defineEmits<{
 
 onMounted(() => {
   kbStore.loadDocuments();
-  loadZoteroItems();
 });
 
 watch(() => projectStore.currentProjectId, () => {
   kbStore.loadDocuments();
-  loadZoteroItems();
 });
-
-const loadZoteroItems = async () => {
-  zoteroLoading.value = true;
-  try {
-    zoteroItems.value = await searchZoteroCache('', 20);
-  } catch (e) {
-    console.warn('[LiteratureSidebar] Failed to load Zotero items:', e);
-    zoteroItems.value = [];
-  } finally {
-    zoteroLoading.value = false;
-  }
-};
 
 const statusIcon = (status: string) => {
   switch (status) {
@@ -59,23 +40,23 @@ const statusClass = (status: string) => {
 <template>
   <div class="literature-sidebar">
     <div class="sidebar-header">
-      <span class="sidebar-title">Literature</span>
+      <span class="sidebar-title">知乎素材</span>
       <button class="open-kb-btn" @click="emit('open-knowledge-panel')">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
         </svg>
-        Knowledge Base
+        知乎知识库
       </button>
     </div>
 
     <!-- Local docs section -->
     <div class="section">
       <div class="section-header">
-        <span class="section-title">Local Documents</span>
+        <span class="section-title">知乎素材</span>
         <span class="section-count">{{ kbStore.projectDocuments.length }}</span>
       </div>
       <div v-if="kbStore.projectDocuments.length === 0" class="empty-state">
-        No documents indexed.
+        暂无素材
       </div>
       <div class="doc-list">
         <div
@@ -87,37 +68,10 @@ const statusClass = (status: string) => {
             {{ statusIcon(doc.indexStatus) }}
           </span>
           <span class="doc-name" :title="doc.fileName">{{ doc.fileName }}</span>
-          <span v-if="doc.totalPages" class="doc-meta">{{ doc.totalPages }}p</span>
+          <span v-if="doc.totalPages" class="doc-meta">{{ doc.totalPages }}页</span>
         </div>
         <div v-if="kbStore.projectDocuments.length > 10" class="more-hint">
-          +{{ kbStore.projectDocuments.length - 10 }} more in Knowledge Base
-        </div>
-      </div>
-    </div>
-
-    <!-- Zotero section -->
-    <div class="section">
-      <div class="section-header">
-        <span class="section-title">Zotero Library</span>
-        <span class="section-count">{{ zoteroItems.length }}</span>
-      </div>
-      <div v-if="zoteroLoading" class="empty-state">Loading...</div>
-      <div v-else-if="zoteroItems.length === 0" class="empty-state">
-        No Zotero items cached.
-      </div>
-      <div class="doc-list">
-        <div
-          v-for="item in zoteroItems.slice(0, 8)"
-          :key="item.key"
-          class="doc-row"
-        >
-          <span class="doc-name" :title="item.title || 'Untitled'">
-            {{ item.title || 'Untitled' }}
-          </span>
-          <span v-if="item.date" class="doc-meta">{{ item.date.split('-')[0] }}</span>
-        </div>
-        <div v-if="zoteroItems.length > 8" class="more-hint">
-          +{{ zoteroItems.length - 8 }} more in Knowledge Base
+          +{{ kbStore.projectDocuments.length - 10 }} 更多知乎素材
         </div>
       </div>
     </div>

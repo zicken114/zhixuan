@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "AI Research Assistant",
+  "productName": "Zhi-Xuan Studio",
   "version": "0.1.0",
   "identifier": "com.research.assistant",
   "build": {
@@ -29,7 +29,7 @@
       },
       {
         "label": "main",
-        "title": "AI Chat",
+        "title": "「知玄」- 知乎全场景悬浮创作舱",
         "url": "index.html?window=main",
         "width": 860,
         "height": 800,

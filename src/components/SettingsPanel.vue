@@ -14,7 +14,6 @@ import {
 } from '../stores/settings';
 import { resetAllData } from '../composables/useDatabase';
 import { setEmbedderMirrorUrl } from '../utils/embedder';
-import { checkZoteroConnection } from '../utils/zoteroBridge';
 import { useI18n } from '../composables/useI18n';
 import {
   listMcpServers,
@@ -44,8 +43,6 @@ const localConfig = ref<AIConfig>(JSON.parse(JSON.stringify(settingsStore.config
 const showTextPassword = ref(false);
 const showVisionPassword = ref(false);
 const saveStatus = ref<'idle' | 'saving' | 'saved' | 'error'>('idle');
-const zoteroConnectionStatus = ref<'unknown' | 'connected' | 'disconnected'>('unknown');
-const zoteroConnectionChecking = ref(false);
 const textExpanded = ref(true);
 const visionExpanded = ref(false);
 const shortcutsExpanded = ref(false);
@@ -62,21 +59,7 @@ const emit = defineEmits<{
 
 onMounted(() => {
   localConfig.value = JSON.parse(JSON.stringify(settingsStore.config));
-  void checkZoteroStatus();
 });
-
-const checkZoteroStatus = async () => {
-  zoteroConnectionChecking.value = true;
-  try {
-    const userId = localConfig.value.externalTools.zoteroUserId || '0';
-    const connected = await checkZoteroConnection(userId);
-    zoteroConnectionStatus.value = connected ? 'connected' : 'disconnected';
-  } catch {
-    zoteroConnectionStatus.value = 'disconnected';
-  } finally {
-    zoteroConnectionChecking.value = false;
-  }
-};
 
 const textProviderPresets = computed(() =>
   providerPresets.filter((preset) => preset.supportsText)
@@ -679,7 +662,7 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate' | 'pri
       <div class="card">
         <button class="card-header" @click="toggleCard('knowledge')">
           <div>
-            <h3 class="card-title">Knowledge Base</h3>
+            <h3 class="card-title">知乎知识库</h3>
             <p class="card-subtitle">Local document indexing and semantic search settings.</p>
           </div>
           <span class="card-toggle">{{ knowledgeExpanded ? 'Hide' : 'Show' }}</span>
@@ -689,7 +672,7 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate' | 'pri
           <div class="form-group toggle-row">
             <div>
               <label class="label">Auto-Retrieve in Chat</label>
-              <p class="hint">When enabled, the app automatically searches the knowledge base for relevant context before each chat message.</p>
+              <p class="hint">开启后，每次发送消息前，应用会自动在知乎知识库中搜索相关上下文。</p>
             </div>
             <button
               class="toggle-switch"
@@ -743,64 +726,12 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate' | 'pri
         <button class="card-header" @click="toggleCard('external')">
           <div>
             <h3 class="card-title">External Tools</h3>
-            <p class="card-subtitle">Connect Zotero and Obsidian for deep research integration.</p>
+            <p class="card-subtitle">Connect Obsidian for deep research integration.</p>
           </div>
           <span class="card-toggle">{{ externalToolsExpanded ? 'Hide' : 'Show' }}</span>
         </button>
 
         <div v-if="externalToolsExpanded" class="card-body">
-          <!-- Zotero -->
-          <div class="form-group">
-            <label class="label">Zotero User ID</label>
-            <input
-              v-model="localConfig.externalTools.zoteroUserId"
-              type="text"
-              class="input"
-              placeholder="0"
-            />
-            <p class="hint">
-              Use <code>0</code> for your local library. This is NOT your online Zotero account ID.
-              Zotero must be running with the local API enabled (Edit → Preferences → Advanced → "Allow other applications...").
-            </p>
-          </div>
-
-          <div class="form-group toggle-row">
-            <div>
-              <label class="label">Zotero Connection Status</label>
-              <p class="hint">
-                <span
-                  class="status-dot"
-                  :class="zoteroConnectionStatus"
-                />
-                <span v-if="zoteroConnectionChecking">Checking...</span>
-                <span v-else-if="zoteroConnectionStatus === 'connected'">Connected — Zotero is running and API is reachable.</span>
-                <span v-else-if="zoteroConnectionStatus === 'disconnected'">Disconnected — Please start Zotero and enable the local API.</span>
-                <span v-else>Click "Test Connection" to check.</span>
-              </p>
-            </div>
-            <button
-              class="btn-secondary test-btn"
-              :disabled="zoteroConnectionChecking"
-              @click="checkZoteroStatus"
-            >
-              {{ zoteroConnectionChecking ? 'Checking...' : 'Test Connection' }}
-            </button>
-          </div>
-
-          <div class="form-group toggle-row">
-            <div>
-              <label class="label">Auto-Sync Zotero</label>
-              <p class="hint">Automatically sync Zotero library when the app starts.</p>
-            </div>
-            <button
-              class="toggle-switch"
-              :class="{ active: localConfig.externalTools.zoteroSyncEnabled }"
-              @click="localConfig.externalTools.zoteroSyncEnabled = !localConfig.externalTools.zoteroSyncEnabled"
-            >
-              <span class="toggle-knob"></span>
-            </button>
-          </div>
-
           <!-- Obsidian -->
           <div class="form-group">
             <label class="label">Obsidian Vault Path</label>
@@ -1505,25 +1436,6 @@ const toggleCard = (target: 'text' | 'vision' | 'shortcuts' | 'translate' | 'pri
   font-family: 'JetBrains Mono', monospace;
 }
 
-/* Zotero connection status */
-.status-dot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  margin-right: 6px;
-  background: var(--text-muted);
-}
-
-.status-dot.connected {
-  background: var(--success);
-  box-shadow: 0 0 6px rgba(52, 168, 83, 0.4);
-}
-
-.status-dot.disconnected {
-  background: var(--error);
-  box-shadow: 0 0 6px rgba(234, 67, 53, 0.3);
-}
 
 .test-btn {
   padding: 0.5rem 0.9rem;
