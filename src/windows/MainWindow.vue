@@ -147,6 +147,11 @@ onMounted(async () => {
     showKnowledge.value = true;
   });
 
+  // Listen for show-sentinel-panel event from popup window
+  await listen('show-sentinel-panel', () => {
+    showSentinel.value = true;
+  });
+
   // Test: fetch current window info once on mount
   try {
     const info = await invoke('get_active_window_info');

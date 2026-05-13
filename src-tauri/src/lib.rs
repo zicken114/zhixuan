@@ -82,6 +82,16 @@ pub fn run() {
         .setup(|app| {
             use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, Code, Modifiers};
 
+            // ── Set window icons to Liu Kanshan ───────────────────────────
+            let icon_bytes = include_bytes!("../icons/32x32.png");
+            if let Ok(icon) = tauri::image::Image::from_bytes(icon_bytes) {
+                for (label, _) in app.webview_windows() {
+                    if let Some(window) = app.get_webview_window(&label) {
+                        let _ = window.set_icon(icon.clone());
+                    }
+                }
+            }
+
             let alt_q = Shortcut::new(Some(Modifiers::ALT), Code::KeyQ);
             let alt_s = Shortcut::new(Some(Modifiers::ALT), Code::KeyS);
             let alt_e = Shortcut::new(Some(Modifiers::ALT), Code::KeyE);

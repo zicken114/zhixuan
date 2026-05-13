@@ -279,7 +279,8 @@ const handleAction = async (action: string) => {
   }
 
   if (action === 'sentinel') {
-    await showSentinelBrief();
+    await emit('show-sentinel-panel');
+    await showWindow('main');
     await hideCurrent();
     return;
   }

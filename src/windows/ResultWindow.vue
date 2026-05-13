@@ -130,7 +130,7 @@ const saveToReadingNotes = async () => {
     <!-- Processing state -->
     <div v-if="isProcessing" class="processing-state">
       <div class="progress-container">
-        <div class="progress-icon">🔍</div>
+        <img src="/liukanshan.png" alt="logo" class="progress-icon-img" />
         <div class="progress-label">{{ progressLabel }}</div>
         <div class="progress-bar-track">
           <div class="progress-bar-fill" :style="{ width: progress + '%' }"></div>
@@ -193,10 +193,11 @@ const saveToReadingNotes = async () => {
   margin: auto;
 }
 
-.progress-icon {
-  font-size: 2.5rem;
+.progress-icon-img {
+  width: 48px;
+  height: 48px;
   margin-bottom: var(--space-md);
-  color: var(--accent);
+  object-fit: contain;
 }
 
 .progress-label {
