@@ -8,10 +8,10 @@
 
 /* ───────────────────────────────────────────────
    Theme Variables — Light Theme (NEW)
-   White minimalist theme for research assistant
+   White minimalist theme for Zhihu creators
    ─────────────────────────────────────────────── */
 :root {
-  /* Accent — 主色调：学术蓝 */
+  /* Accent — 主色调：知乎蓝 */
   --accent: #1a73e8;
   --accent-hover: #1557b0;
   --accent-subtle: #e8f0fe;

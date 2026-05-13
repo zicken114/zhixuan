@@ -7,6 +7,7 @@ export interface PopupHistoryItem {
   id: string;
   actionType: PopupActionType;
   actionLabel: string;
+  actionIcon?: string;
   inputText: string;
   inputImage?: string; // base64 image data for screenshots
   outputText: string;

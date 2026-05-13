@@ -13,6 +13,7 @@ import { isEmbedderLoaded, preloadEmbedder, type EmbedderProgress } from '../uti
 import type { KnowledgeDoc } from '../composables/useDatabase';
 import { useProjectStore } from './projects';
 import { recordEvent } from '../composables/useEvents';
+import { fetchStoryLibrary } from '../composables/useStoryLibrary';
 
 export const useKnowledgeBaseStore = defineStore('knowledgeBase', () => {
   const projectStore = useProjectStore();
@@ -244,56 +245,23 @@ export const useKnowledgeBaseStore = defineStore('knowledgeBase', () => {
     return `以下是我收藏的知乎素材和参考文档，你帮我看看这里面有没有能回答我问题的内容。如果有就直接用，没有的话按你的常识答也行。回答要自然像人写的，别用星号、井号、列表编号这些符号，直接输出文字。\n\n${chunks.join('\n\n---\n\n')}`;
   };
 
-  /** Mock: 模拟从知乎抓取收藏夹/回答并插入假数据 */
+  /** 从知乎开放平台抓取故事素材列表 */
   const fetchZhihuFavorites = async () => {
     zhihuFetching.value = true;
-    await new Promise((resolve) => setTimeout(resolve, 1000));
 
-    const now = Date.now();
-    const mockDocs: KnowledgeDoc[] = [
-      {
-        id: `zhihu_${now}_1`,
-        projectId: projectStore.currentProjectId || null,
-        filePath: 'zhihu://favorites/盐选小说大纲写作指南.md',
-        fileName: '盐选小说大纲写作指南.md',
-        fileType: 'md',
-        indexStatus: 'completed',
-        totalPages: 1,
-        createdAt: now,
-        updatedAt: now
-      },
-      {
-        id: `zhihu_${now}_2`,
-        projectId: projectStore.currentProjectId || null,
-        filePath: 'zhihu://favorites/2023年我的知乎高赞回答汇总.txt',
-        fileName: '2023年我的知乎高赞回答汇总.txt',
-        fileType: 'txt',
-        indexStatus: 'completed',
-        totalPages: 1,
-        createdAt: now - 1000,
-        updatedAt: now - 1000
-      },
-      {
-        id: `zhihu_${now}_3`,
-        projectId: projectStore.currentProjectId || null,
-        filePath: 'zhihu://favorites/知乎运营避坑手册：从0到10万关注.pdf',
-        fileName: '知乎运营避坑手册：从0到10万关注.pdf',
-        fileType: 'pdf',
-        indexStatus: 'completed',
-        totalPages: 12,
-        createdAt: now - 2000,
-        updatedAt: now - 2000
-      }
-    ];
-
-    documents.value.unshift(...mockDocs);
-    zhihuFetching.value = false;
-
-    await recordEvent({
-      event_type: 'zhihu_mock_fetch',
-      project_id: projectStore.currentProjectId ?? undefined,
-      metadata: { documents_added: mockDocs.length }
-    });
+    try {
+      const result = await fetchStoryLibrary();
+      // Story items are not added to knowledge docs — they are displayed in the story panel
+      await recordEvent({
+        event_type: 'zhihu_story_fetch',
+        project_id: projectStore.currentProjectId ?? undefined,
+        metadata: { stories_count: result.items.length, from_cache: result.fromCache }
+      });
+    } catch (e) {
+      console.error('[KB Store] Failed to fetch story library:', e);
+    } finally {
+      zhihuFetching.value = false;
+    }
   };
 
   return {

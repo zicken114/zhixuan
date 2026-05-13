@@ -1,77 +1,63 @@
 <script setup lang="ts">
-import { onMounted, watch } from 'vue';
-import { useKnowledgeBaseStore } from '../stores/knowledgeBase';
-import { useProjectStore } from '../stores/projects';
-
-const kbStore = useKnowledgeBaseStore();
-const projectStore = useProjectStore();
+import { ref, onMounted } from 'vue';
+import { fetchStoryLibrary, type StoryItem } from '../composables/useStoryLibrary';
 
 const emit = defineEmits<{
   'open-knowledge-panel': [];
 }>();
 
-onMounted(() => {
-  kbStore.loadDocuments();
-});
+const stories = ref<StoryItem[]>([]);
+const loading = ref(false);
 
-watch(() => projectStore.currentProjectId, () => {
-  kbStore.loadDocuments();
-});
-
-const statusIcon = (status: string) => {
-  switch (status) {
-    case 'completed': return '✓';
-    case 'indexing': return '⟳';
-    case 'error': return '✗';
-    default: return '○';
+const loadStories = async () => {
+  loading.value = true;
+  try {
+    const result = await fetchStoryLibrary();
+    stories.value = result.items;
+  } catch (e) {
+    console.error('[LiteratureSidebar] failed to load stories:', e);
+  } finally {
+    loading.value = false;
   }
 };
 
-const statusClass = (status: string) => {
-  switch (status) {
-    case 'completed': return 'status-completed';
-    case 'indexing': return 'status-indexing';
-    case 'error': return 'status-error';
-    default: return 'status-pending';
-  }
-};
+onMounted(() => loadStories());
 </script>
 
 <template>
   <div class="literature-sidebar">
     <div class="sidebar-header">
-      <span class="sidebar-title">知乎素材</span>
+      <span class="sidebar-title">知乎故事素材库</span>
       <button class="open-kb-btn" @click="emit('open-knowledge-panel')">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
         </svg>
-        知乎知识库
+        故事库
       </button>
     </div>
 
-    <!-- Local docs section -->
+    <!-- Story list section -->
     <div class="section">
       <div class="section-header">
-        <span class="section-title">知乎素材</span>
-        <span class="section-count">{{ kbStore.projectDocuments.length }}</span>
+        <span class="section-title">故事素材</span>
+        <span class="section-count">{{ stories.length }}</span>
       </div>
-      <div v-if="kbStore.projectDocuments.length === 0" class="empty-state">
-        暂无素材
+      <div v-if="loading" class="empty-state">
+        加载中...
       </div>
-      <div class="doc-list">
+      <div v-else-if="stories.length === 0" class="empty-state">
+        暂无故事素材
+      </div>
+      <div v-else class="story-list">
         <div
-          v-for="doc in kbStore.projectDocuments.slice(0, 10)"
-          :key="doc.id"
-          class="doc-row"
+          v-for="story in stories.slice(0, 8)"
+          :key="story.work_id"
+          class="story-row"
         >
-          <span :class="['status-dot', statusClass(doc.indexStatus)]">
-            {{ statusIcon(doc.indexStatus) }}
-          </span>
-          <span class="doc-name" :title="doc.fileName">{{ doc.fileName }}</span>
-          <span v-if="doc.totalPages" class="doc-meta">{{ doc.totalPages }}页</span>
+          <span class="story-name" :title="story.title">{{ story.title }}</span>
         </div>
-        <div v-if="kbStore.projectDocuments.length > 10" class="more-hint">
-          +{{ kbStore.projectDocuments.length - 10 }} 更多知乎素材
+        <div v-if="stories.length > 8" class="more-hint">
+          +{{ stories.length - 8 }} 更多故事素材
         </div>
       </div>
     </div>
@@ -156,13 +142,13 @@ const statusClass = (status: string) => {
   text-align: center;
 }
 
-.doc-list {
+.story-list {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
 }
 
-.doc-row {
+.story-row {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -171,47 +157,18 @@ const statusClass = (status: string) => {
   font-size: 0.78rem;
   color: var(--text-secondary);
   transition: background 0.15s ease;
+  cursor: default;
 }
 
-.doc-row:hover {
+.story-row:hover {
   background: var(--bg-card-hover);
 }
 
-.status-dot {
-  font-size: 0.65rem;
-  width: 14px;
-  text-align: center;
-  flex-shrink: 0;
-}
-
-.status-completed {
-  color: var(--accent);
-}
-
-.status-indexing {
-  color: var(--warning);
-}
-
-.status-error {
-  color: var(--error);
-}
-
-.status-pending {
-  color: var(--text-dim);
-}
-
-.doc-name {
+.story-name {
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.doc-meta {
-  font-size: 0.7rem;
-  color: var(--text-muted);
-  flex-shrink: 0;
-  font-family: 'JetBrains Mono', monospace;
 }
 
 .more-hint {

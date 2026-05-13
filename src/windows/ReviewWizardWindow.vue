@@ -47,7 +47,7 @@ const loadKbItems = async () => {
     kbItems.value = await loadKnowledgeDocs(undefined);
   } catch (e: any) {
     console.error('[ReviewWizard] Failed to load KB documents:', e);
-    kbError.value = e?.message || '加载知乎知识库文档失败';
+    kbError.value = e?.message || '加载知乎故事素材失败';
     kbItems.value = [];
   } finally {
     kbLoading.value = false;
@@ -112,7 +112,7 @@ const generateReview = async () => {
             title: doc.fileName,
             creators: 'N/A',
             abstract: fullText || '（文档内容为空）',
-            source: '知乎知识库'
+            source: '知乎故事素材库'
           });
         } catch (e) {
           console.warn(`[ReviewWizard] Failed to load chunks for ${doc.fileName}:`, e);
@@ -120,7 +120,7 @@ const generateReview = async () => {
             title: doc.fileName,
             creators: 'N/A',
             abstract: '（文档加载失败）',
-            source: '知乎知识库'
+            source: '知乎故事素材库'
           });
         }
       }
@@ -143,14 +143,18 @@ const generateReview = async () => {
     async function analyzeBatch(batch: typeof papers, offset: number) {
       const batchPromises = batch.map((paper, idx) => {
         const globalIdx = offset + idx;
-        const prompt = `分析以下文献，提取：核心贡献、方法、数据集、评估指标、主要结果、局限性。用中文简洁回答（200字以内）。
+        const prompt = `分析以下素材，提取：核心观点、引用论据、数据细节、人物或案例、争议点、可借鉴的表达方式。用中文简洁回答（200字以内）。
 
 标题：${paper.title}
 作者：${paper.creators}
 摘要：${paper.abstract.slice(0, 2000)}`;
 
         return aiClient.chatOnce([
-          { role: 'system', content: '你是文献分析老手，帮人读论文、抓重点、做分析是你的日常。说话直接点，像跟同行聊天一样，别用星号、井号、列表编号这些符号，纯文字输出。' },
+          { role: 'system', content: `你是刘看山，知乎的官方吉祥物，一只来自北极的小狐狸。说话带点俏皮和热心，偶尔自嘲一下，会随口冒出几个知乎梗，比如"谢邀""利益相关""抖个机灵""先问是不是再问为什么""这是个好问题"之类的，恰到好处就行。
+
+现在我来帮你写深度长文。汇总多份素材，提取核心事实，用知乎经典的破题到分层解析再到升华总结的结构来组织内容。语言接地气，别太端着，像真人写知乎回答一样。
+
+自称"我"，叫用户"你"。说话要像真人，自然流畅，不要出现星号、井号、列表编号这些 markdown 符号，直接输出纯文字。` },
           { role: 'user', content: prompt }
         ], false, 'literature_review').then(({ text }) => {
           analyses[globalIdx] = `【${paper.title}】\n${text}`;
@@ -171,17 +175,17 @@ const generateReview = async () => {
 
     // Reduce phase: generate sections
     const combinedAnalyses = analyses.filter(Boolean).join('\n\n---\n\n');
-    const styleLabel = reviewStyle.value === 'academic' ? '学术综述' : reviewStyle.value === 'brief' ? '调研简报' : '简要概述';
+    const styleLabel = reviewStyle.value === 'academic' ? '深度长文' : reviewStyle.value === 'brief' ? '热点速评' : '简明概述';
     const focusText = focusArea.value ? `，重点关注：${focusArea.value}` : '';
 
     progress.value = { current: 0, total: 5, stage: '生成综述结构...' };
 
     const sections = [
-      { title: '1. 研究背景与动机', prompt: `基于以下文献分析，撰写"研究背景与动机"部分（300字）。说明这些研究解决的核心问题及其重要性。风格：${styleLabel}${focusText}\n\n${combinedAnalyses}` },
-      { title: '2. 方法分类与对比', prompt: `基于以下文献分析，撰写"方法分类与对比"部分（400字）。分类归纳各篇文献的方法，并指出异同。风格：${styleLabel}${focusText}\n\n${combinedAnalyses}` },
-      { title: '3. 对比表格', prompt: `基于以下文献分析，生成一个 Markdown 表格，对比各篇文献的方法、数据集、评估指标和核心创新。风格：${styleLabel}${focusText}\n\n${combinedAnalyses}` },
-      { title: '4. 研究空白与未来方向', prompt: `基于以下文献分析，撰写"研究空白与未来方向"部分（300字）。指出当前研究的不足和可能的改进方向。风格：${styleLabel}${focusText}\n\n${combinedAnalyses}` },
-      { title: '5. 总结', prompt: `基于以下文献分析，撰写简短的"总结"部分（200字）。概括主要发现和意义。风格：${styleLabel}${focusText}\n\n${combinedAnalyses}` },
+      { title: '1. 破题：话题背景与切入点', prompt: `基于以下素材，撰写"破题：话题背景与切入点"部分（300字）。点出话题为什么值得聊、读者为什么关心。风格：${styleLabel}${focusText}\n\n${combinedAnalyses}` },
+      { title: '2. 分层解析：核心观点对比', prompt: `基于以下素材，撰写"分层解析：核心观点对比"部分（400字）。分类归纳各篇素材的观点，并指出异同。风格：${styleLabel}${focusText}\n\n${combinedAnalyses}` },
+      { title: '3. 关键事实速查表', prompt: `基于以下素材，生成一个 Markdown 表格，对比各篇素材的核心观点、关键数据、典型案例与可借鉴的表达方式。风格：${styleLabel}${focusText}\n\n${combinedAnalyses}` },
+      { title: '4. 盲点与延伸思考', prompt: `基于以下素材，撰写"盲点与延伸思考"部分（300字）。指出目前讨论的不足以及还可以挖掘的角度。风格：${styleLabel}${focusText}\n\n${combinedAnalyses}` },
+      { title: '5. 升华总结', prompt: `基于以下素材，撰写简短的"升华总结"部分（200字）。给出一个让读者愿意点赞收藏的结尾。风格：${styleLabel}${focusText}\n\n${combinedAnalyses}` },
     ];
 
     const sectionResults: { title: string; content: string }[] = [];
@@ -191,7 +195,7 @@ const generateReview = async () => {
 
       try {
         const { text } = await aiClient.chatOnce([
-          { role: 'system', content: '你是写文献综述的老手，帮人把一堆论文梳理清楚、写出流畅的综述是你的强项。输出要像人写的文章，自然流畅，不要出现星号、井号、列表编号这些 markdown 符号。' },
+          { role: 'system', content: '你现在是知乎『盐究员』和千万粉大V。请汇总我提供的多份素材文档，使用 Map-Reduce 的逻辑，提取核心事实。最后，请用知乎经典的『破题->分层解析->升华总结』结构,输出一份至少包含 4 个小标题的深度长文草稿。语言风格要专业客观，适当使用知乎热词。' },
           { role: 'user', content: sections[i].prompt }
         ], false, 'literature_review');
         sectionResults.push({ title: sections[i].title, content: text });
@@ -252,7 +256,7 @@ const copyToClipboard = async () => {
 <template>
   <div class="review-wizard">
     <div class="wizard-header" @mousedown="appWindow.startDragging()">
-      <span class="header-title">📚 文献综述生成</span>
+      <span class="header-title">🔥 知乎深度报告</span>
       <button class="close-btn" @click="closeWindow">×</button>
     </div>
 
@@ -271,7 +275,7 @@ const copyToClipboard = async () => {
     <div class="wizard-content">
       <!-- Step 1: Source selection -->
       <div v-if="step === 1" class="step-content">
-        <h3>选择文献来源</h3>
+        <h3>选择素材来源</h3>
         <div class="source-options">
           <button
             class="source-card"
@@ -279,7 +283,7 @@ const copyToClipboard = async () => {
             @click="source = 'kb'"
           >
             <span class="source-icon">📄</span>
-            <span class="source-label">知乎知识库文献</span>
+            <span class="source-label">知乎故事素材库</span>
           </button>
           <button
             class="source-card"
@@ -294,12 +298,12 @@ const copyToClipboard = async () => {
 
       <!-- Step 2: Paper selection -->
       <div v-if="step === 2" class="step-content">
-        <h3>选择文献</h3>
+        <h3>选择素材</h3>
 
         <div v-if="source === 'kb'" class="paper-list">
-          <div v-if="kbLoading" class="loading">加载知乎知识库文档中...</div>
+          <div v-if="kbLoading" class="loading">加载知乎故事素材中...</div>
           <div v-else-if="kbError" class="loading error">{{ kbError }}</div>
-          <div v-else-if="kbItems.length === 0" class="loading">暂无知乎知识库素材，请先添加文件夹或抓取知乎收藏夹。</div>
+          <div v-else-if="kbItems.length === 0" class="loading">暂无故事素材</div>
           <div
             v-for="doc in kbItems"
             :key="doc.id"
@@ -329,7 +333,7 @@ const copyToClipboard = async () => {
         </div>
 
         <div class="selection-count">
-          已选择 {{ selectedPaperCount }} 篇文献
+          已选择 {{ selectedPaperCount }} 篇素材
         </div>
       </div>
 
@@ -343,8 +347,8 @@ const copyToClipboard = async () => {
             :class="{ active: reviewStyle === 'academic' }"
             @click="reviewStyle = 'academic'"
           >
-            <div class="style-name">学术综述</div>
-            <div class="style-desc">结构严谨，适合论文写作</div>
+            <div class="style-name">深度长文</div>
+            <div class="style-desc">结构严谨，适合写知乎长文回答</div>
           </button>
           <button
             class="style-card"
@@ -380,12 +384,12 @@ const copyToClipboard = async () => {
           <h3>确认生成</h3>
           <div class="confirm-info">
             <div class="info-row">
-              <span class="info-label">文献数量：</span>
+              <span class="info-label">素材数量：</span>
               <span>{{ selectedPaperCount }} 篇</span>
             </div>
             <div class="info-row">
-              <span class="info-label">综述风格：</span>
-              <span>{{ reviewStyle === 'academic' ? '学术综述' : reviewStyle === 'brief' ? '调研简报' : '简要概述' }}</span>
+              <span class="info-label">报告风格：</span>
+              <span>{{ reviewStyle === 'academic' ? '深度长文' : reviewStyle === 'brief' ? '热点速评' : '简明概述' }}</span>
             </div>
             <div v-if="focusArea" class="info-row">
               <span class="info-label">聚焦方向：</span>

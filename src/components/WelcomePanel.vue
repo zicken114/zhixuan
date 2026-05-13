@@ -42,7 +42,6 @@ const emit = defineEmits<{
 
     <div class="footer">
       <button class="primary-btn" @click="emit('continue')">{{ t('welcome.primary') }}</button>
-      <button class="secondary-btn" @click="emit('create-project')">{{ t('welcome.secondary') }}</button>
       <p class="footer-note">{{ t('welcome.footer') }}</p>
     </div>
   </div>
@@ -83,7 +82,7 @@ const emit = defineEmits<{
 }
 
 .hero {
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
 }
 
 .eyebrow {
@@ -101,8 +100,8 @@ const emit = defineEmits<{
 
 .hero h2 {
   margin: 0 0 0.7rem 0;
-  font-size: 1.9rem;
-  line-height: 1.15;
+  font-size: 1.5rem;
+  line-height: 1.2;
   font-family: 'Syne', sans-serif;
 }
 
@@ -115,9 +114,9 @@ const emit = defineEmits<{
 }
 
 .grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
 }
 
 .card {

@@ -26,3 +26,7 @@ src-tauri/Cargo.lock
 *.njsproj
 *.sln
 *.sw?
+
+# API secrets — 包含真实密钥，请勿提交到 GitHub
+src/config/apiSecrets.ts
+

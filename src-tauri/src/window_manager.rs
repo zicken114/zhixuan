@@ -1,7 +1,14 @@
 use tauri::{Emitter, Listener, Manager, PhysicalPosition, State};
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use crate::models::{MonitorFrame, WidgetDockState, WindowInfo};
 use crate::AppState;
+
+/// Once the result window has signaled readiness, we don't need to wait
+/// again on subsequent capture sessions — the webview and its listeners
+/// stay alive for the lifetime of the app.
+static RESULT_WINDOW_READY: AtomicBool = AtomicBool::new(false);
 
 /// Return the currently detected active window information.
 #[tauri::command]
@@ -186,9 +193,14 @@ pub async fn show_result_window(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 /// Wait for the result window to emit its "ready" signal (with a 3-second timeout).
+/// Once a ready signal has been received in this process, subsequent calls
+/// return immediately — the webview persists across capture sessions.
 #[tauri::command]
 pub async fn wait_for_result_window_ready(app: tauri::AppHandle) -> Result<(), String> {
-    use std::sync::atomic::{AtomicBool, Ordering};
+    if RESULT_WINDOW_READY.load(Ordering::SeqCst) {
+        return Ok(());
+    }
+
     use std::sync::Arc;
 
     let ready = Arc::new(AtomicBool::new(false));
@@ -201,6 +213,7 @@ pub async fn wait_for_result_window_ready(app: tauri::AppHandle) -> Result<(), S
     let start = std::time::Instant::now();
     while start.elapsed() < std::time::Duration::from_secs(3) {
         if ready.load(Ordering::SeqCst) {
+            RESULT_WINDOW_READY.store(true, Ordering::SeqCst);
             return Ok(());
         }
         std::thread::sleep(std::time::Duration::from_millis(10));
@@ -212,6 +225,7 @@ pub async fn wait_for_result_window_ready(app: tauri::AppHandle) -> Result<(), S
 /// Emit the signal that the result window is ready (called from the frontend).
 #[tauri::command]
 pub async fn result_window_ready(app: tauri::AppHandle) -> Result<(), String> {
+    RESULT_WINDOW_READY.store(true, Ordering::SeqCst);
     let _ = app.emit("result-window-ready", ());
     Ok(())
 }

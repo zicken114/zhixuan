@@ -36,8 +36,6 @@ const extractText = (content: MessageContent): string => {
     .join('');
 };
 
-const processedTodos = ref<Set<number>>(new Set());
-
 const emit = defineEmits<{
   'save-to-obsidian': [content: string];
   'add-todo': [content: string];
@@ -45,30 +43,9 @@ const emit = defineEmits<{
 
 defineExpose({ scrollToBottom });
 
-const parseTodos = (content: MessageContent): string[] => {
-  const text = extractText(content);
-  const match = text.match(/\[TODOS\]([\s\S]*?)\[\/TODOS\]/);
-  if (!match) return [];
-  return match[1]
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => line.startsWith('- '))
-    .map((line) => line.slice(2).trim())
-    .filter(Boolean);
-};
-
 const stripTodos = (content: MessageContent): string => {
   const text = extractText(content);
   return text.replace(/\[TODOS\][\s\S]*?\[\/TODOS\]\n?/, '').trim();
-};
-
-const handleAddTodo = (msgIdx: number, todo: string) => {
-  emit('add-todo', todo);
-  processedTodos.value.add(msgIdx);
-};
-
-const handleDismissTodos = (msgIdx: number) => {
-  processedTodos.value.add(msgIdx);
 };
 </script>
 
@@ -80,27 +57,6 @@ const handleDismissTodos = (msgIdx: number) => {
       :class="['message', msg.role === 'user' ? 'user-message' : 'ai-message']"
     >
       <div class="message-content">{{ msg.role === 'assistant' ? stripTodos(msg.content) : msg.content }}</div>
-
-      <div
-        v-if="msg.role === 'assistant' && parseTodos(msg.content).length > 0 && !processedTodos.has(idx)"
-        class="todo-suggestions"
-      >
-        <div class="todo-suggestions-header">
-          <span class="todo-icon">📝</span>
-          <span class="todo-label">{{ t('chatMessages.todoHeader') }}</span>
-        </div>
-        <div
-          v-for="(todo, tIdx) in parseTodos(msg.content)"
-          :key="tIdx"
-          class="todo-card"
-        >
-          <span class="todo-text">{{ todo }}</span>
-          <div class="todo-actions">
-            <button class="todo-btn add" @click="handleAddTodo(idx, todo)">{{ t('common.add') }}</button>
-            <button class="todo-btn dismiss" @click="handleDismissTodos(idx)">{{ t('common.ignore') }}</button>
-          </div>
-        </div>
-      </div>
 
       <div v-if="msg.role === 'assistant'" class="message-actions">
         <button

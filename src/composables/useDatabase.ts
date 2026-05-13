@@ -375,6 +375,250 @@ export async function initDatabase(): Promise<void> {
     )
   `);
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_team_invites_code ON team_invites(invite_code)`);
+
+  // Hot list cache: persistent cache for Zhihu hot list API (100 req/day limit)
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS hot_list_cache (
+      id          INTEGER PRIMARY KEY CHECK (id = 1),
+      items_json  TEXT NOT NULL,
+      cached_at   INTEGER NOT NULL,
+      is_mock     INTEGER NOT NULL DEFAULT 0
+    )
+  `);
+
+  // Hot topic materials: user-curated hot list items with AI-generated angles
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS hot_topic_materials (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      title       TEXT NOT NULL,
+      url         TEXT,
+      thumbnail   TEXT,
+      summary     TEXT,
+      angles_json TEXT,
+      created_at  INTEGER NOT NULL
+    )
+  `);
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_htm_created ON hot_topic_materials(created_at)`);
+
+  // Story library cache: persistent cache for Zhihu story library API (1 hour TTL)
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS story_library_cache (
+      id          INTEGER PRIMARY KEY CHECK (id = 1),
+      items_json  TEXT NOT NULL,
+      cached_at   INTEGER NOT NULL
+    )
+  `);
+
+  // Story materials: user-curated story items with AI-generated angles
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS story_materials (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      title       TEXT NOT NULL,
+      url         TEXT,
+      thumbnail   TEXT,
+      summary     TEXT,
+      angles_json TEXT,
+      created_at  INTEGER NOT NULL
+    )
+  `);
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_sm_created ON story_materials(created_at)`);
+}
+
+/* ───────────────────────────────────────────────
+   Hot List Cache
+   ─────────────────────────────────────────────── */
+
+export interface HotListCacheEntry {
+  items: Array<{
+    id: string;
+    title: string;
+    heat: string;
+    url?: string;
+    excerpt?: string;
+    thumbnail?: string;
+  }>;
+  cachedAt: number;
+  isMock: boolean;
+}
+
+export async function loadHotListCache(): Promise<HotListCacheEntry | null> {
+  const db = await getDb();
+  const rows = await db.select<
+    { items_json: string; cached_at: number; is_mock: number }[]
+  >('SELECT items_json, cached_at, is_mock FROM hot_list_cache WHERE id = 1');
+  if (!rows.length) return null;
+  try {
+    return {
+      items: JSON.parse(rows[0].items_json),
+      cachedAt: rows[0].cached_at,
+      isMock: rows[0].is_mock === 1,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function saveHotListCache(entry: HotListCacheEntry): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    `INSERT OR REPLACE INTO hot_list_cache (id, items_json, cached_at, is_mock) VALUES (1, ?, ?, ?)`,
+    [JSON.stringify(entry.items), entry.cachedAt, entry.isMock ? 1 : 0]
+  );
+}
+
+/* ───────────────────────────────────────────────
+   Story Library Cache
+   ─────────────────────────────────────────────── */
+
+export interface StoryLibraryCacheEntry {
+  items: Array<{
+    work_id: string;
+    title: string;
+    artwork: string;
+    tab_artwork: string;
+    description: string;
+    labels?: string[];
+  }>;
+  cachedAt: number;
+}
+
+export async function loadStoryLibraryCache(): Promise<StoryLibraryCacheEntry | null> {
+  const db = await getDb();
+  const rows = await db.select<
+    { items_json: string; cached_at: number }[]
+  >('SELECT items_json, cached_at FROM story_library_cache WHERE id = 1');
+  if (!rows.length) return null;
+  try {
+    return {
+      items: JSON.parse(rows[0].items_json),
+      cachedAt: rows[0].cached_at,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function saveStoryLibraryCache(entry: StoryLibraryCacheEntry): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    `INSERT OR REPLACE INTO story_library_cache (id, items_json, cached_at) VALUES (1, ?, ?)`,
+    [JSON.stringify(entry.items), entry.cachedAt]
+  );
+}
+
+/* ───────────────────────────────────────────────
+   Hot Topic Materials CRUD
+   ─────────────────────────────────────────────── */
+
+export interface HotTopicMaterial {
+  id: number;
+  title: string;
+  url?: string;
+  thumbnail?: string;
+  summary?: string;
+  angles?: string[];
+  createdAt: number;
+}
+
+export async function loadHotTopicMaterials(): Promise<HotTopicMaterial[]> {
+  const db = await getDb();
+  const rows = await db.select<
+    { id: number; title: string; url: string | null; thumbnail: string | null; summary: string | null; angles_json: string | null; created_at: number }[]
+  >('SELECT * FROM hot_topic_materials ORDER BY created_at DESC');
+
+  return rows.map((r) => ({
+    id: r.id,
+    title: r.title,
+    url: r.url ?? undefined,
+    thumbnail: r.thumbnail ?? undefined,
+    summary: r.summary ?? undefined,
+    angles: r.angles_json ? JSON.parse(r.angles_json) : undefined,
+    createdAt: r.created_at,
+  }));
+}
+
+export async function addHotTopicMaterial(
+  material: Omit<HotTopicMaterial, 'id' | 'createdAt'>
+): Promise<number> {
+  const db = await getDb();
+  const result = await db.execute(
+    `INSERT INTO hot_topic_materials (title, url, thumbnail, summary, angles_json, created_at)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [
+      material.title,
+      material.url ?? null,
+      material.thumbnail ?? null,
+      material.summary ?? null,
+      material.angles ? JSON.stringify(material.angles) : null,
+      Date.now(),
+    ]
+  );
+  return Number(result.lastInsertId);
+}
+
+export async function deleteHotTopicMaterial(id: number): Promise<void> {
+  const db = await getDb();
+  await db.execute('DELETE FROM hot_topic_materials WHERE id = ?', [id]);
+}
+
+/* ───────────────────────────────────────────────
+   Story Materials CRUD
+   ─────────────────────────────────────────────── */
+
+export interface StoryMaterial {
+  id: number;
+  title: string;
+  url?: string;
+  thumbnail?: string;
+  summary?: string;
+  angles?: string[];
+  createdAt: number;
+}
+
+export async function loadStoryMaterials(): Promise<StoryMaterial[]> {
+  const db = await getDb();
+  const rows = await db.select<
+    { id: number; title: string; url: string | null; thumbnail: string | null; summary: string | null; angles_json: string | null; created_at: number }[]
+  >('SELECT * FROM story_materials ORDER BY created_at DESC');
+
+  return rows.map((r) => ({
+    id: r.id,
+    title: r.title,
+    url: r.url ?? undefined,
+    thumbnail: r.thumbnail ?? undefined,
+    summary: r.summary ?? undefined,
+    angles: r.angles_json ? JSON.parse(r.angles_json) : undefined,
+    createdAt: r.created_at,
+  }));
+}
+
+export async function addStoryMaterial(
+  material: Omit<StoryMaterial, 'id' | 'createdAt'>
+): Promise<number> {
+  const db = await getDb();
+  const result = await db.execute(
+    `INSERT INTO story_materials (title, url, thumbnail, summary, angles_json, created_at)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [
+      material.title,
+      material.url ?? null,
+      material.thumbnail ?? null,
+      material.summary ?? null,
+      material.angles ? JSON.stringify(material.angles) : null,
+      Date.now(),
+    ]
+  );
+  return Number(result.lastInsertId);
+}
+
+export async function deleteStoryMaterial(id: number): Promise<void> {
+  const db = await getDb();
+  await db.execute('DELETE FROM story_materials WHERE id = ?', [id]);
+}
+
+export async function clearHotTopicMaterials(): Promise<void> {
+  const db = await getDb();
+  await db.execute('DELETE FROM hot_topic_materials');
 }
 
 /* ───────────────────────────────────────────────

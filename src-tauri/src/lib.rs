@@ -298,6 +298,20 @@ pub fn run() {
                 });
             }
 
+            // Same treatment for the result window. Without this, the user
+            // closing it via the native X destroys its webview, so the next
+            // extraction's show_result_window() / emit_to_result events find
+            // no listener and the processing box never appears.
+            if let Some(window) = app.get_webview_window("result") {
+                let w = window.clone();
+                window.on_window_event(move |event| {
+                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                        api.prevent_close();
+                        let _ = w.hide();
+                    }
+                });
+            }
+
             println!("AI Research Assistant started");
             Ok(())
         })

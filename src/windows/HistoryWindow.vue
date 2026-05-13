@@ -139,8 +139,8 @@ onUnmounted(() => {
       >
         <div class="item-header">
           <div class="item-action">
-            <span class="action-icon">{{ getActionIcon(item.actionType) }}</span>
-            <span class="action-label">{{ getActionLabel(item.actionType) }}</span>
+            <span class="action-icon">{{ item.actionIcon || getActionIcon(item.actionType) }}</span>
+            <span class="action-label">{{ item.actionLabel || getActionLabel(item.actionType) }}</span>
           </div>
           <div class="item-meta">
             <span class="item-time">{{ formatTime(item.timestamp) }}</span>

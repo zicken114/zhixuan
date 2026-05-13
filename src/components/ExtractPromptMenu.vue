@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue';
+
 export interface ExtractionPrompt {
   label: string;
   icon: string;
@@ -10,23 +12,111 @@ interface Props {
   prompts: ExtractionPrompt[];
   left: number;
   top: number;
+  // The bottom edge of the selection box (used as a fallback flip anchor).
+  selectionBottom?: number;
 }
 
-defineProps<Props>();
+const props = defineProps<Props>();
 
 const emit = defineEmits<{
   select: [prompt: ExtractionPrompt];
   cancel: [];
 }>();
+
+const menuRef = ref<HTMLDivElement | null>(null);
+const menuWidth = ref(0);
+const menuHeight = ref(0);
+const viewportWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 0);
+const viewportHeight = ref(typeof window !== 'undefined' ? window.innerHeight : 0);
+
+const EDGE_MARGIN = 8;
+
+const measure = () => {
+  if (!menuRef.value) return;
+  menuWidth.value = menuRef.value.offsetWidth;
+  menuHeight.value = menuRef.value.offsetHeight;
+};
+
+const onResize = () => {
+  viewportWidth.value = window.innerWidth;
+  viewportHeight.value = window.innerHeight;
+};
+
+onMounted(async () => {
+  await nextTick();
+  measure();
+  window.addEventListener('resize', onResize);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', onResize);
+});
+
+// Re-measure when prompts change (rare, but keeps layout robust).
+watch(
+  () => props.prompts.length,
+  async () => {
+    await nextTick();
+    measure();
+  }
+);
+
+const adjustedPosition = computed(() => {
+  // Until we've measured the menu, render off-screen (invisible) so the
+  // user never sees the menu flash at the unbounded position.
+  if (menuWidth.value === 0 || menuHeight.value === 0) {
+    return { left: -9999, top: -9999, visible: false };
+  }
+
+  const vw = viewportWidth.value;
+  const vh = viewportHeight.value;
+
+  let left = props.left;
+  let top = props.top;
+
+  // Horizontal: clamp inside viewport with EDGE_MARGIN padding.
+  const maxLeft = vw - menuWidth.value - EDGE_MARGIN;
+  if (left > maxLeft) left = maxLeft;
+  if (left < EDGE_MARGIN) left = EDGE_MARGIN;
+
+  // Vertical: if the menu would overflow below the viewport, flip above
+  // the selection. Otherwise clamp to keep it on-screen.
+  const overflowsBottom = top + menuHeight.value + EDGE_MARGIN > vh;
+  if (overflowsBottom) {
+    const selectionBottom = props.selectionBottom ?? props.top;
+    // Place 10px above the selection's top edge (selectionTop = selectionBottom - 10
+    // because the parent already added +10 for spacing).
+    const flippedTop = selectionBottom - 10 - menuHeight.value - 10;
+    if (flippedTop >= EDGE_MARGIN) {
+      top = flippedTop;
+    } else {
+      // Selection is tall enough that neither below nor above fits — clamp.
+      top = Math.max(EDGE_MARGIN, vh - menuHeight.value - EDGE_MARGIN);
+    }
+  }
+
+  if (top < EDGE_MARGIN) top = EDGE_MARGIN;
+
+  return { left, top, visible: true };
+});
 </script>
 
 <template>
-  <div class="prompt-menu" :style="{ left: `${left}px`, top: `${top}px` }">
+  <div
+    ref="menuRef"
+    class="prompt-menu"
+    :style="{
+      left: `${adjustedPosition.left}px`,
+      top: `${adjustedPosition.top}px`,
+      visibility: adjustedPosition.visible ? 'visible' : 'hidden',
+    }"
+  >
     <div class="prompt-menu-title">选择提取类型</div>
     <button
       v-for="p in prompts"
       :key="p.label"
       class="prompt-item"
+      @mousedown.stop
       @click.stop="emit('select', p)"
     >
       <span class="prompt-icon">{{ p.icon }}</span>

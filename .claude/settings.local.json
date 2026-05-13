@@ -15,7 +15,17 @@
       "Bash(npx vue-tsc:*)",
       "Bash(powershell.exe:*)",
       "Bash(tasklist)",
-      "Bash(netstat -ano)"
+      "Bash(netstat -ano)",
+      "PowerShell(npx vue-tsc --noEmit 2>&1 | Select-Object -First 80)",
+      "PowerShell(cargo check *)",
+      "Bash(git stash *)",
+      "Bash(findstr /C:\"error TS\")",
+      "Bash(findstr /C:\"PopupWindow\")",
+      "PowerShell(npx vue-tsc --noEmit 2>&1 | Select-String -Pattern \"error TS\" | Where-Object { $_ -notmatch \"PopupWindow.vue\" })",
+      "Bash(npx tauri *)",
+      "Bash(cargo tauri *)",
+      "Bash(python -c \"from PIL import Image; img = Image.open\\('public/liukanshan.png'\\); print\\(f'Size: {img.size}, Mode: {img.mode}'\\)\")",
+      "Bash(identify public/liukanshan.png)"
     ]
   }
 }

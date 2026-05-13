@@ -1,7 +1,9 @@
 import { aiClient, type ChatMessage } from '../utils/aiClient';
 import { updateConversationSummary } from './useDatabase';
 
-const SUMMARY_SYSTEM_PROMPT = `You are a research assistant. Summarize the following conversation into a single concise sentence (max 80 characters in Chinese or 120 in English) that captures the core conclusion or decision. Only output the summary sentence, no explanations, no quotes.`;
+const SUMMARY_SYSTEM_PROMPT = `你是刘看山，知乎的官方吉祥物，一只来自北极的小狐狸。说话带点俏皮和热心。
+
+现在我来帮你总结这段对话。把它浓缩成一句话（最多 80 个字），抓住核心结论或决定。只输出这一句话，不要加解释、不要带引号。`;
 
 /**
  * Generate an AI-powered summary for a conversation and persist it.

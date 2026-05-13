@@ -69,20 +69,35 @@ const presetHint = ref<string>('');
 let presetPromptIndex = -1;
 
 let unlisten: UnlistenFn | null = null;
+let unlistenNewCapture: UnlistenFn | null = null;
+let unlistenPreset: UnlistenFn | null = null;
+
+const resetCaptureUI = () => {
+  resetSelection();
+  isProcessing.value = false;
+  showResult.value = false;
+  processingResult.value = '';
+  selectedPrompt.value = null;
+  presetHint.value = '';
+  presetPromptIndex = -1;
+};
 
 onMounted(async () => {
+  // Fires as soon as a new capture session begins — runs *before* the
+  // screenshot itself is ready. Reset selection + UI state immediately so
+  // the user can't interact with stale state from a previous extraction.
+  unlistenNewCapture = await listen('new-capture-started', () => {
+    resetCaptureUI();
+  });
+
   unlisten = await listen<ScreenshotPayload>('screenshot-ready', (event) => {
     screenshotData.value = event.payload;
     originalImageWidth.value = event.payload.width;
     originalImageHeight.value = event.payload.height;
     backgroundImage.value = `data:image/png;base64,${event.payload.image}`;
-    resetSelection();
-    isProcessing.value = false;
-    showResult.value = false;
-    processingResult.value = '';
-    selectedPrompt.value = null;
-    presetHint.value = '';
-    presetPromptIndex = -1;
+    // Reset again in case the capture window was shown before
+    // 'new-capture-started' was processed.
+    resetCaptureUI();
   });
 
   window.addEventListener('error', (e) => {
@@ -92,7 +107,7 @@ onMounted(async () => {
   window.addEventListener('keydown', handleKeyDown);
 
   // Listen for preset triggers from reading-companion hotkeys (F2=formula, F3=table)
-  listen<string>('capture:preset', (event) => {
+  unlistenPreset = await listen<string>('capture:preset', (event) => {
     if (event.payload === 'formula') {
       presetHint.value = '阅读助手：拖拽选择图表区域，按 Enter 进行图表分析';
       presetPromptIndex = 0; // 图表分析
@@ -105,6 +120,8 @@ onMounted(async () => {
 
 onUnmounted(() => {
   if (unlisten) unlisten();
+  if (unlistenNewCapture) unlistenNewCapture();
+  if (unlistenPreset) unlistenPreset();
   window.removeEventListener('keydown', handleKeyDown);
 });
 
@@ -201,6 +218,7 @@ const extractWithPrompt = async (prompt: ExtractionPrompt) => {
         popupHistoryStore.addItem({
           actionType: toHistoryActionType(prompt),
           actionLabel: prompt.label,
+          actionIcon: prompt.icon,
           inputText: '[截图输入]',
           inputImage: croppedImage,
           outputText: clipboardText
@@ -303,6 +321,7 @@ const cancelSelection = async () => {
       :prompts="extractionPrompts"
       :left="Math.min(startX, endX)"
       :top="Math.max(startY, endY) + 10"
+      :selection-bottom="Math.max(startY, endY)"
       @select="extractWithPrompt"
       @cancel="cancelSelection"
     />

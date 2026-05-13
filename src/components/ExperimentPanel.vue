@@ -50,7 +50,7 @@ const toggleExpand = (id?: number) => {
 
 const handleDelete = async (id?: number) => {
   if (!id) return;
-  if (!confirm('确定要删除这条实验记录吗？')) return;
+  if (!confirm('确定要删除这条创作快照吗？')) return;
   try {
     await deleteExperimentSnapshot(id);
     await loadSnapshots();
@@ -94,7 +94,7 @@ const formatDate = (timestamp?: number): string => {
 <template>
   <div class="experiment-panel">
     <div class="sidebar-header">
-      <span class="sidebar-title">⚡ 实验记录</span>
+      <span class="sidebar-title">📸 创作快照</span>
       <button class="close-btn" @click="emit('close')">×</button>
     </div>
 
@@ -102,7 +102,7 @@ const formatDate = (timestamp?: number): string => {
       <input
         v-model="searchQuery"
         type="text"
-        placeholder="搜索实验记录..."
+        placeholder="搜索创作快照..."
         @input="loadSnapshots"
       />
       <button class="quick-record-btn" @click="showWindow('experiment_snapshot')">
@@ -112,8 +112,8 @@ const formatDate = (timestamp?: number): string => {
 
     <div v-if="loading && snapshots.length === 0" class="empty-state">加载中...</div>
     <div v-else-if="snapshots.length === 0" class="empty-state">
-      暂无实验记录
-      <span class="empty-hint">按 Alt+E 快速记录实验快照</span>
+      暂无创作快照
+      <span class="empty-hint">按 Alt+E 快速记下一个一闪而过的念头</span>
     </div>
 
     <div class="snapshot-list">
@@ -164,7 +164,13 @@ const formatDate = (timestamp?: number): string => {
 
           <div v-if="snap.screenshotPath" class="detail-section">
             <div class="detail-label">截图</div>
-            <div class="screenshot-placeholder">{{ snap.screenshotPath }}</div>
+            <img
+              v-if="snap.screenshotPath.startsWith('data:image/')"
+              :src="snap.screenshotPath"
+              class="screenshot-image"
+              alt="snapshot screenshot"
+            />
+            <div v-else class="screenshot-placeholder">{{ snap.screenshotPath }}</div>
           </div>
         </div>
       </div>
@@ -408,5 +414,15 @@ const formatDate = (timestamp?: number): string => {
   padding: 0.5rem;
   background: var(--bg-surface);
   border-radius: 6px;
+}
+
+.screenshot-image {
+  display: block;
+  width: 100%;
+  max-height: 240px;
+  object-fit: contain;
+  border-radius: 6px;
+  background: #000;
+  border: 1px solid var(--border-light);
 }
 </style>

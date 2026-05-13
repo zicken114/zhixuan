@@ -70,7 +70,20 @@ pub fn trigger_capture(app: tauri::AppHandle) -> Result<(), String> {
         return Ok(());
     }
 
-    // ── 1. capture first, before any UI changes ────────────────────────────
+    // ── 1. broadcast reset FIRST so the capture/result webviews can clear
+    //       any stale state from the previous extraction *before* the
+    //       capture overlay becomes interactive again. The screen capture
+    //       below typically takes 50-200ms, which gives the listener
+    //       plenty of time to process the reset.
+    let _ = app.emit("new-capture-started", ());
+
+    // ── 2. hide the result window early (if it was open) so it doesn't
+    //       steal focus while we set up the capture overlay.
+    if let Some(result_window) = app.get_webview_window("result") {
+        let _ = result_window.hide();
+    }
+
+    // ── 3. capture the screen ──────────────────────────────────────────────
     let screens = match Screen::all() {
         Ok(s) => s,
         Err(e) => {
@@ -79,10 +92,13 @@ pub fn trigger_capture(app: tauri::AppHandle) -> Result<(), String> {
         }
     };
 
-    let screen = screens.first().ok_or_else(|| {
-        CAPTURE_IN_PROGRESS.store(false, Ordering::SeqCst);
-        "No screens detected".to_string()
-    })?;
+    let screen = match screens.first() {
+        Some(s) => s,
+        None => {
+            CAPTURE_IN_PROGRESS.store(false, Ordering::SeqCst);
+            return Err("No screens detected".to_string());
+        }
+    };
 
     let image = match screen.capture() {
         Ok(img) => img,
@@ -108,13 +124,7 @@ pub fn trigger_capture(app: tauri::AppHandle) -> Result<(), String> {
         y: screen.display_info.y,
     };
 
-    // ── 2. hide previous result window and reset state ─────────────────────
-    if let Some(result_window) = app.get_webview_window("result") {
-        let _ = result_window.hide();
-    }
-    let _ = app.emit("new-capture-started", ());
-
-    // ── 3. show capture overlay ────────────────────────────────────────────
+    // ── 4. show capture overlay and deliver the screenshot ─────────────────
     if let Some(window) = app.get_webview_window("capture") {
         if let Err(e) = window.show() {
             CAPTURE_IN_PROGRESS.store(false, Ordering::SeqCst);
@@ -128,7 +138,7 @@ pub fn trigger_capture(app: tauri::AppHandle) -> Result<(), String> {
         }
     }
 
-    // ── 4. reset guard after a cooldown ────────────────────────────────────
+    // ── 5. reset guard after a cooldown ────────────────────────────────────
     std::thread::spawn(move || {
         std::thread::sleep(std::time::Duration::from_secs(2));
         CAPTURE_IN_PROGRESS.store(false, Ordering::SeqCst);

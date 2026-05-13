@@ -36,9 +36,9 @@ const { showPopup: showPopupMenu, show, resize, showSentinelBrief, snapWidget: s
 
 const collapsedOffset = 44;
 const collapseDelayMs = 1200;
-const expandedSize = 60;
-const collapsedWidth = 14;
-const collapsedHeight = 46;
+const expandedSize = 56;
+const collapsedWidth = 12;
+const collapsedHeight = 40;
 
 const dockSide = ref<DockSide>(null);
 const isExpanded = ref(true);
@@ -446,7 +446,7 @@ onUnmounted(() => {
     </div>
     <!-- Sentinel new papers banner -->
     <div v-if="showSentinelBanner && sentinelUnreadCount > 0" class="sentinel-banner" @click="showSentinelBrief()">
-      本周有 {{ sentinelUnreadCount }} 篇新文献
+      本周有 {{ sentinelUnreadCount }} 条新热榜
     </div>
     <div v-if="contextTooltip" class="context-tooltip">{{ contextTooltip }}</div>
     <!-- Resume reading hint (Phase 3.3) -->
@@ -477,25 +477,22 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 64px;
-  height: 64px;
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
-  background: var(--bg-base);
-  box-shadow: var(--shadow-md);
-  border: 1.5px solid var(--border-light);
+  background: transparent;
+  border: none;
+  box-shadow: none;
   transition:
     width var(--transition-widget),
     height var(--transition-widget),
     transform var(--transition-slow),
     border-radius var(--transition-slow),
-    box-shadow var(--transition-base),
-    filter var(--transition-slow),
-    background var(--transition-slow);
+    filter var(--transition-slow);
   cursor: pointer;
 }
 
 .widget-shell:hover {
-  box-shadow: var(--shadow-lg);
   transform: translateY(-1px);
 }
 
@@ -507,11 +504,12 @@ onUnmounted(() => {
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: url('/liukanshan.png') center/cover no-repeat;
+  background: #fff url('/liukanshan.png') center no-repeat;
+  background-size: auto 72%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.25rem;
+  font-size: 1rem;
   font-weight: 700;
   font-family: var(--font-display);
   transition:
@@ -549,7 +547,7 @@ onUnmounted(() => {
 }
 
 .widget-container.is-collapsed .widget-shell {
-  box-shadow: var(--shadow-sm);
+  box-shadow: none;
 }
 
 .widget-container.is-collapsed .widget-tab {
@@ -558,19 +556,19 @@ onUnmounted(() => {
 
 /* Context-aware subtle border effects */
 .widget-container.context-writing .widget-shell {
-  border-color: var(--accent-border);
+  border: none;
 }
 
 .widget-container.context-pdf .widget-shell {
-  border-color: var(--accent-border);
+  border: none;
 }
 
 .widget-container.context-code .widget-shell {
-  border-color: rgba(251, 188, 4, 0.4);
+  border: none;
 }
 
 .widget-container.context-browser .widget-shell {
-  border-color: rgba(139, 92, 246, 0.4);
+  border: none;
 }
 
 /* Context badge */

@@ -7,20 +7,13 @@ const { t } = useI18n();
 const props = defineProps<{
   modelValue: string;
   isStreaming: boolean;
-  isAgentMode?: boolean;
 }>();
 
 const emit = defineEmits<{
   'update:modelValue': [value: string];
-  'update:isAgentMode': [value: boolean];
   send: [];
   stop: [];
 }>();
-
-const agentMode = computed({
-  get: () => props.isAgentMode ?? false,
-  set: (val) => emit('update:isAgentMode', val)
-});
 
 const inputText = computed({
   get: () => props.modelValue,
@@ -32,18 +25,10 @@ const canSend = computed(() => !props.isStreaming && inputText.value.trim().leng
 
 <template>
   <div class="input-container">
-    <button
-      class="agent-toggle"
-      :class="{ active: agentMode }"
-      :title="agentMode ? 'Agent mode ON' : 'Agent mode OFF'"
-      @click="agentMode = !agentMode"
-    >
-      🤖
-    </button>
     <input
       v-model="inputText"
       type="text"
-      :placeholder="agentMode ? t('chatInput.agentPlaceholder') || 'Ask the agent to do research...' : t('chatInput.placeholder')"
+      :placeholder="t('chatInput.placeholder')"
       class="input-field"
       :disabled="isStreaming"
       @keyup.enter="canSend && emit('send')"
@@ -61,7 +46,7 @@ const canSend = computed(() => !props.isStreaming && inputText.value.trim().leng
       :disabled="!canSend"
       @click="emit('send')"
     >
-      {{ agentMode ? 'Agent' : t('chatInput.send') }}
+      {{ t('chatInput.send') }}
     </button>
   </div>
 </template>
@@ -141,24 +126,4 @@ const canSend = computed(() => !props.isStreaming && inputText.value.trim().leng
   transform: translateY(-1px);
 }
 
-.agent-toggle {
-  background: var(--bg-input);
-  border: 1px solid var(--border-light);
-  border-radius: 10px;
-  padding: 0.75rem;
-  cursor: pointer;
-  font-size: 1rem;
-  transition: all 0.2s ease;
-  opacity: 0.5;
-}
-
-.agent-toggle:hover {
-  opacity: 0.8;
-}
-
-.agent-toggle.active {
-  background: var(--accent);
-  border-color: var(--accent);
-  opacity: 1;
-}
 </style>

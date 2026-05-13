@@ -1,479 +1,449 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue';
-import { useProjectStore } from '../stores/projects';
-import {
-  getSentinelTopics,
-  createSentinelTopic,
-  updateSentinelTopic,
-  deleteSentinelTopic,
-  getSentinelPapers,
-  markSentinelPaper,
-  createSentinelPaper,
-  createSentinelCheck,
-  loadRecentMessages,
-  loadKnowledgeDocs,
-  type SentinelTopic,
-  type SentinelPaper
-} from '../composables/useDatabase';
-import { invoke } from '@tauri-apps/api/core';
-import { emit as tauriEmit } from '@tauri-apps/api/event';
+import { ref, computed, onMounted } from 'vue';
 import { openUrl } from '@tauri-apps/plugin-opener';
-import { recordEvent } from '../composables/useEvents';
-import { useWindow } from '../composables/useWindow';
 import { aiClient } from '../utils/aiClient';
-
-const projectStore = useProjectStore();
-const { showSentinelBrief } = useWindow();
-
-const topics = ref<SentinelTopic[]>([]);
-const papers = ref<Map<string, SentinelPaper[]>>(new Map());
-const loading = ref(false);
-const inferring = ref(false);
-const showCreateModal = ref(false);
-const expandedTopic = ref<string | null>(null);
-
-// Create form
-const newTopicName = ref('');
-const newTopicKeywords = ref('');
-const newTopicSources = ref('arxiv,semantic_scholar');
-const newTopicFrequency = ref('6h');
+import { recordEvent } from '../composables/useEvents';
+import { fetchHotList, formatCacheAge, type HotItem } from '../composables/useHotList';
+import {
+  loadHotTopicMaterials,
+  addHotTopicMaterial,
+  deleteHotTopicMaterial,
+  type HotTopicMaterial,
+} from '../composables/useDatabase';
 
 const emit = defineEmits<{
   close: [];
 }>();
 
-const loadTopics = async () => {
+// ── 热榜列表 ────────────────────────────────────────────────
+const hotList = ref<HotItem[]>([]);
+const loading = ref(false);
+const isMockData = ref(false);
+const cachedAt = ref(0);
+
+const searchQuery = ref('');
+const expandedId = ref<string | null>(null);
+const ideationCache = ref<Map<string, string>>(new Map());
+const ideationLoading = ref<Set<string>>(new Set());
+const ideationError = ref<Map<string, string>>(new Map());
+
+const filteredHotList = computed(() => {
+  const q = searchQuery.value.trim().toLowerCase();
+  if (!q) return hotList.value;
+  return hotList.value.filter(
+    (h) =>
+      h.title.toLowerCase().includes(q) ||
+      (h.excerpt || '').toLowerCase().includes(q)
+  );
+});
+
+const loadHotList = async (forceRefresh = false) => {
   loading.value = true;
   try {
-    topics.value = await getSentinelTopics(projectStore.currentProjectId);
-    // Load papers for each topic
-    for (const topic of topics.value) {
-      if (!topic.id) continue;
-      const topicPapers = await getSentinelPapers(topic.id, undefined, false, 20);
-      papers.value.set(topic.id, topicPapers);
-    }
+    const { items, isMock, cachedAt: ts } = await fetchHotList(forceRefresh);
+    hotList.value = items;
+    isMockData.value = isMock;
+    cachedAt.value = ts;
   } catch (e) {
-    console.error('[Sentinel] Failed to load topics:', e);
+    console.error('[SentinelPanel] failed:', e);
   } finally {
     loading.value = false;
   }
 };
 
-onMounted(loadTopics);
-watch(() => projectStore.currentProjectId, loadTopics);
+onMounted(() => loadHotList());
 
-const toggleTopic = (topicId: string) => {
-  expandedTopic.value = expandedTopic.value === topicId ? null : topicId;
-};
-
-const handleCreateTopic = async () => {
-  const name = newTopicName.value.trim();
-  const keywords = newTopicKeywords.value
-    .split(/[,，;；]/)
-    .map((k) => k.trim())
-    .filter(Boolean);
-
-  if (!name || keywords.length === 0) return;
-
-  try {
-    await createSentinelTopic({
-      projectId: projectStore.currentProjectId,
-      name,
-      keywords,
-      sources: newTopicSources.value,
-      frequency: newTopicFrequency.value,
-      isActive: true
-    });
-
-    recordEvent({
-      event_type: 'sentinel_topic_create',
-      metadata: { name, keywords, sources: newTopicSources.value }
-    });
-
-    newTopicName.value = '';
-    newTopicKeywords.value = '';
-    showCreateModal.value = false;
-    await loadTopics();
-  } catch (e) {
-    console.error('[Sentinel] Failed to create topic:', e);
+const toggleItem = (item: HotItem) => {
+  const id = item.id;
+  if (expandedId.value === id) {
+    expandedId.value = null;
+    return;
   }
+  expandedId.value = id;
 };
 
-const toggleTopicActive = async (topic: SentinelTopic) => {
-  if (!topic.id) return;
+// ── 拆解角度 ────────────────────────────────────────────────
+const analyzeAngles = async (item: HotItem) => {
+  const id = item.id;
+  if (ideationCache.value.has(id) || ideationLoading.value.has(id)) return;
+
+  ideationLoading.value.add(id);
+  ideationError.value.delete(id);
+  const startTime = Date.now();
+
   try {
-    await updateSentinelTopic({
-      ...topic,
-      isActive: !topic.isActive
-    });
-    await loadTopics();
-  } catch (e) {
-    console.error('[Sentinel] Failed to toggle topic:', e);
-  }
-};
-
-const handleDeleteTopic = async (id: string) => {
-  if (!confirm('确定要删除这个监控主题吗？')) return;
-  try {
-    await deleteSentinelTopic(id);
-    await loadTopics();
-  } catch (e) {
-    console.error('[Sentinel] Failed to delete topic:', e);
-  }
-};
-
-const handleInferDirections = async () => {
-  inferring.value = true;
-  try {
-    // 1. Load recent messages and knowledge docs for context
-    const [messages, docs] = await Promise.all([
-      loadRecentMessages(30),
-      loadKnowledgeDocs(projectStore.currentProjectId)
-    ]);
-
-    const userMessages = messages
-      .filter(m => m.role === 'user')
-      .map(m => m.content)
-      .slice(-20)
-      .join('\n---\n');
-
-    const docNames = docs.map(d => d.fileName).slice(0, 20).join(', ');
-
-    if (!userMessages.trim() && !docNames) {
-      alert('暂无足够数据推断研究方向。请先进行一些对话或上传文献。');
-      return;
-    }
-
-    // 2. Call AI to infer research directions
-    const prompt = `Based on the following research activities, infer 3-5 main research directions. Each direction should have a concise Chinese name and 3-5 English keywords suitable for arXiv search.
-
-Recent conversation topics:
-${userMessages.slice(0, 3000)}
-
-知乎知识库素材：
-${docNames}
-
-Return STRICTLY in this JSON format without any other text:
-[{"name":"Direction Name","keywords":["keyword1","keyword2","keyword3"]}]`;
-
     const { text } = await aiClient.chatOnce([
-      { role: 'system', content: 'You are a research assistant that analyzes user activities to infer research interests. Output only valid JSON.' },
-      { role: 'user', content: prompt }
-    ], false, 'literature_review');
+      {
+        role: 'system',
+        content: `你是刘看山，知乎的官方吉祥物，一只来自北极的小狐狸。说话带点俏皮和热心，偶尔自嘲一下，会随口冒出几个知乎梗，比如"谢邀""利益相关""抖个机灵""先问是不是再问为什么""这是个好问题"之类的，恰到好处就行。
 
-    // 3. Parse JSON response
-    let directions: Array<{ name: string; keywords: string[] }> = [];
-    try {
-      const jsonMatch = text.match(/\[[\s\S]*\]/);
-      if (jsonMatch) {
-        directions = JSON.parse(jsonMatch[0]);
-      } else {
-        directions = JSON.parse(text);
+现在我来帮你拆解这个热点的创作角度。从创作者视角出发，找出 3-5 个最有价值的回答方向，每个方向说清楚标题方向、核心切入点、目标受众、预期效果。给建议直接给具体方案，别整虚的套话。
+
+自称"我"，叫用户"你"。说话要像真人，自然流畅，不要出现星号、井号、列表编号这些 markdown 符号，直接输出纯文字。`
+      },
+      {
+        role: 'user',
+        content: `话题：${item.title}\n摘要：${item.excerpt || '无'}\n链接：${item.url || ''}\n\n请帮我拆解这个热点的创作角度。`
       }
-    } catch (parseErr) {
-      console.error('[Sentinel] Failed to parse AI response:', text, parseErr);
-      alert('AI 返回格式异常，请手动创建监控主题。');
-      return;
-    }
-
-    if (!Array.isArray(directions) || directions.length === 0) {
-      alert('未能自动推断出研究方向。请手动创建监控主题。');
-      return;
-    }
-
-    for (const dir of directions) {
-      if (!dir.name || !Array.isArray(dir.keywords)) continue;
-      await createSentinelTopic({
-        projectId: projectStore.currentProjectId,
-        name: dir.name,
-        keywords: dir.keywords,
-        sources: 'arxiv,semantic_scholar',
-        frequency: '6h',
-        isActive: true
-      });
-    }
-
-    await loadTopics();
-  } catch (e) {
-    console.error('[Sentinel] Failed to infer directions:', e);
-    alert('推断失败: ' + (e as Error).message);
-  } finally {
-    inferring.value = false;
-  }
-};
-
-const runManualCheck = async (topic: SentinelTopic) => {
-  if (!topic.id) return;
-  loading.value = true;
-  const checkStartTime = Date.now();
-  try {
-    const arxivPapers: Array<{
-      title: string;
-      authors: string[];
-      summary: string;
-      id: string;
-      pdf_url: string;
-      published: string;
-      doi?: string;
-    }> = await invoke('search_arxiv_command', {
-      keywords: topic.keywords,
-      days: 7
-    });
-
-    // Fetch ALL existing papers for this topic (any status) for deduplication
-    const existingPapers = await getSentinelPapers(topic.id, undefined, undefined, 10000);
-    const existingTitles = new Set(existingPapers.map((p) => p.title.toLowerCase().trim()));
-
-    let createdCount = 0;
-    let duplicateCount = 0;
-    for (const paper of arxivPapers.slice(0, 5)) {
-      const titleKey = paper.title.toLowerCase().trim();
-      if (existingTitles.has(titleKey)) {
-        duplicateCount++;
-        continue;
-      }
-      await createSentinelPaper({
-        topicId: topic.id!,
-        title: paper.title,
-        authors: paper.authors.join(', '),
-        abstract: paper.summary,
-        url: paper.id,
-        pdfUrl: paper.pdf_url,
-        doi: paper.doi || undefined,
-        publishedDate: paper.published,
-        source: 'arxiv',
-        isRead: false,
-        isIgnored: false
-      });
-      existingTitles.add(titleKey);
-      createdCount++;
-    }
-
-    // Update last check time
-    await updateSentinelTopic({
-      ...topic,
-      lastCheckAt: Date.now()
-    });
-
-    // Record check history
-    await createSentinelCheck({
-      timestamp: Date.now(),
-      topicsChecked: 1,
-      papersFound: createdCount,
-      durationMs: Date.now() - checkStartTime,
-      metadata: {
-        source: 'manual',
-        topicId: topic.id,
-        keywords: topic.keywords,
-        totalReturned: arxivPapers.length,
-        duplicates: duplicateCount,
-        checkedSources: ['arxiv']
-      }
-    });
-
-    // Record activity event for dashboard
+    ], false, 'chat');
+    ideationCache.value.set(id, text.trim());
     recordEvent({
-      event_type: 'sentinel_check',
-      project_id: projectStore.currentProjectId ?? undefined,
-      duration_ms: Date.now() - checkStartTime,
-      metadata: {
-        topicId: topic.id,
-        topicName: topic.name,
-        papersFound: createdCount,
-        totalReturned: arxivPapers.length,
-        source: 'manual'
-      }
+      event_type: 'hot_list_ideation',
+      duration_ms: Date.now() - startTime,
+      metadata: { title: item.title, success: true, isMock: isMockData.value },
     });
-
-    if (createdCount > 0) {
-      await tauriEmit('sentinel:new-papers', { count: createdCount });
-      alert(`✅ 发现 ${createdCount} 篇新论文！（arXiv 返回 ${arxivPapers.length} 篇，跳过 ${duplicateCount} 篇已存在）`);
-    } else {
-      alert(`📭 本次检查完成。arXiv 返回 ${arxivPapers.length} 篇论文，全部已存在，未发现新论文。`);
-    }
-
-    await loadTopics();
   } catch (e) {
-    console.error('[Sentinel] Manual check failed:', e);
-    alert('❌ 检查失败：' + e);
+    const msg = e instanceof Error ? e.message : String(e);
+    ideationError.value.set(id, msg);
+    recordEvent({
+      event_type: 'hot_list_ideation',
+      duration_ms: Date.now() - startTime,
+      metadata: { title: item.title, success: false, error: msg },
+    });
   } finally {
-    loading.value = false;
+    ideationLoading.value.delete(id);
   }
 };
 
-const markPaper = async (paperId: number, updates: { isRead?: boolean; isIgnored?: boolean }) => {
+// ── 加入素材库 ──────────────────────────────────────────────
+const quickAddToMaterial = async (item: HotItem) => {
+  await addHotTopicMaterial({
+    title: item.title,
+    url: item.url,
+    thumbnail: item.thumbnail,
+    summary: item.excerpt,
+  });
+  await loadMaterials();
+};
+
+const addIdeationToMaterial = async (item: HotItem) => {
+  const text = ideationCache.value.get(item.id);
+  const angles = text ? text.split(/\n{2,}/).filter(s => s.trim().length > 10) : undefined;
+  await addHotTopicMaterial({
+    title: item.title,
+    url: item.url,
+    thumbnail: item.thumbnail,
+    summary: item.excerpt,
+    angles,
+  });
+  await loadMaterials();
+};
+
+/** 实时检查素材库中是否已收录同名热点 */
+const isInMaterials = (title: string): boolean => {
+  return materials.value.some(m => m.title === title);
+};
+
+// ── 素材库 ──────────────────────────────────────────────────
+const showMaterialPanel = ref(false);
+const materials = ref<HotTopicMaterial[]>([]);
+const selectedMaterialIds = ref<Set<number>>(new Set());
+const materialSummary = ref('');
+const materialInspiration = ref('');
+const aiResultLoading = ref(false);
+const aiResultType = ref<'summary' | 'inspiration' | null>(null);
+
+const loadMaterials = async () => {
   try {
-    await markSentinelPaper(paperId, updates);
-    await loadTopics();
+    materials.value = await loadHotTopicMaterials();
   } catch (e) {
-    console.error('[Sentinel] Failed to mark paper:', e);
+    console.error('[SentinelPanel] Failed to load materials:', e);
   }
 };
 
-const unreadCount = (topicId: string): number => {
-  const topicPapers = papers.value.get(topicId) || [];
-  return topicPapers.filter((p) => !p.isRead && !p.isIgnored).length;
+const toggleMaterialSelection = (id: number) => {
+  const next = new Set(selectedMaterialIds.value);
+  if (next.has(id)) {
+    next.delete(id);
+  } else {
+    next.add(id);
+  }
+  selectedMaterialIds.value = next;
 };
 
-const frequencyLabel = (freq: string): string => {
-  switch (freq) {
-    case '6h': return '每6小时';
-    case '1d': return '每天';
-    case '3d': return '每3天';
-    case '1w': return '每周';
-    default: return freq;
+const selectedMaterials = computed(() =>
+  materials.value.filter(m => selectedMaterialIds.value.has(m.id))
+);
+
+const removeMaterial = async (id: number) => {
+  await deleteHotTopicMaterial(id);
+  selectedMaterialIds.value.delete(id);
+  await loadMaterials();
+};
+
+const generateSummary = async () => {
+  if (selectedMaterials.value.length === 0) return;
+  aiResultLoading.value = true;
+  aiResultType.value = 'summary';
+  materialSummary.value = '';
+  try {
+    const context = selectedMaterials.value
+      .map((m, i) => `${i + 1}. ${m.title}${m.summary ? '\n' + m.summary : ''}`)
+      .join('\n\n');
+    const { text } = await aiClient.chatOnce([
+      {
+        role: 'system',
+        content: `你是刘看山，知乎的官方吉祥物，一只来自北极的小狐狸。说话带点俏皮和热心，偶尔自嘲一下，会随口冒出几个知乎梗，比如"谢邀""利益相关""抖个机灵""先问是不是再问为什么""这是个好问题"之类的，恰到好处就行。
+
+现在我来帮你做热点总结。把多个热点串起来看，提炼共性趋势、核心矛盾、用户到底在关注什么。用知乎的眼光去分析，给出干货。
+
+自称"我"，叫用户"你"。说话要像真人，自然流畅，不要出现星号、井号、列表编号这些 markdown 符号，直接输出纯文字。`
+      },
+      {
+        role: 'user',
+        content: `以下是我收集的知乎热点素材，请帮我做一份热点总结：\n\n${context}`
+      }
+    ], false, 'chat');
+    materialSummary.value = text.trim();
+  } catch (e: any) {
+    materialSummary.value = `生成失败：${e?.message || '请重试'}`;
+  } finally {
+    aiResultLoading.value = false;
   }
 };
 
-const formatDate = (timestamp?: number | null): string => {
-  if (!timestamp) return '从未';
-  const d = new Date(timestamp);
-  return d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+const generateInspiration = async () => {
+  if (selectedMaterials.value.length === 0) return;
+  aiResultLoading.value = true;
+  aiResultType.value = 'inspiration';
+  materialInspiration.value = '';
+  try {
+    const context = selectedMaterials.value
+      .map((m, i) =>
+        `${i + 1}. ${m.title}${m.angles ? '\n拆解角度：\n' + m.angles.join('\n') : ''}${m.summary ? '\n摘要：' + m.summary : ''}`
+      )
+      .join('\n\n---\n\n');
+    const { text } = await aiClient.chatOnce([
+      {
+        role: 'system',
+        content: `你是刘看山，知乎的官方吉祥物，一只来自北极的小狐狸。说话带点俏皮和热心，偶尔自嘲一下，会随口冒出几个知乎梗，比如"谢邀""利益相关""抖个机灵""先问是不是再问为什么""这是个好问题"之类的，恰到好处就行。
+
+现在我来帮你找创作灵感。基于这些热点素材，想想有哪些能切入的角度、标题怎么起、内容怎么搭、读者会在哪里互动。用知乎的思维来想事情：什么样的回答能引发共鸣，什么样的标题有诱惑力。
+
+自称"我"，叫用户"你"。说话要像真人，自然流畅，不要出现星号、井号、列表编号这些 markdown 符号，直接输出纯文字。`
+      },
+      {
+        role: 'user',
+        content: `以下是我收集的知乎热点素材，请帮我生成创作灵感：\n\n${context}`
+      }
+    ], false, 'chat');
+    materialInspiration.value = text.trim();
+  } catch (e: any) {
+    materialInspiration.value = `生成失败：${e?.message || '请重试'}`;
+  } finally {
+    aiResultLoading.value = false;
+  }
+};
+
+const openMaterialPanel = async () => {
+  showMaterialPanel.value = true;
+  await loadMaterials();
+};
+
+const closeMaterialPanel = () => {
+  showMaterialPanel.value = false;
+  selectedMaterialIds.value = new Set();
+  materialSummary.value = '';
+  materialInspiration.value = '';
+  aiResultType.value = null;
+};
+
+const copyText = async (text: string) => {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (e) {
+    console.warn('[SentinelPanel] copy failed:', e);
+  }
 };
 </script>
 
 <template>
   <div class="sentinel-panel">
+    <!-- Header -->
     <div class="sidebar-header">
-      <span class="sidebar-title">📡 文献哨兵</span>
-      <button class="close-btn" @click="emit('close')">×</button>
+      <span class="sidebar-title">🔥 热榜灵感雷达</span>
+      <div class="header-actions">
+        <span v-if="cachedAt && !loading" class="cache-age">{{ formatCacheAge(cachedAt) }}</span>
+        <button class="header-btn" @click="openMaterialPanel">
+          📚 素材库 ({{ materials.length }})
+        </button>
+        <button class="close-btn" @click="emit('close')">×</button>
+      </div>
     </div>
 
+    <!-- Toolbar -->
     <div class="toolbar">
-      <button class="tool-btn primary" @click="showCreateModal = true">
-        + 添加主题
+      <div class="search-input-wrapper">
+        <input
+          v-model="searchQuery"
+          type="text"
+          class="search-input"
+          placeholder="搜索热榜话题..."
+        />
+      </div>
+      <button class="tool-btn primary" :disabled="loading" @click="loadHotList(true)">
+        {{ loading ? '抓取中...' : '🔄 刷新热榜' }}
       </button>
-      <button class="tool-btn" :disabled="inferring" @click="handleInferDirections">
-        {{ inferring ? '推断中...' : '🔮 推断方向' }}
-      </button>
-      <button class="tool-btn" @click="showSentinelBrief()">
-        📰 简报
-      </button>
+      <span class="status-tag" :class="{ mock: isMockData }">
+        {{ isMockData ? '兜底数据' : '实时数据' }}
+      </span>
     </div>
 
-    <div v-if="loading && topics.length === 0" class="empty-state">加载中...</div>
-    <div v-else-if="topics.length === 0" class="empty-state">
-      暂无监控主题
-      <br />
-      <span class="empty-hint">点击"添加主题"或"推断方向"开始</span>
+    <div v-if="isMockData" class="mock-notice">
+      接口不通或被 CORS 拦截，已切换到本地兜底数据。点击仍可生成破题灵感。
     </div>
 
-    <div class="topic-list">
+    <div v-if="loading && hotList.length === 0" class="empty-state">加载中...</div>
+    <div v-else-if="hotList.length === 0" class="empty-state">
+      暂无热榜数据
+      <span class="empty-hint">点击「刷新热榜」试试</span>
+    </div>
+    <div v-else-if="filteredHotList.length === 0" class="empty-state">
+      未找到匹配的热点话题
+    </div>
+
+    <!-- Hot List -->
+    <div v-else class="hot-list">
       <div
-        v-for="topic in topics"
-        :key="topic.id"
-        class="topic-card"
-        :class="{ inactive: !topic.isActive, expanded: expandedTopic === topic.id }"
+        v-for="(item, idx) in filteredHotList"
+        :key="item.id"
+        class="hot-card"
+        :class="{ expanded: expandedId === item.id }"
       >
-        <div class="topic-header" @click="toggleTopic(topic.id || '')">
-          <div class="topic-main">
-            <span class="topic-name">{{ topic.name }}</span>
-            <span v-if="unreadCount(topic.id || '') > 0" class="unread-badge">
-              {{ unreadCount(topic.id || '') }}
-            </span>
+        <div class="hot-header" @click="toggleItem(item)">
+          <div class="hot-thumb-wrap">
+            <img
+              v-if="item.thumbnail"
+              :src="item.thumbnail"
+              class="hot-thumb"
+              alt=""
+              loading="lazy"
+              @error="(e) => { const t = e.target as HTMLImageElement | null; if (t) t.style.display = 'none'; }"
+            />
+            <div v-else class="hot-thumb-placeholder">📰</div>
           </div>
-          <div class="topic-meta">
-            <span class="topic-freq">{{ frequencyLabel(topic.frequency) }}</span>
-            <span class="topic-sources">{{ topic.sources }}</span>
-            <span class="topic-last-check">{{ formatDate(topic.lastCheckAt) }}</span>
-          </div>
-        </div>
-
-        <div class="topic-keywords">
-          <span v-for="kw in topic.keywords" :key="kw" class="keyword-tag">{{ kw }}</span>
-        </div>
-
-        <div class="topic-actions">
-          <button class="action-link" @click.stop="toggleTopicActive(topic)">
-            {{ topic.isActive ? '暂停' : '启用' }}
-          </button>
-          <button class="action-link" @click.stop="runManualCheck(topic)">
-            手动检查
-          </button>
-          <button class="action-link danger" @click.stop="handleDeleteTopic(topic.id || '')">
-            删除
-          </button>
-        </div>
-
-        <!-- Expanded paper list -->
-        <div v-if="expandedTopic === topic.id" class="paper-list">
-          <div
-            v-for="paper in papers.get(topic.id || '') || []"
-            :key="paper.id"
-            class="paper-item"
-            :class="{ read: paper.isRead, ignored: paper.isIgnored }"
-          >
-            <div class="paper-title">{{ paper.title }}</div>
-            <div class="paper-authors">{{ paper.authors }}</div>
-            <div class="paper-actions">
-              <button
-                v-if="paper.url"
-                class="paper-link"
-                @click.stop="openUrl(paper.url)"
-              >查看原文</button>
-              <button
-                v-if="!paper.isRead"
-                class="paper-action"
-                @click.stop="markPaper(paper.id || 0, { isRead: true })"
-              >
-                标记已读
-              </button>
-              <button
-                class="paper-action ignore"
-                @click.stop="markPaper(paper.id || 0, { isIgnored: true })"
-              >
-                忽略
-              </button>
+          <div class="hot-body">
+            <div class="hot-title-line">
+              <span class="hot-rank" :class="{ 'top-three': idx < 3 }">{{ idx + 1 }}</span>
+              <span class="hot-title">{{ item.title }}</span>
+            </div>
+            <div v-if="item.excerpt" class="hot-excerpt">{{ item.excerpt }}</div>
+            <div class="hot-meta">
+              <span class="hot-heat">{{ item.heat }}</span>
             </div>
           </div>
-          <div
-            v-if="(papers.get(topic.id || '') || []).length === 0"
-            class="paper-empty"
-          >
-            暂无新论文
+          <span class="expand-indicator">{{ expandedId === item.id ? '−' : '+' }}</span>
+        </div>
+
+        <!-- Expanded Actions -->
+        <div v-if="expandedId === item.id" class="hot-actions">
+          <div class="action-row">
+            <button
+              class="action-main-btn"
+              :disabled="ideationLoading.has(item.id)"
+              @click.stop="analyzeAngles(item)"
+            >
+              {{ ideationLoading.has(item.id) ? '拆解中...' : '🔍 拆解角度' }}
+            </button>
+            <button
+              class="action-main-btn secondary"
+              :disabled="isInMaterials(item.title)"
+              @click.stop="quickAddToMaterial(item)"
+            >
+              {{ isInMaterials(item.title) ? '✓ 已加入' : '📚 加入素材库' }}
+            </button>
+            <button v-if="item.url" class="action-link-btn" @click.stop="openUrl(item.url)">🔗 打开</button>
+            <button v-if="item.url" class="action-link-btn" @click.stop="copyText(item.url)">📋 复制链接</button>
+          </div>
+
+          <!-- Ideation Result -->
+          <div v-if="ideationLoading.has(item.id)" class="ideation-loading">
+            <span class="spinner"></span>
+            <span>正在为你拆解创作角度...</span>
+          </div>
+
+          <div v-else-if="ideationError.has(item.id)" class="ideation-error">
+            生成失败：{{ ideationError.get(item.id) }}
+            <button class="retry-btn" @click.stop="analyzeAngles(item)">重试</button>
+          </div>
+
+          <div v-else-if="ideationCache.has(item.id)" class="ideation-content">
+            <pre class="ideation-text">{{ ideationCache.get(item.id) }}</pre>
+            <div class="ideation-footer">
+              <button class="action-link-btn" @click.stop="copyText(ideationCache.get(item.id) || '')">📋 复制</button>
+              <button
+                class="action-link-btn"
+                :disabled="isInMaterials(item.title)"
+                @click.stop="addIdeationToMaterial(item)"
+              >
+                {{ isInMaterials(item.title) ? '✓ 已加入素材库' : '📚 将拆解加入素材库' }}
+              </button>
+            </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Create topic modal -->
-    <div v-if="showCreateModal" class="modal-overlay" @click="showCreateModal = false">
-      <div class="modal-content" @click.stop>
-        <h3>添加监控主题</h3>
-        <div class="form-group">
-          <label>主题名称</label>
-          <input v-model="newTopicName" type="text" placeholder="例如：多模态大模型幻觉检测" />
+    <!-- Material Panel Overlay -->
+    <div v-if="showMaterialPanel" class="panel-overlay" @click.self="closeMaterialPanel">
+      <div class="material-panel">
+        <div class="panel-header">
+          <h3>📚 热点素材库</h3>
+          <button class="close-btn" @click="closeMaterialPanel">×</button>
         </div>
-        <div class="form-group">
-          <label>关键词（逗号分隔）</label>
-          <input
-            v-model="newTopicKeywords"
-            type="text"
-            placeholder="multimodal, hallucination, vision-language"
-          />
+
+        <div v-if="materials.length === 0" class="panel-empty">
+          暂无素材，在热榜中点击「加入素材库」即可收录。
         </div>
-        <div class="form-group">
-          <label>数据源</label>
-          <select v-model="newTopicSources">
-            <option value="arxiv">arXiv</option>
-            <option value="semantic_scholar">Semantic Scholar</option>
-            <option value="arxiv,semantic_scholar">arXiv + Semantic Scholar</option>
-          </select>
+
+        <div v-else class="material-list">
+          <div
+            v-for="m in materials"
+            :key="m.id"
+            class="material-row"
+            :class="{ selected: selectedMaterialIds.has(m.id) }"
+            @click="toggleMaterialSelection(m.id)"
+          >
+            <div class="material-check">
+              <span v-if="selectedMaterialIds.has(m.id)">☑</span>
+              <span v-else>☐</span>
+            </div>
+            <div class="material-info">
+              <div class="material-title">{{ m.title }}</div>
+              <div v-if="m.summary" class="material-desc">{{ m.summary }}</div>
+              <div v-if="m.angles" class="material-tags">
+                <span v-for="(angle, idx) in m.angles.slice(0, 2)" :key="idx" class="tag">{{ angle.slice(0, 24) }}...</span>
+              </div>
+            </div>
+            <button class="material-del" @click.stop="removeMaterial(m.id)">×</button>
+          </div>
         </div>
-        <div class="form-group">
-          <label>检查频率</label>
-          <select v-model="newTopicFrequency">
-            <option value="6h">每6小时</option>
-            <option value="1d">每天</option>
-            <option value="3d">每3天</option>
-            <option value="1w">每周</option>
-          </select>
+
+        <div v-if="materials.length > 0" class="panel-toolbar">
+          <span class="panel-count">已选 {{ selectedMaterials.length }} / {{ materials.length }} 条</span>
+          <div class="panel-actions">
+            <button
+              class="toolbar-btn"
+              :disabled="selectedMaterials.length === 0 || aiResultLoading"
+              @click="generateSummary"
+            >
+              {{ aiResultLoading && aiResultType === 'summary' ? '生成中...' : '🔥 热点总结' }}
+            </button>
+            <button
+              class="toolbar-btn"
+              :disabled="selectedMaterials.length === 0 || aiResultLoading"
+              @click="generateInspiration"
+            >
+              {{ aiResultLoading && aiResultType === 'inspiration' ? '生成中...' : '💡 创作灵感' }}
+            </button>
+          </div>
         </div>
-        <div class="modal-actions">
-          <button class="btn-secondary" @click="showCreateModal = false">取消</button>
-          <button class="btn-primary" :disabled="!newTopicName.trim() || !newTopicKeywords.trim()" @click="handleCreateTopic">
-            创建
-          </button>
+
+        <div v-if="materialSummary || materialInspiration" class="ai-result">
+          <h4 v-if="materialSummary">🔥 热点总结</h4>
+          <pre v-if="materialSummary">{{ materialSummary }}</pre>
+          <h4 v-if="materialInspiration">💡 创作灵感</h4>
+          <pre v-if="materialInspiration">{{ materialInspiration }}</pre>
         </div>
       </div>
     </div>
@@ -489,8 +459,10 @@ const formatDate = (timestamp?: number | null): string => {
   flex-direction: column;
   overflow: hidden;
   border-left: 1px solid var(--border-subtle);
+  position: relative;
 }
 
+/* Header */
 .sidebar-header {
   display: flex;
   align-items: center;
@@ -505,6 +477,34 @@ const formatDate = (timestamp?: number | null): string => {
   font-size: 0.9rem;
   font-weight: 600;
   color: var(--text-primary);
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.cache-age {
+  font-size: 0.65rem;
+  color: var(--text-dim);
+}
+
+.header-btn {
+  font-size: 0.7rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--border-light);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.header-btn:hover {
+  background: var(--accent-subtle);
+  border-color: var(--accent-border);
+  color: var(--accent);
 }
 
 .close-btn {
@@ -528,9 +528,11 @@ const formatDate = (timestamp?: number | null): string => {
   color: var(--text-primary);
 }
 
+/* Toolbar */
 .toolbar {
   display: flex;
   gap: 0.5rem;
+  align-items: center;
   padding: 0.75rem 1rem;
   border-bottom: 1px solid var(--border-subtle);
 }
@@ -565,6 +567,57 @@ const formatDate = (timestamp?: number | null): string => {
   cursor: not-allowed;
 }
 
+.search-input-wrapper {
+  flex: 1;
+  min-width: 0;
+}
+
+.search-input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  background: var(--bg-input);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-md);
+  color: var(--text-primary);
+  font-size: 0.8125rem;
+  font-family: var(--font-body);
+  outline: none;
+  transition: border-color var(--transition-base), box-shadow var(--transition-base);
+}
+
+.search-input:focus {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--accent-subtle);
+}
+
+.search-input::placeholder {
+  color: var(--text-dim);
+}
+
+.status-tag {
+  font-size: 0.7rem;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: rgba(52, 168, 83, 0.15);
+  color: #2e7d32;
+  font-weight: 600;
+}
+
+.status-tag.mock {
+  background: rgba(251, 188, 5, 0.18);
+  color: #b45309;
+}
+
+.mock-notice {
+  padding: 0.55rem 1rem;
+  background: rgba(251, 188, 5, 0.08);
+  color: #b45309;
+  font-size: 0.72rem;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
 .empty-state {
   text-align: center;
   padding: 2rem 1rem;
@@ -579,297 +632,484 @@ const formatDate = (timestamp?: number | null): string => {
   display: block;
 }
 
-.topic-list {
+/* Hot List */
+.hot-list {
   flex: 1;
   overflow-y: auto;
   padding: 0.5rem;
 }
 
-.topic-card {
+.hot-card {
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   border-radius: 10px;
-  padding: 0.75rem;
   margin-bottom: 0.5rem;
-  cursor: pointer;
+  overflow: hidden;
   transition: all 0.15s ease;
 }
 
-.topic-card:hover {
-  background: var(--bg-card-hover);
+.hot-card:hover {
   border-color: var(--border-light);
 }
 
-.topic-card.inactive {
-  opacity: 0.6;
-}
-
-.topic-card.expanded {
+.hot-card.expanded {
   border-color: var(--accent-border);
+  background: var(--bg-elevated);
 }
 
-.topic-header {
+.hot-header {
   display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.topic-main {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.topic-name {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.unread-badge {
-  background: var(--error);
-  color: var(--text-on-accent);
-  font-size: 0.65rem;
-  font-weight: 700;
-  padding: 1px 6px;
-  border-radius: 10px;
-  min-width: 16px;
-  text-align: center;
-}
-
-.topic-meta {
-  display: flex;
-  gap: 0.5rem;
-  font-size: 0.7rem;
-  color: var(--text-dim);
-}
-
-.topic-freq {
-  font-family: 'JetBrains Mono', monospace;
-}
-
-.topic-sources {
-  color: var(--accent-text);
-}
-
-.topic-keywords {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem;
-  margin-top: 0.4rem;
-}
-
-.keyword-tag {
-  font-size: 0.7rem;
-  padding: 2px 8px;
-  background: rgba(26, 115, 232, 0.15);
-  border: 1px solid rgba(26, 115, 232, 0.2);
-  border-radius: 4px;
-  color: var(--accent);
-}
-
-.topic-actions {
-  display: flex;
-  gap: 0.75rem;
-  margin-top: 0.5rem;
-}
-
-.action-link {
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  font-size: 0.72rem;
+  align-items: flex-start;
+  gap: 0.55rem;
+  padding: 0.6rem 0.7rem;
   cursor: pointer;
-  padding: 0;
-  transition: color 0.15s ease;
+  transition: background 0.15s ease;
 }
 
-.action-link:hover {
-  color: var(--accent);
-}
-
-.action-link.danger:hover {
-  color: var(--error);
-}
-
-.paper-list {
-  margin-top: 0.75rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid var(--border-subtle);
-}
-
-.paper-item {
-  padding: 0.6rem;
-  background: var(--bg-surface);
-  border-radius: 6px;
-  margin-bottom: 0.4rem;
-}
-
-.paper-item.read {
-  opacity: 0.6;
-}
-
-.paper-item.ignored {
-  opacity: 0.3;
-}
-
-.paper-title {
-  font-size: 0.78rem;
-  color: var(--text-primary);
-  line-height: 1.4;
-  margin-bottom: 0.2rem;
-}
-
-.paper-authors {
-  font-size: 0.7rem;
-  color: var(--text-muted);
-  margin-bottom: 0.3rem;
-}
-
-.paper-actions {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.paper-link,
-.paper-action {
-  font-size: 0.7rem;
-  padding: 2px 8px;
-  border-radius: 4px;
-  cursor: pointer;
-  text-decoration: none;
-  transition: all 0.15s ease;
-}
-
-.paper-link {
-  background: var(--accent-subtle);
-  border: 1px solid var(--accent-border);
-  color: var(--accent);
-}
-
-.paper-link:hover {
-  background: var(--accent-border);
-}
-
-.paper-action {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-light);
-  color: var(--text-secondary);
-  border: none;
-}
-
-.paper-action:hover {
+.hot-header:hover {
   background: var(--bg-card-hover);
 }
 
-.paper-action.ignore:hover {
-  background: rgba(234, 67, 53, 0.15);
-  color: var(--error);
+.hot-thumb-wrap {
+  flex-shrink: 0;
 }
 
-.paper-empty {
+.hot-thumb {
+  width: 48px;
+  height: 48px;
+  border-radius: 6px;
+  object-fit: cover;
+  background: var(--bg-surface);
+}
+
+.hot-thumb-placeholder {
+  width: 48px;
+  height: 48px;
+  border-radius: 6px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+}
+
+.hot-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.hot-title-line {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.15rem;
+}
+
+.hot-rank {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-muted);
+  background: var(--bg-card-hover);
+  border-radius: 4px;
+}
+
+.hot-rank.top-three {
+  background: linear-gradient(135deg, #ff6b35 0%, #f72585 100%);
+  color: #fff;
+}
+
+.hot-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.hot-excerpt {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  margin-bottom: 0.1rem;
+}
+
+.hot-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.hot-heat {
+  font-size: 0.7rem;
+  color: #ff6b35;
+  font-weight: 600;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.expand-indicator {
+  flex-shrink: 0;
+  font-size: 1.1rem;
+  color: var(--text-muted);
+  width: 18px;
   text-align: center;
-  padding: 1rem;
-  color: var(--text-dim);
-  font-size: 0.75rem;
+  user-select: none;
+  margin-top: 0.1rem;
 }
 
-/* Modal */
-.modal-overlay {
-  position: fixed;
+/* Expanded actions */
+.hot-actions {
+  padding: 0.6rem 0.75rem;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--bg-base);
+}
+
+.action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
+}
+
+.action-main-btn {
+  font-size: 0.72rem;
+  padding: 0.35rem 0.7rem;
+  border-radius: 6px;
+  border: 1px solid var(--accent-border);
+  background: var(--accent-subtle);
+  color: var(--accent);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.action-main-btn:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--text-on-accent);
+}
+
+.action-main-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.action-main-btn.secondary {
+  background: var(--bg-surface);
+  border-color: var(--border-light);
+  color: var(--text-secondary);
+}
+
+.action-main-btn.secondary:hover:not(:disabled) {
+  background: var(--bg-card-hover);
+  border-color: var(--border-medium);
+  color: var(--text-primary);
+}
+
+.action-link-btn {
+  font-size: 0.68rem;
+  padding: 0.3rem 0.5rem;
+  border-radius: 4px;
+  border: 1px solid var(--border-light);
+  background: var(--bg-surface);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.action-link-btn:hover {
+  background: var(--accent-subtle);
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+
+/* Ideation */
+.ideation-loading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  padding: 0.5rem 0;
+}
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--border-light);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.ideation-error {
+  color: var(--error);
+  font-size: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.5rem 0;
+}
+
+.retry-btn {
+  align-self: flex-start;
+  padding: 0.3rem 0.7rem;
+  background: var(--accent-subtle);
+  border: 1px solid var(--accent-border);
+  border-radius: 6px;
+  color: var(--accent);
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+
+.retry-btn:hover {
+  background: var(--accent-border);
+}
+
+.ideation-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.ideation-text {
+  margin: 0;
+  padding: 0.65rem 0.8rem;
+  background: var(--bg-surface);
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+  font-size: 0.76rem;
+  line-height: 1.65;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.ideation-footer {
+  display: flex;
+  gap: 0.5rem;
+}
+
+/* Material Panel */
+.panel-overlay {
+  position: absolute;
   inset: 0;
   background: var(--bg-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 200;
+  z-index: 50;
 }
 
-.modal-content {
+.material-panel {
   background: var(--bg-elevated);
   border: 1px solid var(--border-light);
-  border-radius: 16px;
-  padding: 1.25rem;
-  width: 320px;
+  border-radius: 14px;
+  padding: 1rem;
+  width: 380px;
+  max-height: 85vh;
+  overflow-y: auto;
   box-shadow: var(--shadow-xl);
 }
 
-.modal-content h3 {
-  margin: 0 0 1rem;
-  color: var(--text-primary);
-  font-size: 0.95rem;
-  font-weight: 700;
-}
-
-.form-group {
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   margin-bottom: 0.75rem;
 }
 
-.form-group label {
-  display: block;
-  color: var(--text-secondary);
-  font-size: 0.75rem;
-  font-weight: 600;
-  margin-bottom: 0.3rem;
+.panel-header h3 {
+  margin: 0;
+  font-size: 0.95rem;
 }
 
-.form-group input,
-.form-group select {
-  width: 100%;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-light);
-  border-radius: 8px;
-  padding: 0.55rem 0.75rem;
-  color: var(--text-primary);
-  font-size: 0.82rem;
-  outline: none;
+.panel-empty {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: var(--text-muted);
+  font-size: 0.8rem;
 }
 
-.form-group input:focus,
-.form-group select:focus {
-  border-color: var(--border-focus);
-}
-
-.modal-actions {
+.material-list {
   display: flex;
-  gap: 0.75rem;
-  justify-content: flex-end;
-  margin-top: 1rem;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-height: 280px;
+  overflow-y: auto;
 }
 
-.btn-secondary {
-  padding: 0.5rem 1rem;
+.material-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.55rem 0.5rem;
+  border-radius: 8px;
   background: var(--bg-surface);
-  border: 1px solid var(--border-light);
-  border-radius: 8px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.material-row:hover {
+  border-color: var(--border-light);
+}
+
+.material-row.selected {
+  border-color: var(--accent-border);
+  background: var(--accent-subtle);
+}
+
+.material-check {
+  font-size: 1rem;
+  line-height: 1;
+  margin-top: 0.1rem;
+  flex-shrink: 0;
+}
+
+.material-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.material-title {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.material-desc {
+  font-size: 0.68rem;
   color: var(--text-secondary);
-  font-size: 0.82rem;
-  cursor: pointer;
-  transition: background 0.2s ease;
+  margin-top: 0.1rem;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
 }
 
-.btn-secondary:hover {
+.material-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-top: 0.2rem;
+}
+
+.tag {
+  font-size: 0.6rem;
+  padding: 0.08rem 0.3rem;
   background: var(--bg-card-hover);
+  border-radius: 4px;
+  color: var(--text-dim);
 }
 
-.btn-primary {
-  padding: 0.5rem 1rem;
-  background: var(--accent);
+.material-del {
+  background: none;
   border: none;
-  border-radius: 8px;
-  color: var(--text-on-accent);
-  font-size: 0.82rem;
-  font-weight: 700;
+  color: var(--text-dim);
+  font-size: 1rem;
   cursor: pointer;
-  transition: opacity 0.2s ease;
+  padding: 0 0.2rem;
+  line-height: 1;
+  flex-shrink: 0;
+  transition: color 0.15s ease;
 }
 
-.btn-primary:hover {
-  opacity: 0.9;
+.material-del:hover {
+  color: var(--error);
 }
 
-.btn-primary:disabled {
+.panel-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 0.6rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.panel-count {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+}
+
+.panel-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.toolbar-btn {
+  font-size: 0.72rem;
+  padding: 0.35rem 0.7rem;
+  border-radius: 6px;
+  border: 1px solid var(--accent-border);
+  background: var(--accent-subtle);
+  color: var(--accent);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.toolbar-btn:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--text-on-accent);
+}
+
+.toolbar-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.ai-result {
+  margin-top: 0.6rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.ai-result h4 {
+  margin: 0 0 0.4rem;
+  font-size: 0.82rem;
+  color: var(--text-primary);
+}
+
+.ai-result pre {
+  margin: 0 0 0.6rem;
+  padding: 0.6rem;
+  background: var(--bg-surface);
+  border-radius: 8px;
+  font-size: 0.76rem;
+  line-height: 1.65;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 180px;
+  overflow-y: auto;
 }
 </style>

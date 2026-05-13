@@ -4,6 +4,7 @@ import { emit, listen } from '@tauri-apps/api/event';
 import { loadSettings, saveSettings } from '../composables/useDatabase';
 import { setIncognitoMode } from '../composables/useEvents';
 import { setEmbedderMirrorUrl } from '../utils/embedder';
+import { DEFAULT_TEXT_CONFIG, DEFAULT_VISION_CONFIG } from '../config/apiSecrets';
 
 /**
  * Tauri event broadcast whenever settings are persisted in any window.
@@ -332,17 +333,19 @@ export const providerPresets: ProviderPreset[] = [
 ];
 
 const createDefaultConfig = (): AIConfig => {
+  // 默认配置不携带内置 API key，避免暴露在 UI 上。
+  // 内置 API 仅在 aiClient 检测到用户未配置时作为后台 fallback 使用。
   const textConfig: ModelConfig = {
-    provider: 'openai',
-    baseUrl: 'https://api.openai.com/v1',
+    provider: 'custom',
+    baseUrl: '',
     apiKey: '',
-    model: 'gpt-4o'
+    model: '',
   };
   const visionConfig: ModelConfig = {
-    provider: 'openai',
-    baseUrl: 'https://api.openai.com/v1',
+    provider: 'custom',
+    baseUrl: '',
     apiKey: '',
-    model: 'gpt-4o'
+    model: '',
   };
   return {
     textConfig,

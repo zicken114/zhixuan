@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue';
-import { listen } from '@tauri-apps/api/event';
+import { listen, emit } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import { aiClient } from '../utils/aiClient';
 import { marked } from 'marked';
@@ -28,6 +28,7 @@ const clipboardText = ref('');
 const isProcessing = ref(false);
 const currentAppType = ref<string>('unknown');
 const processingActionLabel = ref('');
+const processingActionIcon = ref('');
 const processingInput = ref('');
 const processingOutput = ref('');
 const menuContentRef = ref<HTMLElement | null>(null);
@@ -72,7 +73,6 @@ const baseMenuItems = [
   { icon: '💬', label: 'Chat', action: 'chat' },
   { icon: '🕵️', label: '"杠精"视角审视', action: 'translate' },
   { icon: '📖', label: '盐选脑洞扩写', action: 'clean' },
-  { icon: '📜', label: 'History', action: 'history' },
 ];
 
 // Citation format correction state
@@ -93,12 +93,21 @@ const menuItems = computed(() => {
   if (currentAppType.value === 'pdf_reader') {
     items.splice(2, 0, { icon: '📄', label: 'Generate Note', action: 'reading_note' });
   }
+  // 固定功能区域
+  items.push(
+    { icon: '🔥', label: 'Hot Rankings', action: 'sentinel' },
+    { icon: '📚', label: 'Story Library', action: 'knowledge' },
+    { icon: '📸', label: 'Screenshot', action: 'screenshot' },
+  );
+
   // Show save to Obsidian when clipboard has text and vault is configured
   if (clipboardText.value.trim() && settingsStore.config.externalTools.obsidianVaultPath) {
     items.push({ icon: '📝', label: 'Save to Obsidian', action: 'save_to_obsidian' });
   }
+
+  // 末尾固定顺序：历史记录 → 设置 → 退出
   items.push(
-    { icon: '📸', label: 'Screenshot', action: 'screenshot' },
+    { icon: '📜', label: 'History', action: 'history' },
     { icon: '⚙️', label: 'Settings', action: 'settings' },
     { icon: '⏻', label: 'Exit', action: 'exit' }
   );
@@ -111,6 +120,8 @@ const menuLabelKeyMap: Record<string, string> = {
   clean: 'popup.clean',
   citation: 'popup.formatCitation',
   history: 'popup.history',
+  sentinel: 'popup.sentinel',
+  knowledge: 'popup.knowledge',
   polish: 'popup.polish',
   recommend_citation: 'popup.recommendCitation',
   fix_citation: 'popup.fixCitationFormat',
@@ -267,6 +278,19 @@ const handleAction = async (action: string) => {
     return;
   }
 
+  if (action === 'sentinel') {
+    await showSentinelBrief();
+    await hideCurrent();
+    return;
+  }
+
+  if (action === 'knowledge') {
+    await emit('show-knowledge-panel');
+    await showWindow('main');
+    await hideCurrent();
+    return;
+  }
+
   if (isProcessing.value) return;
 
   if (!clipboardText.value.trim()) {
@@ -281,6 +305,7 @@ const handleAction = async (action: string) => {
   processingActionLabel.value = currentItem
     ? getMenuItemLabel(currentItem.action, currentItem.label)
     : action;
+  processingActionIcon.value = currentItem?.icon || '';
   processingInput.value = clipboardText.value;
   processingOutput.value = '';
 
@@ -325,6 +350,7 @@ const handleAction = async (action: string) => {
       popupHistoryStore.addItem({
         actionType,
         actionLabel: processingActionLabel.value,
+        actionIcon: processingActionIcon.value || undefined,
         inputText: clipboardText.value,
         outputText: outputTextForHistory
       });
@@ -390,7 +416,11 @@ const handleTranslate = async () => {
   const sourceLabel = supportedLanguages.find(l => l.code === sourceLang)?.label || sourceLang;
   const targetLabel = supportedLanguages.find(l => l.code === targetLang)?.label || targetLang;
 
-  const systemPrompt = "你现在扮演知乎评论区最严格的'逻辑杠精'。请审视用户提供的这段文字，指出其中可能存在的：1. 逻辑漏洞；2. 幸存者偏差；3. 容易被网友攻击的靶点。最后给出 1-2 条修改建议，帮助作者让这段论述无懈可击。语气可以稍微犀利一点，但最终目的是帮助作者完善文章。";
+  const systemPrompt = `你是刘看山，知乎的官方吉祥物，一只来自北极的小狐狸。说话带点俏皮和热心，偶尔自嘲一下，会随口冒出几个知乎梗，比如"谢邀""利益相关""抖个机灵""先问是不是再问为什么""这是个好问题"之类的，恰到好处就行。
+
+现在我来当你的逻辑审查员，帮你看看这段文字里有啥漏洞：逻辑哪里不对、有没有幸存者偏差、网友会从哪个角度杠你。最后给你 1-2 条修改建议，让你的论述无懈可击。
+
+自称"我"，叫用户"你"。说话要像真人，自然流畅，不要出现星号、井号、列表编号这些 markdown 符号，直接输出纯文字。`;
 
   const messages = [
     { role: 'system' as const, content: systemPrompt },
@@ -416,7 +446,11 @@ const handleCleanToWord = async () => {
     const messages = [
       {
         role: 'system' as const,
-        content: '你是知乎盐选专栏的金牌小说作者，悬疑、脑洞、反转类是你的拿手好戏。根据用户给的东西，扩写成一段 300 字左右的盐选小说高潮或开头，悬念要足，画面感要强，结尾卡在最勾人的地方。像真人写小说一样自然，不要出现星号、井号、列表编号这些 markdown 符号。'
+        content: `你是刘看山，知乎的官方吉祥物，一只来自北极的小狐狸。说话带点俏皮和热心，偶尔自嘲一下，会随口冒出几个知乎梗，比如"谢邀""利益相关""抖个机灵""先问是不是再问为什么""这是个好问题"之类的，恰到好处就行。
+
+现在我来帮你写盐选小说片段。根据你给的内容，扩写成一段 300 字左右的高潮或开头，悬念要足，画面感要强，结尾卡在最勾人的地方。用知乎盐选的风格来写，别太端着，像真人讲故事一样。
+
+自称"我"，叫用户"你"。说话要像真人，自然流畅，不要出现星号、井号、列表编号这些 markdown 符号，直接输出纯文字。`
       },
       { role: 'user' as const, content: clipboardText.value }
     ];
@@ -448,7 +482,11 @@ const handlePolish = async () => {
     const messages = [
       {
         role: 'system' as const,
-        content: '你是知乎百万粉大V，改文案是你的绝活。把用户给的内容改成知乎高赞风格，适当来点"谢邀""利益相关"这种知乎味儿。结构上就按知乎套路来：先抛观点，再展开说，最后上个金句收尾。语气要专业但别端着，怎么接地气怎么来。直接输出改写后的内容，别废话，也别用星号、井号、列表编号这些 markdown 符号，纯文字输出。'
+        content: `你是刘看山，知乎的官方吉祥物，一只来自北极的小狐狸。说话带点俏皮和热心，偶尔自嘲一下，会随口冒出几个知乎梗，比如"谢邀""利益相关""抖个机灵""先问是不是再问为什么""这是个好问题"之类的，恰到好处就行。
+
+现在我来帮你改文案。把这段内容改成知乎高赞风格，结构上按知乎套路来：先抛观点，再展开说，最后上个金句收尾。语气要接地气，别端着。
+
+自称"我"，叫用户"你"。说话要像真人，自然流畅，不要出现星号、井号、列表编号这些 markdown 符号，直接输出纯文字。`
       },
       { role: 'user' as const, content: clipboardText.value }
     ];
@@ -558,7 +596,11 @@ const handleReadingNote = async () => {
     const messages = [
       {
         role: 'system' as const,
-        content: 'You are a research reading assistant. Given a text excerpt from an academic paper, generate a structured reading note in Markdown format. Include: (1) Key Points, (2) Critical Analysis, (3) Connections to broader field, (4) Questions raised. Be concise but insightful. Output in the same language as the input text.'
+        content: `你是刘看山，知乎的官方吉祥物，一只来自北极的小狐狸。说话带点俏皮和热心，偶尔自嘲一下，会随口冒出几个知乎梗，比如"谢邀""利益相关""抖个机灵""先问是不是再问为什么""这是个好问题"之类的，恰到好处就行。
+
+现在我来帮你做阅读笔记。看完这段文字后，提炼核心观点、分析一下有没有什么值得推敲的地方、跟更大的领域有啥联系、还有啥问题值得追问。简洁但有深度。
+
+自称"我"，叫用户"你"。说话要像真人，自然流畅，不要出现星号、井号、列表编号这些 markdown 符号，直接输出纯文字。用中文回答。`
       },
       {
         role: 'user' as const,
@@ -652,7 +694,7 @@ const handleRecommendCitation = async () => {
     generateReasonsForResults(clipboardText.value);
   } catch (e: any) {
     console.error('[Citation Recommend] Failed:', e);
-    progressLabel.value = `文献推荐失败: ${e?.message || t('common.unknownError')}`;
+    progressLabel.value = `引用推荐失败: ${e?.message || t('common.unknownError')}`;
   } finally {
     citationLoading.value = false;
     stopProgress();
@@ -727,7 +769,9 @@ const generateReasonForItem = async (item: any, userText: string) => {
     const messages = [
       {
         role: 'system' as const,
-        content: 'You are a research assistant. Given a paper and a user\'s writing context, generate a single concise sentence (max 20 words) explaining why this paper is relevant to cite. Respond in the same language as the user\'s writing context. Only return the reason sentence, no extra text.'
+        content: `你是刘看山，知乎的官方吉祥物，一只来自北极的小狐狸。说话带点俏皮和热心。
+
+现在我来帮你看这条引用跟你的上下文有啥关系。用一句话说明，别超过 30 个字，直接输出这句话，不加多余解释。`
       },
       {
         role: 'user' as const,
@@ -976,9 +1020,9 @@ const cancelProgress = async () => {
         <span class="citation-title">📖 {{ t('popup.recommendedCitations') }}</span>
         <button class="citation-close" @click="closeCitations">✕</button>
       </div>
-      <div v-if="citationLoading" class="citation-loading">搜索文献中...</div>
+      <div v-if="citationLoading" class="citation-loading">搜索引用中...</div>
       <div v-else-if="citationResults.length === 0" class="citation-empty">
-        暂无匹配的文献推荐。
+        暂无匹配的引用推荐。
       </div>
       <div v-else class="citation-list">
         <div

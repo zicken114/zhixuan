@@ -30,7 +30,6 @@ import KnowledgePanel from '../components/KnowledgePanel.vue';
 import ChatMessageList from '../components/ChatMessageList.vue';
 import ChatInputArea from '../components/ChatInputArea.vue';
 import TodoPanel from '../components/TodoPanel.vue';
-import LiteratureSidebar from '../components/LiteratureSidebar.vue';
 import WritingHistoryPanel from '../components/WritingHistoryPanel.vue';
 import SentinelPanel from '../components/SentinelPanel.vue';
 import ExperimentPanel from '../components/ExperimentPanel.vue';
@@ -58,7 +57,6 @@ const showSettings = ref(false);
 const showHistory = ref(false);
 const showKnowledge = ref(false);
 const showTodos = ref(false);
-const showLiterature = ref(false);
 const showWritingHistory = ref(false);
 const showSentinel = ref(false);
 const showExperiment = ref(false);
@@ -142,6 +140,11 @@ onMounted(async () => {
   // Phase 0.1: Listen for window activity changes (for testing / future use)
   await listen('window:activity-changed', (event) => {
     console.log('[WindowActivity]', event.payload);
+  });
+
+  // Listen for show-knowledge-panel event from popup window
+  await listen('show-knowledge-panel', () => {
+    showKnowledge.value = true;
   });
 
   // Test: fetch current window info once on mount
@@ -358,15 +361,6 @@ const sendMessage = async () => {
   // 0. Persona — 刘看山,知乎吉祥物(注入全局人设)
   let systemContent = LIUKANSHAN_PERSONA + '\n\n';
 
-  // 1. Todo extraction instruction (Phase 1.1)
-  systemContent += `If the user expresses an intention to do something later (e.g., "I will try...", "I need to...", "I should...", "let me check..."), append a todo suggestion block at the very end of your response using this exact format:
-
-[TODOS]
-- <concise todo description>
-[/TODOS]
-
-Only include this block when there is a clear future action. Keep each todo under 15 words. Do NOT include the block if there is no actionable item.\n\n`;
-
   // 2. Conversation History Summaries (Phase 1.1)
   try {
     const summaries = await loadRecentConversationSummaries(
@@ -403,18 +397,6 @@ Only include this block when there is a clear future action. Keep each todo unde
       }
     } catch (e) {
       console.warn('[KB] Retrieval failed, continuing without context:', e);
-    }
-  }
-
-  // 4. Pending todos reminder (Phase 1.1)
-  if (currentProject) {
-    const pendingTodos = projectStore.todos.filter((t) => t.status === 'pending');
-    if (pendingTodos.length > 0) {
-      const todoText = pendingTodos
-        .slice(0, 3)
-        .map((t, i) => `${i + 1}. ${t.content}`)
-        .join('\n');
-      systemContent += `Pending todos in this project (${pendingTodos.length} total, showing top 3):\n${todoText}\n\n`;
     }
   }
 
@@ -600,7 +582,7 @@ const newChat = () => {
   historyStore.createConversation();
   showHistory.value = false;
   showTodos.value = false;
-  showLiterature.value = false;
+  showKnowledge.value = false;
   showWritingHistory.value = false;
   showSentinel.value = false;
   showExperiment.value = false;
@@ -611,7 +593,7 @@ const newChat = () => {
 
 const toggleHistory = () => {
   showHistory.value = !showHistory.value;
-  showLiterature.value = false;
+  showKnowledge.value = false;
   showTodos.value = false;
   showWritingHistory.value = false;
   showSentinel.value = false;
@@ -622,7 +604,8 @@ const toggleHistory = () => {
 };
 
 const toggleKnowledge = () => {
-  showLiterature.value = !showLiterature.value;
+  showKnowledge.value = !showKnowledge.value;
+  showSettings.value = false;
   showHistory.value = false;
   showTodos.value = false;
   showWritingHistory.value = false;
@@ -636,7 +619,7 @@ const toggleKnowledge = () => {
 const toggleTodos = () => {
   showTodos.value = !showTodos.value;
   showHistory.value = false;
-  showLiterature.value = false;
+  showKnowledge.value = false;
   showWritingHistory.value = false;
   showSentinel.value = false;
   showExperiment.value = false;
@@ -649,7 +632,7 @@ const toggleWritingHistory = () => {
   showWritingHistory.value = !showWritingHistory.value;
   showHistory.value = false;
   showTodos.value = false;
-  showLiterature.value = false;
+  showKnowledge.value = false;
   showSentinel.value = false;
   showExperiment.value = false;
   showDashboard.value = false;
@@ -661,7 +644,7 @@ const toggleSentinel = () => {
   showSentinel.value = !showSentinel.value;
   showHistory.value = false;
   showTodos.value = false;
-  showLiterature.value = false;
+  showKnowledge.value = false;
   showWritingHistory.value = false;
   showExperiment.value = false;
   showDashboard.value = false;
@@ -673,7 +656,7 @@ const toggleExperiment = () => {
   showExperiment.value = !showExperiment.value;
   showHistory.value = false;
   showTodos.value = false;
-  showLiterature.value = false;
+  showKnowledge.value = false;
   showWritingHistory.value = false;
   showSentinel.value = false;
   showDashboard.value = false;
@@ -685,7 +668,7 @@ const toggleDashboard = () => {
   showDashboard.value = !showDashboard.value;
   showHistory.value = false;
   showTodos.value = false;
-  showLiterature.value = false;
+  showKnowledge.value = false;
   showWritingHistory.value = false;
   showSentinel.value = false;
   showExperiment.value = false;
@@ -697,7 +680,7 @@ const togglePlugin = () => {
   showPlugin.value = !showPlugin.value;
   showHistory.value = false;
   showTodos.value = false;
-  showLiterature.value = false;
+  showKnowledge.value = false;
   showWritingHistory.value = false;
   showSentinel.value = false;
   showExperiment.value = false;
@@ -709,7 +692,7 @@ const toggleTeam = () => {
   showTeam.value = !showTeam.value;
   showHistory.value = false;
   showTodos.value = false;
-  showLiterature.value = false;
+  showKnowledge.value = false;
   showWritingHistory.value = false;
   showSentinel.value = false;
   showExperiment.value = false;
@@ -724,7 +707,7 @@ const loadFromHistory = (id: string) => {
     showHistory.value = false;
     showDashboard.value = false;
     showTodos.value = false;
-    showLiterature.value = false;
+    showKnowledge.value = false;
     showWritingHistory.value = false;
     showSentinel.value = false;
     showExperiment.value = false;
@@ -867,7 +850,11 @@ const saveConversationToObsidian = async () => {
       const { text: summaryText } = await aiClient.chatOnce([
         {
           role: 'system',
-          content: 'Summarize the following research conversation in 2-3 concise sentences. Focus on the key question, main insights, and any decisions made. Respond in the same language as the conversation.'
+          content: `你是刘看山，知乎的官方吉祥物，一只来自北极的小狐狸。说话带点俏皮和热心。
+
+现在我来帮你总结这段对话。抓住核心问题、主要洞察和做了哪些决定，用两三句话概括清楚。
+
+自称"我"，叫用户"你"。说话要像真人，自然流畅，不要出现星号、井号、列表编号这些 markdown 符号，直接输出纯文字。用中文回答。`
         },
         { role: 'user', content: conversationText.slice(0, 3000) }
       ], false, 'chat');
@@ -880,7 +867,11 @@ const saveConversationToObsidian = async () => {
       const { text: kpText } = await aiClient.chatOnce([
         {
           role: 'system',
-          content: 'Extract 3-5 key points or conclusions from the following conversation. Return each point on a separate line starting with "- ". Only return the bullet points, no extra text. Respond in the same language as the conversation.'
+          content: `你是刘看山，知乎的官方吉祥物，一只来自北极的小狐狸。说话带点俏皮和热心。
+
+现在我来帮你提炼这段对话的关键点。找出 3-5 个核心结论，每个用一句话说清楚。
+
+自称"我"，叫用户"你"。说话要像真人，自然流畅，不要出现星号、井号、列表编号这些 markdown 符号，直接输出纯文字。用中文回答。`
         },
         { role: 'user', content: conversationText.slice(0, 3000) }
       ], false, 'chat');
@@ -898,7 +889,11 @@ const saveConversationToObsidian = async () => {
       const { text: hypText } = await aiClient.chatOnce([
         {
           role: 'system',
-          content: 'Extract any hypotheses, assumptions, or claims that need verification from the following conversation. Return each on a separate line starting with "- ". Only return the bullet points, no extra text. If none, return "None". Respond in the same language as the conversation.'
+          content: `你是刘看山，知乎的官方吉祥物，一只来自北极的小狐狸。说话带点俏皮和热心。
+
+现在我来帮你找出这段对话里有哪些假设、推测或说法还需要验证。每个用一句话说清楚，如果没有就说"没有"。
+
+自称"我"，叫用户"你"。说话要像真人，自然流畅，不要出现星号、井号、列表编号这些 markdown 符号，直接输出纯文字。用中文回答。`
         },
         { role: 'user', content: conversationText.slice(0, 3000) }
       ], false, 'chat');
@@ -1093,11 +1088,6 @@ const saveToObsidian = async () => {
         @close="showTodos = false"
       />
 
-      <LiteratureSidebar
-        v-if="showLiterature"
-        @open-knowledge-panel="showKnowledge = true"
-      />
-
       <WritingHistoryPanel
         v-if="showWritingHistory"
         @close="showWritingHistory = false"
@@ -1141,7 +1131,6 @@ const saveToObsidian = async () => {
 
       <ChatInputArea
         v-model="inputText"
-        v-model:is-agent-mode="isAgentMode"
         :is-streaming="isStreaming"
         @send="sendMessage"
         @stop="stopStreaming"

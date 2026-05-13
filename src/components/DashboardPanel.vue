@@ -19,8 +19,6 @@ const emit = defineEmits<{
 
 // Time range filter
 const timeRange = ref<'week' | 'month' | 'quarter'>('week');
-const selectedProjectId = ref<string | null | 'all'>(projectStore.currentProjectId ?? 'all');
-const effectiveProjectId = computed(() => selectedProjectId.value === 'all' ? null : selectedProjectId.value);
 
 const sinceTimestamp = computed(() => {
   const now = Date.now();
@@ -60,7 +58,7 @@ const loadDashboard = async () => {
     const since = sinceTimestamp.value;
     const days = daysInRange.value;
 
-    const pid = effectiveProjectId.value;
+    const pid = projectStore.currentProjectId;
     const [
       evStats,
       usStats,
@@ -97,13 +95,13 @@ const loadDashboard = async () => {
   }
 };
 
-onMounted(loadDashboard);
+onMounted(() => {
+  loadDashboard();
+});
 watch(() => projectStore.currentProjectId, () => {
-  selectedProjectId.value = projectStore.currentProjectId ?? 'all';
   loadDashboard();
 });
 watch(timeRange, loadDashboard);
-watch(selectedProjectId, loadDashboard);
 
 // Computed stats for summary cards
 const totalReadingSessions = computed(() => {
@@ -124,6 +122,9 @@ const totalWritingEvents = computed(() => {
 const totalCost = computed(() => {
   return usageStats.value?.totalCost ?? 0;
 });
+
+// ── 热榜已迁移至 SentinelBriefWindow ────────────────────────
+
 
 // Chart helpers
 const maxDailyCount = computed(() => {
@@ -166,27 +167,6 @@ const getHeatmapIntensity = (count: number) => {
   return 4;
 };
 
-// Project time distribution (from event stats)
-const projectDistribution = computed(() => {
-  if (!eventStats.value?.projectBreakdown.length) return [];
-  const total = eventStats.value.projectBreakdown.reduce((s, p) => s + p.count, 0);
-  if (total === 0) return [];
-
-  return eventStats.value.projectBreakdown
-    .filter(p => p.projectId !== null)
-    .map(p => {
-      const proj = projects.value.find(pr => pr.id === p.projectId);
-      return {
-        name: proj?.name || '未知项目',
-        color: proj?.color || '#666',
-        count: p.count,
-        percentage: Math.round((p.count / total) * 100)
-      };
-    })
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 5);
-});
-
 // Model usage distribution
 const modelDistribution = computed(() => {
   return usageStats.value?.modelBreakdown.slice(0, 5) ?? [];
@@ -201,17 +181,17 @@ const taskDistribution = computed(() => {
 const activityTypes = computed(() => {
   const typeLabels: Record<string, string> = {
     chat_start: 'AI对话',
-    reading_session_start: '阅读文献',
+    reading_session_start: '阅读素材',
     writing_polish: '写作润色',
     citation_insert: '引用插入',
     capture_ocr_complete: '截图提取',
-    experiment_snapshot: '实验记录',
-    sentinel_check: '文献哨兵',
+    experiment_snapshot: '创作快照',
+    sentinel_check: '热榜雷达',
     project_create: '创建项目',
     todo_complete: '完成待办',
     zhihu_mock_fetch: '知乎抓取',
-    kb_index_complete: '知乎知识库索引',
-    synthesis_complete: '综述生成'
+    kb_index_complete: '素材库索引',
+    synthesis_complete: '深度报告生成'
   };
 
   return (eventStats.value?.typeBreakdown ?? [])
@@ -248,22 +228,7 @@ const maxActivityCount = computed(() => {
       </button>
     </div>
 
-    <!-- Project filter -->
-    <div class="project-filter-bar">
-      <label>项目：</label>
-      <select v-model="selectedProjectId" class="project-select">
-        <option value="all">全部项目</option>
-        <option
-          v-for="proj in projects"
-          :key="proj.id"
-          :value="proj.id"
-        >
-          {{ proj.name }}
-        </option>
-      </select>
-    </div>
-
-    <div v-if="loading" class="loading-state">加载中...</div>
+    <div v-if="loading" class="loading-state">加载�?..</div>
     <div v-else-if="error" class="error-state">{{ error }}</div>
     <div v-else class="dashboard-content">
       <!-- Summary Cards -->
@@ -271,7 +236,7 @@ const maxActivityCount = computed(() => {
         <div class="summary-card">
           <div class="card-icon">📚</div>
           <div class="card-value">{{ totalReadingSessions }}</div>
-          <div class="card-label">阅读文献</div>
+          <div class="card-label">阅读素材</div>
         </div>
         <div class="summary-card">
           <div class="card-icon">💬</div>
@@ -308,7 +273,7 @@ const maxActivityCount = computed(() => {
 
       <!-- Activity Heatmap -->
       <div class="chart-section">
-        <h4 class="chart-title">🔥 科研活跃度热力图</h4>
+        <h4 class="chart-title">🔥 创作活跃度热力图</h4>
         <div class="heatmap">
           <div
             v-for="(day, idx) in heatmapDays"
@@ -331,38 +296,6 @@ const maxActivityCount = computed(() => {
 
       <!-- Two-column layout for smaller charts -->
       <div class="charts-row">
-        <!-- Project Distribution -->
-        <div class="chart-section half">
-          <h4 class="chart-title">📁 项目时间分配</h4>
-          <div v-if="projectDistribution.length === 0" class="empty-chart">
-            暂无项目数据
-          </div>
-          <div v-else class="pie-chart">
-            <div class="pie-visual">
-              <svg viewBox="0 0 100 100" class="pie-svg">
-                <circle
-                  v-for="(slice, i) in projectDistribution"
-                  :key="i"
-                  cx="50" cy="50" r="40"
-                  fill="none"
-                  :stroke="slice.color"
-                  stroke-width="20"
-                  :stroke-dasharray="`${slice.percentage * 2.51} ${251 - slice.percentage * 2.51}`"
-                  :stroke-dashoffset="-projectDistribution.slice(0, i).reduce((s, p) => s + p.percentage * 2.51, 0)"
-                  transform="rotate(-90 50 50)"
-                />
-              </svg>
-            </div>
-            <div class="pie-legend">
-              <div v-for="(item, i) in projectDistribution" :key="i" class="legend-item">
-                <div class="legend-dot" :style="{ background: item.color }"></div>
-                <span class="legend-name">{{ item.name }}</span>
-                <span class="legend-pct">{{ item.percentage }}%</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
         <!-- Activity Type Distribution -->
         <div class="chart-section half">
           <h4 class="chart-title">🎯 活动类型分布</h4>
@@ -436,11 +369,11 @@ const maxActivityCount = computed(() => {
 
       <!-- Current Project Stats -->
       <div class="chart-section">
-        <h4 class="chart-title">📂 当前项目统计</h4>
+        <h4 class="chart-title">📂 当前使用统计</h4>
         <div class="project-stats-grid">
           <div class="proj-stat">
             <div class="proj-stat-value">{{ projectStats?.docCount ?? 0 }}</div>
-            <div class="proj-stat-label">知乎知识库素材</div>
+            <div class="proj-stat-label">知乎故事素材</div>
           </div>
           <div class="proj-stat">
             <div class="proj-stat-value">{{ projectStats?.conversationCount ?? 0 }}</div>
@@ -456,7 +389,7 @@ const maxActivityCount = computed(() => {
           </div>
           <div class="proj-stat">
             <div class="proj-stat-value">{{ readingStats?.documentsRead ?? 0 }}</div>
-            <div class="proj-stat-label">已读文献</div>
+            <div class="proj-stat-label">已读素材</div>
           </div>
           <div class="proj-stat">
             <div class="proj-stat-value">{{ readingStats?.totalSessions ?? 0 }}</div>
@@ -544,36 +477,6 @@ const maxActivityCount = computed(() => {
   background: var(--accent-subtle);
   border-color: var(--accent-border);
   color: var(--accent);
-}
-
-.project-filter-bar {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.4rem 1rem;
-  border-bottom: 1px solid var(--border-subtle);
-  flex-shrink: 0;
-}
-
-.project-filter-bar label {
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-}
-
-.project-select {
-  flex: 1;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-light);
-  border-radius: 6px;
-  padding: 0.3rem 0.5rem;
-  color: var(--text-secondary);
-  font-size: 0.75rem;
-  cursor: pointer;
-  outline: none;
-}
-
-.project-select:focus {
-  border-color: var(--accent-border);
 }
 
 .loading-state,
@@ -941,5 +844,62 @@ const maxActivityCount = computed(() => {
   font-size: 0.65rem;
   color: var(--text-muted);
   margin-top: 0.1rem;
+}
+
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--bg-overlay);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+
+.modal-content {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-xl);
+  padding: var(--space-2xl);
+  box-shadow: var(--shadow-xl);
+}
+
+.btn-primary {
+  padding: 0.55rem 1rem;
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius-md);
+  color: var(--text-on-accent);
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  padding: 0.55rem 1rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn-secondary:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-medium);
+  color: var(--text-primary);
 }
 </style>

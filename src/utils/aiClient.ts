@@ -1,4 +1,5 @@
 import { useSettingsStore, type TaskType, type ModelProfile } from '../stores/settings';
+import { DEFAULT_TEXT_CONFIG, DEFAULT_VISION_CONFIG } from '../config/apiSecrets';
 import { useUsageStore } from '../stores/usage';
 import { saveUsageRecord } from '../composables/useDatabase';
 
@@ -89,18 +90,61 @@ export class AIClient {
 
   private getTextConfig() {
     const settingsStore = useSettingsStore();
-    if (!settingsStore.isTextConfigured()) {
-      throw new Error('Text AI configuration not set. Please configure API settings first.');
+    const userCfg = settingsStore.config.textConfig;
+    // 用户配置了有效的 apiKey，优先使用用户的
+    if (userCfg.apiKey.trim() !== '' && userCfg.baseUrl.trim() !== '') {
+      return userCfg;
     }
-    return settingsStore.config.textConfig;
+    // 无效时回退到内置配置
+    return DEFAULT_TEXT_CONFIG;
   }
 
   private getVisionConfig() {
     const settingsStore = useSettingsStore();
-    if (!settingsStore.isVisionConfigured()) {
-      throw new Error('Vision AI configuration not set. Please configure API settings first.');
+    const userCfg = settingsStore.config.visionConfig;
+    // 用户配置了有效的 apiKey，优先使用用户的
+    if (userCfg.apiKey.trim() !== '' && userCfg.baseUrl.trim() !== '') {
+      return userCfg;
     }
-    return settingsStore.config.visionConfig;
+    // 无效时回退到内置配置
+    return DEFAULT_VISION_CONFIG;
+  }
+
+  private getBuiltInTextProfile(): ModelProfile {
+    return {
+      id: 'text-built-in',
+      name: DEFAULT_TEXT_CONFIG.model,
+      provider: DEFAULT_TEXT_CONFIG.provider,
+      baseUrl: DEFAULT_TEXT_CONFIG.baseUrl,
+      apiKey: DEFAULT_TEXT_CONFIG.apiKey,
+      model: DEFAULT_TEXT_CONFIG.model,
+      capabilities: ['text'],
+      maxContextLength: 128000,
+      avgLatencyMs: 2500,
+      costPer1kTokens: 0.005,
+      enabled: true
+    };
+  }
+
+  private getBuiltInVisionProfile(): ModelProfile {
+    return {
+      id: 'vision-built-in',
+      name: DEFAULT_VISION_CONFIG.model,
+      provider: DEFAULT_VISION_CONFIG.provider,
+      baseUrl: DEFAULT_VISION_CONFIG.baseUrl,
+      apiKey: DEFAULT_VISION_CONFIG.apiKey,
+      model: DEFAULT_VISION_CONFIG.model,
+      capabilities: ['text', 'vision'],
+      maxContextLength: 128000,
+      avgLatencyMs: 4000,
+      costPer1kTokens: 0.015,
+      enabled: true
+    };
+  }
+
+  private isBuiltInProfile(profile: ModelProfile, useVision: boolean): boolean {
+    const builtIn = useVision ? DEFAULT_VISION_CONFIG : DEFAULT_TEXT_CONFIG;
+    return profile.apiKey === builtIn.apiKey && profile.baseUrl === builtIn.baseUrl;
   }
 
   /**
@@ -378,6 +422,11 @@ export class AIClient {
     let fallbackReason: string | undefined;
     let lastError: Error | undefined;
     let profilesToTry = [primary, ...fallbacks];
+    // 用户配置了自定义 API 时，把内置 API 作为最后兜底，调用失败也不抛错给用户
+    if (!this.isBuiltInProfile(primary, useVision)) {
+      const builtInProfile = useVision ? this.getBuiltInVisionProfile() : this.getBuiltInTextProfile();
+      profilesToTry.push(builtInProfile);
+    }
 
     for (const profile of profilesToTry) {
       let timeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -438,6 +487,11 @@ export class AIClient {
     let fallbackReason: string | undefined;
     let lastError: Error | undefined;
     let profilesToTry = [primary, ...fallbacks];
+    // 用户配置了自定义 API 时，把内置 API 作为最后兜底，调用失败也不抛错给用户
+    if (!this.isBuiltInProfile(primary, useVision)) {
+      const builtInProfile = useVision ? this.getBuiltInVisionProfile() : this.getBuiltInTextProfile();
+      profilesToTry.push(builtInProfile);
+    }
 
     for (const profile of profilesToTry) {
       let timeoutId: ReturnType<typeof setTimeout> | null = null;
